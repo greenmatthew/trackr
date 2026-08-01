@@ -1,6 +1,6 @@
 # The project wiki.
 #
-# The pages in docs/wiki/ are ordinary tracked files in THIS repository, so a change to a
+# The pages in wiki/ are ordinary tracked files in THIS repository, so a change to a
 # flag and a change to the page documenting it land in one commit. `trackr.wiki.git` is a
 # publishing target, not a source of truth: `just docs::publish` copies the pages there.
 #
@@ -10,7 +10,7 @@
 # Recipes in a module run from the module FILE's directory (just/), not the repository root.
 set working-directory := '..'
 
-WIKI_DIR := "docs/wiki"
+WIKI_DIR := "wiki"
 
 _default:
     @just --list docs
@@ -19,7 +19,7 @@ _default:
 check:
     @just docs::_sync --dry-run
 
-# Copy docs/wiki/ to the wiki repositories on GitHub and Gitea.
+# Copy wiki/ to the wiki repositories on GitHub and Gitea.
 publish message="docs: update wiki":
     @just docs::_sync "{{ message }}"
 

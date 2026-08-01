@@ -33,6 +33,6 @@ The only thing that ever leaves the machine is a barcode number, looked up again
 
 ---
 
-*This wiki is generated from `docs/wiki/` in the [main repository](https://github.com/greenmatthew/trackr).
+*This wiki is generated from `wiki/` in the [main repository](https://github.com/greenmatthew/trackr).
 Edits made here in the web UI are overwritten on the next publish — change the files in the
 repository instead.*

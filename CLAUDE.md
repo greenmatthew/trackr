@@ -13,8 +13,8 @@ server". What differs is whether it must be in context *before* the question is 
 | Home | Holds | Read |
 | --- | --- | --- |
 | **`CLAUDE.md`** (this file) | Decisions and constraints. What we are building, what is locked in, what not to do. | Every session, unprompted. |
-| **`docs/.claude/`** | Claude-specific working material. `decisions/` holds one record per milestone — the *why* behind past choices. | Before changing anything a record covers. |
-| **`docs/wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. Tracked in this repository and published to the GitHub/Gitea wiki. | On demand, when the question actually arises. |
+| **`docs/`** | Claude-facing working material, not published anywhere. `decisions/` holds one record per milestone — the *why* behind past choices. | Before changing anything a record covers. |
+| **`wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. Tracked in this repository and published to the GitHub/Gitea wiki. | On demand, when the question actually arises. |
 
 **The test for this file:** *would Claude make a worse decision without this in context?* If
 yes, it belongs here. If it merely answers a question — "which port", "what are the nutrient
@@ -28,7 +28,7 @@ the code is a mild annoyance for a how-to and a security misunderstanding for a 
 
 ### The wiki is published from this repository
 
-`docs/wiki/` holds ordinary tracked files. That is deliberate and is the whole point: a
+`wiki/` holds ordinary tracked files. That is deliberate and is the whole point: a
 change to an environment variable and a change to the page documenting it land in **one
 commit**, reviewed together and impossible to half-forget.
 
@@ -37,7 +37,7 @@ truth**:
 
 ```
 just docs::check      # what would change on the wiki
-just docs::publish    # copy docs/wiki/ to GitHub and Gitea
+just docs::publish    # copy wiki/ to GitHub and Gitea
 just docs::lint       # links pointing at pages that do not exist
 ```
 
@@ -52,7 +52,7 @@ Two consequences to hold on to:
   cannot clone, the fix is to create the first page through the web UI once per host, not to
   work around it.
 
-Rejected alternatives, so they are not revisited: cloning `trackr.wiki.git` into `docs/wiki/`
+Rejected alternatives, so they are not revisited: cloning `trackr.wiki.git` into `wiki/`
 and gitignoring it — editing is fine but nothing is ever atomic, and a second repository is a
 second thing to forget to push. A submodule is worse: still two commits, plus detached-HEAD
 friction. `git subtree` is atomic and was a genuine contender, but its merge semantics are
@@ -121,7 +121,7 @@ There is **no pre-loaded food/ingredient database**. The catalog is built up gra
   - *Already built into MAUI — do not add packages for these:* dependency injection (`builder.Services` on `MauiAppBuilder`), logging (`builder.Logging`) and configuration (`builder.Configuration`).
   - *Deliberately NOT `Microsoft.Extensions.Hosting`.* `MauiAppBuilder` is modelled on `HostApplicationBuilder` but is not an `IHostBuilder`, and MAUI never runs `IHostedService` — adding it bolts on a host nothing drives. Likewise no `appsettings.json`: the only real configuration is the server URL, which the user types and which belongs in `SecureStorage`.
   - *Cleartext HTTP is blocked, except for the emulator in Debug.* Android has forbidden cleartext by default since API 28 and the app targets 36, so a plain-HTTP server is simply unreachable — which the dev compose stack is, by design. `Platforms/Android/Resources/xml/network_security_config.xml` (Release) forbids it everywhere; `network_security_config.debug.xml` opens it for `10.0.2.2`, `localhost` and `127.0.0.1` only — addresses that can never be a real server. `Trackr.Mobile.csproj` decides which file supplies the resource, so the exception cannot reach a release build by being forgotten. **Verify this by dumping the manifest out of a built APK** (`aapt2 dump xmltree <apk> --file res/xml/network_security_config.xml`), not by reading the source.
-  - *Not MAUI Blazor Hybrid.* It would reuse the Razor components, but renders them in a WebView — the thing this design moved away from. See [03-android-pivot.md](docs/.claude/decisions/03-android-pivot.md).
+  - *Not MAUI Blazor Hybrid.* It would reuse the Razor components, but renders them in a WebView — the thing this design moved away from. See [03-android-pivot.md](docs/decisions/03-android-pivot.md).
   - iOS is out of scope. Nothing should *prevent* it later, but do not spend effort on it.
 - **Web:** Blazor WebAssembly (`Trackr.Web`), served by nginx. Scope is **account self-service and administration only** — login, password change, 2FA enrolment, invites, and an admin page later. Any user may log in. It is deliberately **not** a food-logging surface; do not build the chat or stats views here.
   - *Note:* the user initially thought of "Razor Pages." That is server-rendered HTML; Blazor WASM was chosen instead and the choice still stands now that the scope has narrowed.
@@ -130,7 +130,7 @@ There is **no pre-loaded food/ingredient database**. The catalog is built up gra
 - **Database:** PostgreSQL (containerized).
 - **Shared contracts:** `Trackr.Shared` — request/response DTOs referenced by the API, the web app and the mobile app alike. Sharing types by **project reference** rather than generating a client from the OpenAPI document is the main reason everything lives in one repository. Keep it dependency-free: it is trimmed into the browser bundle and linked into the APK.
 - **Auth:** ASP.NET Core **Identity** (do NOT hand-roll auth). Password hashing, login, session handling, **2FA (TOTP authenticator apps)**, and account **lockout** all come from Identity. See §8 for the full auth-hardening list. **Two schemes, by client:**
-  - *Web → HttpOnly cookie.* Same origin (nginx serves the app and proxies `/api/`), so the browser handles the session itself and JavaScript cannot read it — an XSS bug cannot steal the session. Every hardening decision in [02-auth.md](docs/.claude/decisions/02-auth.md) stands unchanged.
+  - *Web → HttpOnly cookie.* Same origin (nginx serves the app and proxies `/api/`), so the browser handles the session itself and JavaScript cannot read it — an XSS bug cannot steal the session. Every hardening decision in [02-auth.md](docs/decisions/02-auth.md) stands unchanged.
   - *Android → Identity bearer token.* The app is a native cross-origin client and cannot hold a cookie usefully, so it gets `IdentityConstants.BearerScheme` with a refresh token, stored in Android `SecureStorage`. This is **additive** — it changes nothing about the cookie path.
   - *Historical note:* §3 previously read "cookies, not JWTs" on the reasoning that tokens only matter for "cross-origin / multi-service / native-mobile setups, none of which apply." The Android app made that premise false. The conclusion still holds for the browser, which is why both schemes coexist rather than one replacing the other.
   - *No CORS.* MAUI uses a native `HttpClient`, and CORS is a browser-only mechanism. Do not add CORS configuration for the app — it would be pure attack surface.
@@ -162,15 +162,15 @@ to `frontend` over the network like any other client.
 
 ### Decisions made so far
 
-Recorded per milestone in [`docs/.claude/decisions/`](docs/.claude/decisions/), which is where the *why*
+Recorded per milestone in [`docs/decisions/`](docs/decisions/), which is where the *why*
 lives — read the relevant one before changing anything it covers.
 
-- [01-scaffold.md](docs/.claude/decisions/01-scaffold.md) — nginx also proxying `/api/`, plain HTTP
+- [01-scaffold.md](docs/decisions/01-scaffold.md) — nginx also proxying `/api/`, plain HTTP
   inside the containers, the two compose files, the `dotnet watch` inner loop.
-- [02-auth.md](docs/.claude/decisions/02-auth.md) — `AddIdentityCore` with hand-written endpoints,
+- [02-auth.md](docs/decisions/02-auth.md) — `AddIdentityCore` with hand-written endpoints,
   bootstrap-then-invite registration, the fail-safe fallback policy, cookie hardening,
   data-protection keys in Postgres, `Guid` user keys, startup migrations.
-- [03-android-pivot.md](docs/.claude/decisions/03-android-pivot.md) — why the phone became the
+- [03-android-pivot.md](docs/decisions/03-android-pivot.md) — why the phone became the
   product, why MAUI XAML over Blazor Hybrid, why one repository, and why the API now issues
   bearer tokens as well as cookies.
 
@@ -323,8 +323,8 @@ The user explicitly wants a properly secured account system. Implement, roughly 
 
 ## 9. Build order (suggested milestones)
 
-1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with a Blazor WASM frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions in [01-scaffold.md](docs/.claude/decisions/01-scaffold.md); how to run it is in `README.md`.
-2. ~~**Auth**~~ — ✅ **DONE.** ASP.NET Core Identity behind an HttpOnly cookie: bootstrap-then-invite-only registration, login, TOTP 2FA with QR enrolment and recovery codes, account lockout, rate limiting, password change and log-delivered reset, and a fully authed web app (auth state, protected routes, login/settings pages). First EF migration and first test project. Decisions in [02-auth.md](docs/.claude/decisions/02-auth.md); account handling is in `README.md`.
+1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with a Blazor WASM frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions in [01-scaffold.md](docs/decisions/01-scaffold.md); how to run it is in `README.md`.
+2. ~~**Auth**~~ — ✅ **DONE.** ASP.NET Core Identity behind an HttpOnly cookie: bootstrap-then-invite-only registration, login, TOTP 2FA with QR enrolment and recovery codes, account lockout, rate limiting, password change and log-delivered reset, and a fully authed web app (auth state, protected routes, login/settings pages). First EF migration and first test project. Decisions in [02-auth.md](docs/decisions/02-auth.md); account handling is in `README.md`.
 3. **Mobile foundation** — the thin end-to-end slice, deliberately **before** the backend milestones because the Android toolchain and the token auth were the two unknowns in the pivot. Bearer-token scheme on the API alongside the cookie (`/api/auth/token`, refresh, optional 2FA code in one request); `Trackr.Mobile.Core` + `Trackr.Mobile`; a first-run **server-URL** screen, login, 2FA, and one placeholder page. Done when a signed APK installs on a real phone, points at the server and logs in through 2FA. No food logging.
 4. **Documentation migration** — no feature code. Move reference and how-to material out of `CLAUDE.md` and `README.md` into the wiki, per §0. `CLAUDE.md` is ~41KB and loaded in full every session; §3 and §11 together are nearly a third of it and are now mostly reference rather than decisions. Target ~22-25KB by moving:
     - §11 (dev environment, building, Android testing) → `Development-Environment.md`, `Building.md`, `Testing-the-Android-App.md`.
@@ -340,7 +340,7 @@ The user explicitly wants a properly secured account system. Implement, roughly 
     - **Navigation** — `Shell` versus plain navigation, how the chat and stats tabs are laid out, and where server-setup and login sit relative to the signed-in shell.
     - **Styling and theming** — resource dictionaries, light/dark handling, and whether to lean on default Material styling or build a custom theme.
     - **Local storage** — what the app persists beyond the token: cached stats, an offline log queue, and whether that needs SQLite now or waits for §9.14.
-   Record the outcome in `docs/.claude/decisions/` and revise milestone 3's provisional choices to match.
+   Record the outcome in `docs/decisions/` and revise milestone 3's provisional choices to match.
 6. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the extensible nutrient store** (`Nutrient` + `NutrientAmount`, or JSONB map) from §7, seeding the §7a nutrient set. Basic CRUD API for catalog and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
 7. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive **User-Agent** on OFF requests (app name + version + contact) — OFF asks for this and may throttle callers without it. Handle full-match, partial-match, and no-match cases per §5, and surface rate-limit/timeout errors rather than swallowing them.
 8. **Ollama integration** — add the ollama service, wire the backend to call it, define the strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the JSON. Configure `keep_alive`.

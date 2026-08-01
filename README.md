@@ -2,7 +2,7 @@
 
 A self-hosted personal nutrition tracker with a chat-first interface. The product is an
 **Android app**; the website is account and administration only. See [CLAUDE.md](CLAUDE.md)
-for the full project brief and [docs/.claude/decisions/](docs/.claude/decisions/) for why things are the way
+for the full project brief and [docs/decisions/](docs/decisions/) for why things are the way
 they are.
 
 **Status: milestone 2 (auth) complete; milestone 3 (mobile foundation) in progress.** The
@@ -21,8 +21,8 @@ src/Trackr.Shared/         DTOs referenced by all of the above
 tests/Trackr.Api.Tests/    Integration tests against a throwaway Postgres
 tests/Trackr.Mobile.Tests/ View-model tests, no device needed
 docker/                    Compose stacks and .env.example
-docs/.claude/decisions/    Why each milestone was built the way it was
-docs/wiki/                 The project wiki — edited here, published from here
+docs/decisions/            Why each milestone was built the way it was (Claude-facing)
+wiki/                      The project wiki — edited here, published from here
 ```
 
 The wiki pages live in this repository, so a change to a flag and a change to the page
