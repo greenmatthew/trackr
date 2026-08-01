@@ -12,43 +12,63 @@ set working-directory := '..'
 
 WIKI_DIR := "wiki"
 
+# Which of this repository's remotes to publish the wiki to, as a space-separated list.
+# Each name has `.git` swapped for `.wiki.git` to get the wiki repository's URL.
+#
+# `github` is deliberately absent: GitHub only offers a wiki on a *public* repository, and
+# trackr is private there. Add it here the day that changes - nothing else needs to move.
+WIKI_REMOTES := "local"
+
 _default:
     @just --list docs
 
 # Show which pages would change on the wiki, without touching it.
 check:
-    @just docs::_sync --dry-run
+    @TRACKR_WIKI_DRY=1 just docs::_sync
 
-# Copy wiki/ to the wiki repositories on GitHub and Gitea.
+# Copy wiki/ to the wiki repository.
 publish message="docs: update wiki":
-    @just docs::_sync "{{ message }}"
+    @TRACKR_WIKI_MESSAGE="{{ message }}" just docs::_sync
 
 # Warn about pages that exist on neither side of a link.
 lint:
     #!/usr/bin/env bash
-    set -euo pipefail
+    # No pipefail here: grep exits 1 when a page contains no links, which is not an error.
+    set -u
     cd {{ WIKI_DIR }} 2>/dev/null || { echo "No {{ WIKI_DIR }} yet."; exit 0; }
-    fail=0
+
+    missing=0
     # Wiki links are page names, not paths: [text](Self-Hosting) resolves to Self-Hosting.md.
     for f in *.md; do
         [ -e "$f" ] || continue
-        grep -oE '\]\([A-Z][A-Za-z0-9-]*\)' "$f" 2>/dev/null | tr -d '](' | tr -d ')' | while read -r page; do
+        for page in $(grep -oE '\]\([A-Z][A-Za-z0-9-]*\)' "$f" | tr -d '])' | sed 's/^(//'); do
             if [ ! -f "${page}.md" ]; then
-                echo "$f -> ${page}.md is missing"
+                echo "  $f -> ${page}.md is missing"
+                missing=$((missing + 1))
             fi
         done
     done
-    echo "Pages: $(ls -1 *.md 2>/dev/null | wc -l)"
+
+    pages=$(ls -1 *.md 2>/dev/null | wc -l)
+    if [ "$missing" -gt 0 ]; then
+        echo "$pages pages, $missing dangling link(s)."
+        exit 1
+    fi
+    echo "$pages pages, no dangling links."
 
 # The actual sync. Not called directly - use `publish` or `check`.
+#
+# Options arrive as environment variables rather than recipe arguments. A shebang recipe is
+# written to a temporary script and executed, so `$1` inside it is NOT what the caller passed
+# to `just` - the arguments have to be interpolated with {{ }}. Reading `$1` silently found
+# nothing, which made `check` publish for real instead of dry-running.
 [private]
-_sync *args:
+_sync:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    dry=0
-    message="docs: update wiki"
-    if [ "${1:-}" = "--dry-run" ]; then dry=1; else message="${1:-$message}"; fi
+    dry="${TRACKR_WIKI_DRY:-0}"
+    message="${TRACKR_WIKI_MESSAGE:-docs: update wiki}"
 
     if [ ! -d "{{ WIKI_DIR }}" ] || [ -z "$(ls -A {{ WIKI_DIR }} 2>/dev/null)" ]; then
         echo "error: {{ WIKI_DIR }} is empty - nothing to publish." >&2
@@ -60,8 +80,11 @@ _sync *args:
     # the wiki repository.
     wiki_url() { git remote get-url "$1" 2>/dev/null | sed 's/\.git$/.wiki.git/'; }
 
-    primary=$(wiki_url local || true)
-    [ -n "$primary" ] || primary=$(wiki_url github)
+    primary=$(wiki_url $(echo {{ WIKI_REMOTES }} | awk '{print $1}'))
+    if [ -z "$primary" ]; then
+        echo "error: no wiki remote configured - see WIKI_REMOTES in just/docs.just" >&2
+        exit 1
+    fi
 
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
@@ -97,7 +120,7 @@ _sync *args:
         -c user.email="$(git -C {{ justfile_directory() }} config user.email)" \
         commit --quiet -m "$message"
 
-    for remote in local github; do
+    for remote in {{ WIKI_REMOTES }}; do
         url=$(cd {{ justfile_directory() }} && git remote get-url "$remote" 2>/dev/null | sed 's/\.git$/.wiki.git/') || continue
         [ -n "$url" ] || continue
         echo "pushing to $remote ($url)"
