@@ -80,14 +80,66 @@ the API's token scheme together, and nothing below this tier can.
 
 Required for camera work, and the only real check of the reverse-proxy path.
 
-Wireless debugging is simpler than USB — WSL's NAT handles outbound connections fine, so
-`usbipd-win` is not needed. Enable *Developer options → Wireless debugging*:
+Two gaps sit between WSL and a phone. They are fixed separately, and confusing them is the
+usual reason this feels harder than it is:
+
+| Gap | Why | Fix |
+| --- | --- | --- |
+| WSL cannot see the phone | WSL2 passes no USB through to the VM, and the phone's adb port is not routable from here | `just mobile::usb`, or `pair` + `connect` |
+| The phone cannot see the dev stack | Its ports are published on the Windows loopback, not on the LAN, so there is no address the phone could type | `just mobile::reverse` |
+
+Once both are closed:
+
+```bash
+just mobile::phone      # build, install, tunnel and launch, in one go
+```
+
+### Connecting — tethered
+
+`usbipd-win` forwards the device into WSL over USB/IP. It ships its own Linux client, so
+there is nothing to install in the distribution:
+
+```bash
+just mobile::usb           # finds the ADB interface and attaches it
+just mobile::usb-detach    # hand it back to Windows; unplugging does the same
+```
+
+Sharing a device is a one-off that needs an **admin PowerShell** on Windows — `just
+mobile::usb` prints the exact `usbipd bind` line if it is needed. Install usbipd itself with
+`winget install usbipd`.
+
+### Connecting — wireless
+
+No Windows-side tooling at all. Enable *Developer options → Wireless debugging*:
 
 ```bash
 just mobile::pair 192.168.1.50:37000   # port and code shown on the phone
 just mobile::connect 192.168.1.50
-just mobile::install
 ```
 
-Point a real phone at your **deployed HTTPS server**. `10.0.2.2` is meaningless off the
-emulator, and the cleartext exception does not cover your LAN.
+### Reaching the dev stack
+
+`just mobile::reverse` tunnels port 8000 down the adb connection, so on the phone the dev
+stack is at:
+
+```
+http://localhost:8000
+```
+
+This is why there is no LAN address to work out and no TLS to arrange: `localhost` on the
+phone is already covered by the Debug cleartext exception, exactly as `10.0.2.2` is on the
+emulator. It works over USB and wireless alike, and needs re-running after a phone reboot or
+an adb disconnect.
+
+To check the **reverse-proxy path** instead, skip `reverse` and point the phone at your
+deployed HTTPS server. `10.0.2.2` is meaningless off the emulator, and the cleartext
+exception does not cover your LAN.
+
+### When both a phone and the emulator are connected
+
+adb needs telling which one. `just mobile::phone` and `reverse` resolve the phone
+themselves; for everything else, export the serial once and every recipe follows:
+
+```bash
+export ANDROID_SERIAL=$(just mobile::serial)
+```

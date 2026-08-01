@@ -98,6 +98,21 @@ sudo usermod -aG kvm $USER    # then `wsl --shutdown` from Windows PowerShell
 
 `just mobile::doctor` checks this along with the rest of the toolchain.
 
+### Typing on the emulator does nothing
+
+The keyboard is not passed through: keystrokes go nowhere and only the on-screen keyboard
+works. The Pixel 6 device profile ships `hw.keyboard = no`, and it comes back every time the
+AVD is recreated.
+
+`scripts/emulator.sh` now fixes this at every start, so `just mobile::up` or `just
+mobile::show` is enough. To do it by hand, set `hw.keyboard = yes` in
+`~/.android/avd/<name>.avd/config.ini` and restart the emulator — it is read at launch.
+
+### A phone plugged into the PC does not show up
+
+WSL2 passes no USB through to the VM, so a tethered phone is invisible until it is forwarded
+in. See [Testing the Android App](Testing-the-Android-App#connecting--tethered).
+
 ### A device never appears in `adb devices`
 
 Two `adb` binaries with different versions. Debian ships 34.x and the Android SDK has 37.x;

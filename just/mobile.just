@@ -127,16 +127,162 @@ devices:
     {{ ADB }} devices -l
 
 # --- physical phone -----------------------------------------------------------------------
+# Two separate gaps sit between WSL and a phone, and it is worth keeping them apart because
+# they are fixed by different recipes.
+#
+#   1. WSL cannot see the phone.   USB is not passed through to the VM at all, and the phone's
+#      adb port is not routable from here either. Closed by `usb` (tethered) or `pair` +
+#      `connect` (wireless).
+#
+#   2. The phone cannot see the dev stack.   Its ports are published on the Windows loopback,
+#      not on the LAN, so no address the phone can type reaches them. Closed by `reverse`,
+#      which tunnels port 8000 back down the adb connection - so the server address on the
+#      phone is http://localhost:8000, an address the Debug cleartext exception already
+#      covers. No LAN address, no TLS, and nothing to undo before a release build.
+#
+# `phone` does both plus build, install and launch. Everything here needs USB debugging on,
+# under Developer options.
+
+USBIPD := "/mnt/c/Program Files/usbipd-win/usbipd.exe"
+
+# The serial of the connected phone, i.e. the one device that is not an emulator. Exported as
+# ANDROID_SERIAL it makes every other recipe here target the phone instead:
+#
+#     export ANDROID_SERIAL=$(just mobile::serial)
+
+# Print the connected phone's adb serial.
+serial:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mapfile -t found < <({{ ADB }} devices | awk '$2 == "device" && $1 !~ /^emulator-/ { print $1 }')
+    case ${#found[@]} in
+        1) echo "${found[0]}" ;;
+        0) echo "error: no phone connected. Run 'just mobile::usb', or pair over wireless." >&2; exit 1 ;;
+        *) printf 'error: %d phones connected; set ANDROID_SERIAL to one of: %s\n' "${#found[@]}" "${found[*]}" >&2; exit 1 ;;
+    esac
+
+# Tethered USB. usbipd-win forwards the device into WSL over USB/IP; it ships its own Linux
+# client, so there is nothing to install in the distribution. Binding a device is a one-off
+# that needs an ADMIN PowerShell on Windows - the recipe prints the exact line if it is
+# needed. Add --auto-attach to the attach line below to have it survive unplugging the cable,
+# at the cost of the command no longer returning.
+#
+# Detection reads `usbipd state`, not `usbipd list`. The list table truncates its DEVICE
+# column to fit the terminal, and a phone in USB-tethering mode is described as "Remote NDIS
+# based Internet Sharing Device, SAMSUNG Android ADB Interface" - long enough that the ADB
+# part is exactly what gets cut off. `state` emits untruncated JSON.
+
+# Attach a USB-tethered phone into WSL: `just mobile::usb [BUSID]`.
+usb busid="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ ! -x "{{ USBIPD }}" ]; then
+        echo "error: usbipd-win is not installed on Windows." >&2
+        echo "       In an admin PowerShell: winget install usbipd" >&2
+        exit 1
+    fi
+
+    # Prints "<busid> <state> <description>" for the one matching device, or exits non-zero.
+    # A device is shared once it has a PersistedGuid, and attached once a client holds it.
+    found=$("{{ USBIPD }}" state | python3 -c '
+    import json, sys
+    want = sys.argv[1]
+    devices = [d for d in json.load(sys.stdin)["Devices"] if d.get("BusId")]
+    hits = [d for d in devices if d["BusId"] == want] if want else \
+           [d for d in devices if "ADB" in (d.get("Description") or "")]
+    if len(hits) != 1:
+        sys.exit(1)
+    d = hits[0]
+    state = "attached" if d.get("ClientIPAddress") else "shared" if d.get("PersistedGuid") else "unshared"
+    print(d["BusId"], state, d.get("Description") or "")
+    ' "{{ busid }}") || {
+        echo "error: no single USB device advertising an ADB interface." >&2
+        echo "       Plug the phone in, unlock it, enable USB debugging and accept the" >&2
+        echo "       prompt on its screen. Then check what Windows can see:" >&2
+        echo "         '{{ USBIPD }}' state" >&2
+        echo "       and pass the bus ID directly:  just mobile::usb 7-3" >&2
+        exit 1
+    }
+
+    read -r busid state description <<<"$found"
+    echo "Found $description on bus $busid"
+
+    if [ "$state" = "unshared" ]; then
+        echo "error: bus $busid is not shared yet. Once, in an ADMIN PowerShell:" >&2
+        echo "         usbipd bind --busid $busid" >&2
+        echo "" >&2
+        echo "       A bind covers one USB configuration, so changing the phone's USB mode" >&2
+        echo "       (charging, file transfer, tethering) can present a different device" >&2
+        echo "       that needs its own bind." >&2
+        exit 1
+    fi
+
+    if [ "$state" = "attached" ]; then
+        echo "Already attached to a client; not re-attaching."
+    else
+        "{{ USBIPD }}" attach --wsl --busid "$busid"
+    fi
+
+    echo -n "Waiting for adb"
+    for _ in $(seq 30); do
+        if {{ ADB }} devices | awk '$2 == "device" && $1 !~ /^emulator-/' | grep -q .; then
+            echo " ok."
+            {{ ADB }} devices -l
+            exit 0
+        fi
+        echo -n "."
+        sleep 1
+    done
+
+    echo ""
+    echo "error: attached, but adb never saw it. Check for an 'Allow USB debugging' prompt" >&2
+    echo "       on the phone, then run: just mobile::devices" >&2
+    exit 1
+
+# Hand the phone back to Windows. Unplugging it does the same thing.
+usb-detach:
+    "{{ USBIPD }}" detach --all
 
 # Port and code come from Developer options -> Wireless debugging -> Pair with code.
 
-# Pair with a phone: `just mobile::pair 192.168.1.50:37000`.
+# Pair with a phone over wifi: `just mobile::pair 192.168.1.50:37000`.
 pair address:
     {{ ADB }} pair {{ address }}
 
 # Connect to a paired phone: `just mobile::connect 192.168.1.50`.
 connect ip port="5555":
     {{ ADB }} connect {{ ip }}:{{ port }}
+
+# Undone by a phone reboot or an adb disconnect, so re-run it after either. Harmless to
+# repeat. Works over USB and wireless alike - the tunnel rides the adb connection itself.
+
+# Tunnel the dev stack to the phone, where it becomes http://localhost:8000.
+reverse port="8000":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Assigned first, exported second. 'export x=$(cmd)' reports export's exit status, not
+    # the command's, so a failing lookup would sail past set -e and target the emulator.
+    serial=$(just mobile::serial)
+    export ANDROID_SERIAL="$serial"
+    {{ ADB }} reverse tcp:{{ port }} tcp:{{ port }}
+    echo "In the app, the server address is now  http://localhost:{{ port }}"
+
+# The whole loop on a real phone: build, install, tunnel, launch.
+phone port="8000":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Assigned first, exported second - see the note in `reverse`.
+    serial=$(just mobile::serial)
+    export ANDROID_SERIAL="$serial"
+    echo "Targeting $ANDROID_SERIAL"
+    just mobile::build
+    {{ ADB }} install -r {{ APK }}
+    {{ ADB }} reverse tcp:{{ port }} tcp:{{ port }}
+    activity=$({{ ADB }} shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER {{ PACKAGE }} | tail -1 | tr -d '\r')
+    {{ ADB }} shell am start -n "$activity"
+    echo ""
+    echo "In the app, the server address is  http://localhost:{{ port }}"
 
 # --- diagnostics --------------------------------------------------------------------------
 

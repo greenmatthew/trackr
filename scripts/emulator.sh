@@ -29,6 +29,21 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="$REPO_ROOT/src/Trackr.Mobile/bin/Debug/net10.0-android/dev.trackr.app-Signed.apk"
 PACKAGE="dev.trackr.app"
 
+# The Pixel 6 device profile ships hw.keyboard=no, which silently drops every keystroke from
+# the host: typing goes nowhere and only the on-screen keyboard works. That is maddening in an
+# app whose first two screens are a server address and an email, and it comes back whenever the
+# AVD is recreated - hence a check at every start rather than a one-off edit.
+require_keyboard() {
+    local ini
+    ini="$(sed -n 's/^path=//p' "$HOME/.android/avd/$AVD_NAME.ini" 2>/dev/null)/config.ini"
+
+    [ -f "$ini" ] || return 0
+    grep -q '^hw\.keyboard *= *no' "$ini" || return 0
+
+    sed -i 's/^hw\.keyboard *= *no/hw.keyboard = yes/' "$ini"
+    echo "Enabled host keyboard passthrough (hw.keyboard) in $AVD_NAME."
+}
+
 require_kvm() {
     if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
         echo "error: /dev/kvm is not accessible by $(whoami)." >&2
@@ -45,6 +60,9 @@ cmd_start() {
         echo "An emulator is already running."
         return 0
     fi
+
+    # Must happen before the emulator reads config.ini, i.e. before it launches.
+    require_keyboard
 
     local args=(-avd "$AVD_NAME" -no-boot-anim -no-snapshot-save)
 
