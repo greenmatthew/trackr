@@ -73,3 +73,19 @@ changes made in the wiki's web UI are overwritten on the next publish.
 
 [CLAUDE.md](CLAUDE.md) is the project brief: what is being built, what is locked in, and why.
 [docs/decisions/](docs/decisions/) records the reasoning behind each milestone.
+
+## License
+
+Copyright © 2026 Matthew Green. Licensed under the
+[Elastic License 2.0](LICENSE) (`Elastic-2.0`).
+
+**Run it, modify it, host it — for yourself, your household, or your company.** All of that
+is explicitly permitted, at no cost and with nothing to ask.
+
+The one thing you may not do is **provide Trackr to third parties as a hosted or managed
+service** — selling accounts on an instance you run. Trackr is meant to be self-hosted by the
+people using it, not resold to them.
+
+This is a source-available licence rather than an open-source one, which is a deliberate
+trade: it costs F-Droid distribution and the OSI label in exchange for that single
+restriction.

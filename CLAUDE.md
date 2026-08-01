@@ -359,6 +359,9 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
 
 ## 10. Explicit non-goals / cautions
 
+- **Trackr is under the Elastic License 2.0** (`Elastic-2.0`) — source-available, not open source. Anyone may run, modify and self-host it, including commercially; nobody may offer it to third parties as a hosted or managed service. Two consequences that actually bite:
+  - **Dependencies must be permissive** — MIT, Apache-2.0, BSD. **Copyleft is not usable**: GPL and AGPL require the whole work to be distributed under their terms, which this licence cannot satisfy. LGPL is only safe as an unmodified dynamically-linked library, so avoid it too rather than reasoning case by case. Check before adding a package; a licence conflict found after it is woven in is expensive to undo.
+  - **No F-Droid.** It only accepts FOSS licences, so the APK is distributed by sideloading or Play Store. Do not write documentation implying otherwise.
 - No pre-loaded global food database; catalog is user-built over time.
 - No public/multi-tenant SaaS concerns; this is private and self-hosted.
 - Don't hand-roll authentication or password hashing — use Identity.

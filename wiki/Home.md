@@ -36,3 +36,8 @@ The only thing that ever leaves the machine is a barcode number, looked up again
 *This wiki is generated from `wiki/` in the [main repository](https://github.com/greenmatthew/trackr).
 Edits made here in the web UI are overwritten on the next publish — change the files in the
 repository instead.*
+
+*Copyright © 2026 Matthew Green, licensed under the
+[Elastic License 2.0](https://github.com/greenmatthew/trackr/blob/master/LICENSE). Running,
+modifying and self-hosting Trackr is free for anyone, including businesses. Selling accounts
+on an instance you host for other people is not permitted.*
