@@ -94,6 +94,18 @@ Once both are closed:
 just mobile::phone      # build, install, tunnel and launch, in one go
 ```
 
+**If you last installed a build from before the package was renamed** to
+`gg.matthewgreen.trackr`, remove the old one first. Android treats a changed application ID as
+a different app, so the two would otherwise sit side by side:
+
+```bash
+adb uninstall dev.trackr.app
+```
+
+The saved server address and stored token do not survive the change — they live in storage
+keyed by package name — so the app starts again at first-run setup. A password manager entry
+for the old ID needs repointing as well.
+
 ### Connecting — tethered
 
 `usbipd-win` forwards the device into WSL over USB/IP. It ships its own Linux client, so

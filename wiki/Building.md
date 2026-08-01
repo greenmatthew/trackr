@@ -49,7 +49,7 @@ Deployment**, which leaves the managed assemblies *outside* the APK for `dotnet 
 separately over adb. The resulting file installs without complaint and then aborts on launch:
 
 ```
-No assemblies found in '/data/user/0/dev.trackr.app/files/.__override__/x86_64'
+No assemblies found in '/data/user/0/gg.matthewgreen.trackr/files/.__override__/x86_64'
 ```
 
 which names Fast Deployment but reads like a corrupt build. Since every APK here is installed

@@ -25,7 +25,13 @@
     <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
     <ApplicationTitle>Trackr</ApplicationTitle>
-    <ApplicationId>dev.trackr.app</ApplicationId>
+
+    <!-- Reverse-DNS of the deployment's own domain, trackr.matthewgreen.gg. This is the
+         app's permanent identity on a device: Android treats a change here as a different
+         app entirely (no in-place upgrade, and SecureStorage and Preferences start empty),
+         and password managers key their autofill match on it. Changing it is a migration,
+         not a rename. Every install recipe derives the APK filename from this. -->
+    <ApplicationId>gg.matthewgreen.trackr</ApplicationId>
     <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
 
@@ -43,7 +49,7 @@
        marginally quicker and the resulting APK useless: it installs without complaint and
        then aborts on launch with
 
-         No assemblies found in '/data/user/0/dev.trackr.app/files/.__override__/x86_64'
+         No assemblies found in '/data/user/0/gg.matthewgreen.trackr/files/.__override__/x86_64'
 
        which names Fast Deployment but reads like a corrupt build. Since every APK here is
        installed with `adb install` - onto the emulator, onto a real phone, or handed to a

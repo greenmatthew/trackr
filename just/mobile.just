@@ -17,8 +17,8 @@ set working-directory := '..'
 export JAVA_HOME := env("JAVA_HOME", home_directory() / ".jdks/microsoft-17")
 export ANDROID_HOME := env("ANDROID_HOME", home_directory() / "Android/Sdk")
 
-APK := "src/Trackr.Mobile/bin/Debug/net10.0-android/dev.trackr.app-Signed.apk"
-PACKAGE := "dev.trackr.app"
+APK := "src/Trackr.Mobile/bin/Debug/net10.0-android/gg.matthewgreen.trackr-Signed.apk"
+PACKAGE := "gg.matthewgreen.trackr"
 ADB := "$ANDROID_HOME/platform-tools/adb"
 
 _default:

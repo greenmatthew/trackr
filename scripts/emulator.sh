@@ -26,8 +26,8 @@ export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export PATH="$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$ANDROID_HOME/emulator:$PATH"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APK="$REPO_ROOT/src/Trackr.Mobile/bin/Debug/net10.0-android/dev.trackr.app-Signed.apk"
-PACKAGE="dev.trackr.app"
+APK="$REPO_ROOT/src/Trackr.Mobile/bin/Debug/net10.0-android/gg.matthewgreen.trackr-Signed.apk"
+PACKAGE="gg.matthewgreen.trackr"
 
 # The Pixel 6 device profile ships hw.keyboard=no, which silently drops every keystroke from
 # the host: typing goes nowhere and only the on-screen keyboard works. That is maddening in an
