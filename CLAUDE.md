@@ -80,6 +80,18 @@ The database may be Postgres from day one (recommended, since we want a real use
 - **Two compose files.** `docker-compose.yml` is the Portainer deployment stack (external proxy network, no published ports, build-from-repo since nothing is pushed to a registry). `docker-compose.dev.yml` is a standalone local stack with published ports and throwaway credentials — standalone rather than an override because Compose merges networks additively and an override cannot drop the external network.
 - **Dev inner loop.** In `Debug` only, `Trackr.Api` also serves the Blazor client (`dotnet watch`, single origin, hot reload). The project reference and the matching `#if DEBUG` block are excluded from `Release`, so the shipped backend image does not contain the client.
 
+### Decided during milestone 2 (auth)
+
+- **`AddIdentityCore` + `AddIdentityCookies`, with hand-written endpoints.** Not `MapIdentityApi<T>()`, whose `/register` cannot be gated behind the invite rule and whose reset endpoints hard-require an email sender. Identity still does all the cryptography — hashing, TOTP, lockout counting; only the routing and policy are ours. Endpoints live in `Endpoints/{Auth,Account,Invite}Endpoints.cs`, mirroring `HealthEndpoints`.
+- **Registration = bootstrap, then invites.** `/api/auth/register` is open only while the users table is empty; after that it needs a single-use `Invite` token (SHA-256 hashed at rest, 8-char prefix kept in the clear for display). User creation and invite redemption share one transaction — which is why `UseNpgsql` must **not** enable a retrying execution strategy.
+- **Fail-safe authorization.** A fallback policy requires a signed-in user everywhere, and `_Imports.razor` applies `[Authorize]` to every page. Milestone 3+ endpoints are therefore protected by default. The health routes and the dev `MapFallbackToFile` opt out explicitly — losing either breaks the container healthcheck (and so the whole stack) or the login page.
+- **Cookie hardening.** `HttpOnly`, `SameSite=Strict`, and `SecurePolicy` conditional on environment: `Always` in Production, `SameAsRequest` in Development because every dev path is plain HTTP and `Always` would make the browser silently drop the cookie. `SameSite=Strict` + one origin + JSON-only bodies **is** the CSRF story; no antiforgery tokens.
+- **Data-protection keys in Postgres** (`PersistKeysToDbContext`). The container has no volume for the default file key ring, so it would be regenerated on every restart, signing everyone out on each redeploy.
+- **User key is `Guid`** (`IdentityUser<Guid>`, v7, assigned in the constructor because `IdentityUser<TKey>` does not assign one). Effectively permanent — every milestone-3 table gets an owner FK.
+- **Password recovery via `IEmailSender<TUser>`.** Default implementation logs the reset link at Warning (`docker compose logs backend`); an SMTP implementation is selected by config. Documented trade-off: whoever can read the logs can take over an account.
+- **Migrations apply at startup** (`MigrateDatabaseAsync`), single replica, no manual step on redeploy. `dotnet-ef` is pinned in `dotnet-tools.json`.
+- **Tests exist now** — `tests/Trackr.Api.Tests`, xUnit + `WebApplicationFactory` against a Testcontainers Postgres, so the real migrations run. They use the environment name `Testing` (not Development, which would trigger the `#if DEBUG` Blazor blocks) and an `https://localhost` base address (Secure cookies are not sent over http).
+
 ---
 
 ## 5. The logging cascade (core flow)
@@ -229,8 +241,8 @@ The user explicitly wants a properly secured account system. Implement, roughly 
 
 ## 9. Build order (suggested milestones)
 
-1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with Blazor WASM (PWA) frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions recorded in §4; how to run it is in `README.md`. **Next milestone: 2 (Auth).**
-2. **Auth** — ASP.NET Core Identity: register (possibly invite-only), login, protected API, authed PWA state. Enforce HTTPS.
+1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with Blazor WASM (PWA) frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions recorded in §4; how to run it is in `README.md`.
+2. ~~**Auth**~~ — ✅ **DONE.** ASP.NET Core Identity behind an HttpOnly cookie: bootstrap-then-invite-only registration, login, TOTP 2FA with QR enrolment and recovery codes, account lockout, rate limiting, password change and log-delivered reset, and a fully authed PWA (auth state, protected routes, login/settings pages). First EF migration and first test project. Decisions in §4; account handling is in `README.md`. **Next milestone: 3 (Data layer).**
 3. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the extensible nutrient store** (`Nutrient` + `NutrientAmount`, or JSONB map) from §7, seeding the §7a nutrient set. Basic CRUD API for catalog and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
 4. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive **User-Agent** on OFF requests (app name + version + contact) — OFF asks for this and may throttle callers without it. Handle full-match, partial-match, and no-match cases per §5, and surface rate-limit/timeout errors rather than swallowing them.
 5. **Ollama integration** — add the ollama service, wire the backend to call it, define the strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the JSON. Configure `keep_alive`.

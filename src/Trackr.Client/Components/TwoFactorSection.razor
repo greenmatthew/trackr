@@ -1,0 +1,237 @@
+@inject AuthClient Auth
+
+@* The enrolment flow from CLAUDE.md section 8.1: show a QR code, have the user scan it,
+   make them type one working code to prove it before turning 2FA on, then hand over
+   recovery codes once. *@
+
+<section class="settings-section">
+    <h2>Two-factor authentication</h2>
+
+    @if (_problem is not null)
+    {
+        <div class="notice notice--bad" role="alert">
+            @foreach (var message in _problem)
+            {
+                <p>@message</p>
+            }
+        </div>
+    }
+
+    @if (_newRecoveryCodes is not null)
+    {
+        <RecoveryCodeList Codes="_newRecoveryCodes" />
+        <button type="button" @onclick="DismissCodesAsync">Done — I have saved them</button>
+    }
+    else if (_status is null)
+    {
+        <p role="status">Loading…</p>
+    }
+    else if (_enrollment is not null)
+    {
+        <p>Scan this with your authenticator app, then enter the code it shows.</p>
+
+        <img class="qr" src="@_enrollment.QrCodeSvgDataUri" alt="Two-factor setup QR code" width="220" height="220" />
+
+        <p class="field-hint">
+            Cannot scan it? Enter this key by hand: <code>@_enrollment.SharedKey</code>
+        </p>
+
+        <EditForm Model="_codeRequest" OnValidSubmit="EnableAsync" FormName="enable-2fa">
+            <DataAnnotationsValidator />
+
+            <label for="verifyCode">Code from the app</label>
+            <InputText id="verifyCode" @bind-Value="_codeRequest.Code" autocomplete="one-time-code"
+                       inputmode="numeric" />
+            <ValidationMessage For="() => _codeRequest.Code" />
+
+            <button type="submit" disabled="@_busy">@(_busy ? "Verifying…" : "Turn on")</button>
+            <button type="button" class="linklike" @onclick="CancelEnrollment">Cancel</button>
+        </EditForm>
+    }
+    else if (_status.IsEnabled)
+    {
+        <div class="notice notice--good">
+            <p>Two-factor authentication is on.</p>
+            <p class="field-hint">@_status.RecoveryCodesLeft recovery code(s) left.</p>
+        </div>
+
+        @if (_status.RecoveryCodesLeft <= 3)
+        {
+            <div class="notice notice--warn">
+                <p>You are running low on recovery codes. Generate a new set while you still can.</p>
+            </div>
+        }
+
+        <button type="button" @onclick="RegenerateAsync" disabled="@_busy">
+            Generate new recovery codes
+        </button>
+
+        <h3>Turn off two-factor authentication</h3>
+        <p class="field-hint">This lowers your account's protection, so it needs your password.</p>
+
+        <EditForm Model="_disableRequest" OnValidSubmit="DisableAsync" FormName="disable-2fa">
+            <DataAnnotationsValidator />
+
+            <label for="disablePassword">Password</label>
+            <InputText id="disablePassword" @bind-Value="_disableRequest.Password" type="password"
+                       autocomplete="current-password" />
+            <ValidationMessage For="() => _disableRequest.Password" />
+
+            <button type="submit" class="danger" disabled="@_busy">Turn off</button>
+        </EditForm>
+    }
+    else
+    {
+        <p>
+            Add a second step to signing in, using an authenticator app such as Google
+            Authenticator, Aegis or 1Password.
+        </p>
+        <button type="button" @onclick="StartEnrollmentAsync" disabled="@_busy">
+            @(_busy ? "Preparing…" : "Set up")
+        </button>
+    }
+</section>
+
+@code {
+    private TwoFactorStatusResponse? _status;
+    private TwoFactorEnrollmentResponse? _enrollment;
+    private IReadOnlyList<string>? _newRecoveryCodes;
+
+    private readonly TwoFactorCodeRequest _codeRequest = new();
+    private readonly DisableTwoFactorRequest _disableRequest = new();
+
+    private IReadOnlyList<string>? _problem;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => RefreshStatusAsync();
+
+    private async Task RefreshStatusAsync()
+    {
+        var result = await Auth.GetTwoFactorStatusAsync();
+
+        if (result.Succeeded)
+        {
+            _status = result.Value;
+        }
+        else
+        {
+            _problem = result.Problem!.AllMessages.ToArray();
+        }
+    }
+
+    private async Task StartEnrollmentAsync()
+    {
+        _busy = true;
+        _problem = null;
+
+        try
+        {
+            var result = await Auth.EnrollTwoFactorAsync();
+
+            if (result.Succeeded)
+            {
+                _enrollment = result.Value;
+            }
+            else
+            {
+                _problem = result.Problem!.AllMessages.ToArray();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void CancelEnrollment()
+    {
+        // Only the local view is cleared. The shared secret stays on the server so that
+        // resuming enrolment does not invalidate a QR code that has already been scanned.
+        _enrollment = null;
+        _codeRequest.Code = "";
+        _problem = null;
+    }
+
+    private async Task EnableAsync()
+    {
+        _busy = true;
+        _problem = null;
+
+        try
+        {
+            var result = await Auth.EnableTwoFactorAsync(_codeRequest);
+
+            if (result.Succeeded)
+            {
+                _enrollment = null;
+                _codeRequest.Code = "";
+                _newRecoveryCodes = result.Value!.RecoveryCodes;
+                await RefreshStatusAsync();
+            }
+            else
+            {
+                _problem = result.Problem!.AllMessages.ToArray();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DisableAsync()
+    {
+        _busy = true;
+        _problem = null;
+
+        try
+        {
+            var result = await Auth.DisableTwoFactorAsync(_disableRequest);
+
+            if (result.Succeeded)
+            {
+                _disableRequest.Password = "";
+                await RefreshStatusAsync();
+            }
+            else
+            {
+                _problem = result.Problem!.AllMessages.ToArray();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RegenerateAsync()
+    {
+        _busy = true;
+        _problem = null;
+
+        try
+        {
+            var result = await Auth.RegenerateRecoveryCodesAsync();
+
+            if (result.Succeeded)
+            {
+                _newRecoveryCodes = result.Value!.RecoveryCodes;
+                await RefreshStatusAsync();
+            }
+            else
+            {
+                _problem = result.Problem!.AllMessages.ToArray();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DismissCodesAsync()
+    {
+        _newRecoveryCodes = null;
+        await RefreshStatusAsync();
+    }
+}

@@ -38,6 +38,15 @@ async function onActivate(event) {
 }
 
 async function onFetch(event) {
+    // Never let the offline cache answer for the API. Nothing under /api/ is in the
+    // assets manifest today, so these already fall through - but that is an accident of
+    // what the manifest happens to contain, and an API response is user-specific and
+    // auth-dependent, so a stale hit would be a data-leak-shaped bug rather than a
+    // cosmetic one. Made explicit so it stays true.
+    if (new URL(event.request.url).pathname.startsWith('/api/')) {
+        return fetch(event.request);
+    }
+
     let cachedResponse = null;
     if (event.request.method === 'GET') {
         // For all navigation requests, try to serve index.html from cache,
@@ -53,3 +62,9 @@ async function onFetch(event) {
 
     return cachedResponse || fetch(event.request);
 }
+
+// Note there is deliberately no cache purge on sign-out. The offline cache holds only the
+// public application shell - markup, WebAssembly and CSS that are identical for every
+// visitor - while auth state comes from GET /api/auth/me at runtime. If a later milestone
+// ever caches API responses here, that assumption breaks and signing out will need to
+// clear them.

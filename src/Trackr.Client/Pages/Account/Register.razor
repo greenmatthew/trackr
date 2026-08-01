@@ -1,0 +1,126 @@
+@page "/register"
+@attribute [AllowAnonymous]
+@inject AuthClient Auth
+@inject NavigationManager Navigation
+
+@* Two very different situations behind one form. On a brand new server this is where the
+   owner claims the first account; after that it only works with an invite token, and the
+   token field appears. See CLAUDE.md section 8.4. *@
+
+<PageTitle>Create an account — Trackr</PageTitle>
+
+<main class="auth-card">
+    <h1>Create an account</h1>
+
+    @if (_mode is null)
+    {
+        <p role="status">Loading…</p>
+    }
+    else
+    {
+        @if (_mode is RegistrationMode.Bootstrap)
+        {
+            <div class="notice notice--good">
+                <p>
+                    This server has no accounts yet, so this one becomes the owner. Afterwards
+                    registration closes and further accounts need an invite.
+                </p>
+            </div>
+        }
+
+        @if (_problem is not null)
+        {
+            <div class="notice notice--bad" role="alert">
+                @foreach (var message in _problem)
+                {
+                    <p>@message</p>
+                }
+            </div>
+        }
+
+        <EditForm Model="_request" OnValidSubmit="SubmitAsync" FormName="register">
+            <DataAnnotationsValidator />
+
+            <label for="email">Email</label>
+            <InputText id="email" @bind-Value="_request.Email" autocomplete="username" type="email" />
+            <ValidationMessage For="() => _request.Email" />
+
+            <label for="password">Password</label>
+            <InputText id="password" @bind-Value="_request.Password" type="password"
+                       autocomplete="new-password" />
+            <ValidationMessage For="() => _request.Password" />
+            <p class="field-hint">At least 12 characters. A memorable phrase beats a short scramble.</p>
+
+            @if (_mode is RegistrationMode.InviteRequired)
+            {
+                <label for="inviteToken">Invite code</label>
+                <InputText id="inviteToken" @bind-Value="_request.InviteToken" autocomplete="off" />
+                <ValidationMessage For="() => _request.InviteToken" />
+                <p class="field-hint">From the invite link you were sent.</p>
+            }
+
+            <button type="submit" disabled="@_busy">@(_busy ? "Creating…" : "Create account")</button>
+        </EditForm>
+    }
+
+    <p class="auth-card__aside">
+        Already have an account? <a href="login">Sign in</a>
+    </p>
+</main>
+
+@code {
+    /// <summary>Prefilled from the invite link so the token does not have to be copied by hand.</summary>
+    [SupplyParameterFromQuery(Name = "token")]
+    private string? Token { get; set; }
+
+    private readonly RegisterRequest _request = new();
+    private RegistrationMode? _mode;
+    private IReadOnlyList<string>? _problem;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _request.InviteToken = Token;
+
+        var result = await Auth.GetRegistrationStatusAsync();
+
+        // If the check itself fails, assume the stricter of the two rather than showing a
+        // form that cannot possibly succeed.
+        _mode = result.Value?.Mode ?? RegistrationMode.InviteRequired;
+
+        if (!result.Succeeded)
+        {
+            _problem = result.Problem!.AllMessages.ToArray();
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _problem = null;
+
+        try
+        {
+            var result = await Auth.RegisterAsync(_request);
+
+            if (result.Succeeded)
+            {
+                // Registering signs you in, so go straight to the app.
+                Navigation.NavigateTo("", replace: true);
+                return;
+            }
+
+            _problem = result.Problem!.AllMessages.ToArray();
+
+            if (result.Problem.Code is "registration_closed")
+            {
+                // Someone else claimed the server between loading this page and submitting.
+                _mode = RegistrationMode.InviteRequired;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

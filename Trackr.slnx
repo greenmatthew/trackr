@@ -4,4 +4,7 @@
     <Project Path="src/Trackr.Client/Trackr.Client.csproj" />
     <Project Path="src/Trackr.Shared/Trackr.Shared.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Trackr.Api.Tests/Trackr.Api.Tests.csproj" />
+  </Folder>
 </Solution>

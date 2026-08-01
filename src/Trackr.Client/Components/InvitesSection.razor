@@ -1,0 +1,178 @@
+@inject AuthClient Auth
+@inject IJSRuntime JS
+
+@* How a household member gets an account without reopening public sign-up
+   (CLAUDE.md section 8.4). *@
+
+<section class="settings-section">
+    <h2>Invites</h2>
+
+    @if (_problem is not null)
+    {
+        <div class="notice notice--bad" role="alert">
+            @foreach (var message in _problem)
+            {
+                <p>@message</p>
+            }
+        </div>
+    }
+
+    @if (_created is not null)
+    {
+        <div class="notice notice--warn" role="status">
+            <p><strong>Copy this link now — it is shown only once.</strong></p>
+            <p class="invite-link"><code>@_created.InviteUrl</code></p>
+            <button type="button" @onclick="CopyLinkAsync">@(_copied ? "Copied" : "Copy link")</button>
+            <button type="button" class="linklike" @onclick="() => _created = null">Dismiss</button>
+        </div>
+    }
+
+    <EditForm Model="_request" OnValidSubmit="CreateAsync" FormName="create-invite">
+        <DataAnnotationsValidator />
+
+        <label for="inviteNote">Who is it for? (optional)</label>
+        <InputText id="inviteNote" @bind-Value="_request.Note" />
+        <ValidationMessage For="() => _request.Note" />
+
+        <label for="expiresInHours">Expires in (hours)</label>
+        <InputNumber id="expiresInHours" @bind-Value="_request.ExpiresInHours" />
+        <ValidationMessage For="() => _request.ExpiresInHours" />
+
+        <button type="submit" disabled="@_busy">@(_busy ? "Creating…" : "Create invite")</button>
+    </EditForm>
+
+    @if (_invites is null)
+    {
+        <p role="status">Loading…</p>
+    }
+    else if (_invites.Length == 0)
+    {
+        <p class="field-hint">No invites yet.</p>
+    }
+    else
+    {
+        <table class="invites">
+            <thead>
+                <tr>
+                    <th scope="col">Code</th>
+                    <th scope="col">For</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Expires</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var invite in _invites)
+                {
+                    <tr>
+                        <td><code>@invite.TokenPrefix…</code></td>
+                        <td>@(invite.Note ?? "—")</td>
+                        <td>
+                            @invite.Status
+                            @if (invite.RedeemedByEmail is { Length: > 0 } email)
+                            {
+                                <span class="field-hint"> by @email</span>
+                            }
+                        </td>
+                        <td>@invite.ExpiresUtc.ToLocalTime().ToString("g")</td>
+                        <td>
+                            @if (invite.Status is InviteStatus.Active)
+                            {
+                                <button type="button" class="linklike" @onclick="() => RevokeAsync(invite.Id)">
+                                    Revoke
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private readonly CreateInviteRequest _request = new();
+    private InviteResponse[]? _invites;
+    private InviteCreatedResponse? _created;
+    private IReadOnlyList<string>? _problem;
+    private bool _busy;
+    private bool _copied;
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        var result = await Auth.ListInvitesAsync();
+
+        if (result.Succeeded)
+        {
+            _invites = result.Value ?? [];
+        }
+        else
+        {
+            _problem = result.Problem!.AllMessages.ToArray();
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _problem = null;
+        _copied = false;
+
+        try
+        {
+            var result = await Auth.CreateInviteAsync(_request);
+
+            if (result.Succeeded)
+            {
+                _created = result.Value;
+                _request.Note = null;
+                await RefreshAsync();
+            }
+            else
+            {
+                _problem = result.Problem!.AllMessages.ToArray();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(Guid id)
+    {
+        _problem = null;
+
+        var result = await Auth.RevokeInviteAsync(id);
+
+        if (result.Succeeded)
+        {
+            await RefreshAsync();
+        }
+        else
+        {
+            _problem = result.Problem!.AllMessages.ToArray();
+        }
+    }
+
+    private async Task CopyLinkAsync()
+    {
+        if (_created is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _created.InviteUrl);
+            _copied = true;
+        }
+        catch (JSException)
+        {
+            // The link is on screen either way; just do not claim the copy worked.
+            _copied = false;
+        }
+    }
+}

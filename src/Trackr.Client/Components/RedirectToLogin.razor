@@ -1,0 +1,19 @@
+@inject NavigationManager Navigation
+
+@* Rendered by AuthorizeRouteView's NotAuthorized fragment. Carries where the user was
+   trying to go, so signing in lands them there rather than dumping them on the home page.
+   replace: true keeps the protected URL out of history, so Back does not bounce them
+   through the redirect again. *@
+
+@code {
+    protected override void OnInitialized()
+    {
+        var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+
+        var target = string.IsNullOrEmpty(returnUrl) || returnUrl.StartsWith("login", StringComparison.OrdinalIgnoreCase)
+            ? "login"
+            : $"login?returnUrl={Uri.EscapeDataString(returnUrl)}";
+
+        Navigation.NavigateTo(target, replace: true);
+    }
+}

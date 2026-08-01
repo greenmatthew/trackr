@@ -43,6 +43,21 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Trackr: >-
         Host=db;Port=5432;Database=${POSTGRES_DB:-trackr};Username=${POSTGRES_USER:-trackr};Password=${POSTGRES_PASSWORD}
+      # Password-reset delivery. Left as Log, the reset link is written to this
+      # container's log instead of being emailed - see README. All optional.
+      Trackr__Email__Provider: ${TRACKR_EMAIL_PROVIDER:-Log}
+      Trackr__Email__Host: ${TRACKR_SMTP_HOST:-}
+      Trackr__Email__Port: ${TRACKR_SMTP_PORT:-587}
+      Trackr__Email__UseSsl: ${TRACKR_SMTP_USE_SSL:-true}
+      Trackr__Email__UserName: ${TRACKR_SMTP_USER:-}
+      Trackr__Email__Password: ${TRACKR_SMTP_PASSWORD:-}
+      Trackr__Email__From: ${TRACKR_SMTP_FROM:-}
+      # Only needed if links come out with the wrong host, e.g. behind a proxy that
+      # does not forward Host and X-Forwarded-Proto.
+      Trackr__Email__PublicBaseUrl: ${TRACKR_PUBLIC_BASE_URL:-}
+      # Raise if a household behind one address keeps tripping the auth rate limits.
+      Trackr__RateLimiting__LoginPermitLimit: ${TRACKR_LOGIN_RATE_LIMIT:-10}
+      Trackr__RateLimiting__SensitivePermitLimit: ${TRACKR_SENSITIVE_RATE_LIMIT:-5}
     networks: [internal]
 
   frontend:

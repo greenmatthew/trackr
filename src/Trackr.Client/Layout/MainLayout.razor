@@ -1,3 +1,35 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject AuthClient Auth
+@inject NavigationManager Navigation
+
+@* A slim bar rather than a nav menu. Milestone 6 replaces this with the chat and stats
+   layout; for now it just needs to show who is signed in and offer a way out. *@
+
+<header class="app-bar">
+    <a class="app-bar__brand" href="">Trackr</a>
+
+    <AuthorizeView>
+        <Authorized>
+            <span class="app-bar__user" title="@context.User.Identity?.Name">
+                @context.User.Identity?.Name
+            </span>
+            <a class="app-bar__link" href="settings">Settings</a>
+            <button type="button" class="app-bar__link app-bar__link--button" @onclick="SignOutAsync">
+                Sign out
+            </button>
+        </Authorized>
+        <NotAuthorized>
+            <a class="app-bar__link" href="login">Sign in</a>
+        </NotAuthorized>
+    </AuthorizeView>
+</header>
 
 @Body
+
+@code {
+    private async Task SignOutAsync()
+    {
+        await Auth.LogoutAsync();
+        Navigation.NavigateTo("login", replace: true);
+    }
+}

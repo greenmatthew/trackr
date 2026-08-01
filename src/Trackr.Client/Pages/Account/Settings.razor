@@ -1,0 +1,14 @@
+@page "/settings"
+
+@* Protected by the blanket [Authorize] in _Imports.razor - no attribute needed here.
+   A thin host for the three sections; each owns its own state and calls. *@
+
+<PageTitle>Settings — Trackr</PageTitle>
+
+<main class="settings">
+    <h1>Settings</h1>
+
+    <TwoFactorSection />
+    <ChangePasswordSection />
+    <InvitesSection />
+</main>

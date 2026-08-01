@@ -170,3 +170,212 @@ body {
     .probe .card { background: #1c212b; border-color: #2c3340; }
     .probe button { background: #1c212b; color: inherit; border-color: #3a4250; }
 }
+
+/* ---------------------------------------------------------------------------
+   Milestone 2 - auth shell, forms and settings.
+   Styled to match the .probe card idiom above rather than pulling in a CSS
+   framework. The stock .valid.modified / .invalid / .validation-message rules
+   near the top already cover EditForm validation state.
+   --------------------------------------------------------------------------- */
+
+.app-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid #e3e7ec;
+}
+
+.app-bar__brand {
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
+    margin-right: auto;
+}
+
+.app-bar__user {
+    color: #5b6472;
+    font-size: 0.85rem;
+    max-width: 16rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-bar__link {
+    font-size: 0.9rem;
+    color: inherit;
+}
+
+.app-bar__link--button {
+    font: inherit;
+    font-size: 0.9rem;
+    border: 0;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.auth-checking {
+    padding: 2rem 1.25rem;
+    color: #5b6472;
+}
+
+.auth-card,
+.settings {
+    max-width: 30rem;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+}
+
+.settings { max-width: 42rem; }
+
+.auth-card h1,
+.settings h1 { margin-top: 0; }
+
+.auth-card__aside {
+    margin-top: 1.25rem;
+    font-size: 0.9rem;
+}
+
+.settings-section {
+    border: 1px solid #e3e7ec;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.settings-section h2 { margin-top: 0; font-size: 1.1rem; }
+.settings-section h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+
+label {
+    display: block;
+    margin-top: 0.9rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+label.checkbox {
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"] {
+    font: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #c3cad4;
+    border-radius: 6px;
+    background: #fff;
+    color: inherit;
+}
+
+.field-hint {
+    margin: 0.3rem 0 0;
+    font-size: 0.8rem;
+    color: #5b6472;
+}
+
+button {
+    font: inherit;
+    margin-top: 1rem;
+    padding: 0.45rem 1rem;
+    border: 1px solid #c3cad4;
+    border-radius: 6px;
+    background: #fff;
+    color: inherit;
+    cursor: pointer;
+}
+
+button:disabled { opacity: 0.55; cursor: default; }
+button.danger { border-color: #d99; color: #b32121; }
+
+button.linklike {
+    border: 0;
+    background: none;
+    padding: 0;
+    margin-left: 0.75rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.notice {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid #e3e7ec;
+    border-left-width: 4px;
+    border-radius: 6px;
+}
+
+.notice p { margin: 0.25rem 0; }
+.notice--good { border-left-color: #2f8a4c; }
+.notice--warn { border-left-color: #c98a17; }
+.notice--bad  { border-left-color: #b32121; }
+
+.qr {
+    display: block;
+    margin: 1rem 0;
+    background: #fff;
+    padding: 0.5rem;
+    border-radius: 8px;
+}
+
+.recovery-codes__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: 0.35rem;
+    list-style: none;
+    padding: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.invite-link code { overflow-wrap: anywhere; }
+
+.invites {
+    width: 100%;
+    margin-top: 1.25rem;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.invites th,
+.invites td {
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid #e3e7ec;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+    .app-bar { border-bottom-color: #2c3340; }
+    .app-bar__user, .field-hint, .auth-checking { color: #98a2b3; }
+    .settings-section, .notice { border-color: #2c3340; }
+    .invites th, .invites td { border-bottom-color: #2c3340; }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    button {
+        background: #1c212b;
+        color: inherit;
+        border-color: #3a4250;
+    }
+
+    button.linklike { background: none; }
+}

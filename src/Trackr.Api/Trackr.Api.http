@@ -10,3 +10,136 @@ Accept: application/json
 
 ### Readiness: 200 only when Postgres is reachable too.
 GET {{Trackr.Api_HostAddress}}/api/health/ready
+
+###
+# Auth. Everything below relies on the session cookie the API sets, which most HTTP
+# clients keep for you between requests in the same file.
+
+### Bootstrap or InviteRequired - whether an account can be created right now.
+GET {{Trackr.Api_HostAddress}}/api/auth/registration-status
+
+### Claim the first account. Only works while no accounts exist.
+POST {{Trackr.Api_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "me@example.com",
+  "password": "correct horse battery staple"
+}
+
+### Register with an invite, once the server has an owner.
+POST {{Trackr.Api_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "member@example.com",
+  "password": "a different long passphrase",
+  "inviteToken": "paste-the-token-here"
+}
+
+### Sign in. Answers RequiresTwoFactor when the account has 2FA.
+POST {{Trackr.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "me@example.com",
+  "password": "correct horse battery staple",
+  "rememberMe": true
+}
+
+### Second step: the current code from the authenticator app.
+POST {{Trackr.Api_HostAddress}}/api/auth/login/2fa
+Content-Type: application/json
+
+{
+  "code": "123456",
+  "rememberMachine": false
+}
+
+### Second step alternative: a single-use recovery code.
+POST {{Trackr.Api_HostAddress}}/api/auth/login/recovery-code
+Content-Type: application/json
+
+{
+  "recoveryCode": "abcde-fghij"
+}
+
+### Who the current session belongs to. 401 when signed out.
+GET {{Trackr.Api_HostAddress}}/api/auth/me
+
+### Clear the session.
+POST {{Trackr.Api_HostAddress}}/api/auth/logout
+
+### Request a reset link. Always 202. With the default Log provider the link goes
+### to the backend log rather than to an inbox.
+POST {{Trackr.Api_HostAddress}}/api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "me@example.com"
+}
+
+### Set a new password using the code from that link.
+POST {{Trackr.Api_HostAddress}}/api/auth/reset-password
+Content-Type: application/json
+
+{
+  "email": "me@example.com",
+  "code": "paste-the-code-from-the-link",
+  "newPassword": "a different long passphrase"
+}
+
+###
+# Account settings. All require a signed-in session.
+
+### Change the password. The current session survives; others are signed out.
+POST {{Trackr.Api_HostAddress}}/api/account/password
+Content-Type: application/json
+
+{
+  "currentPassword": "correct horse battery staple",
+  "newPassword": "a different long passphrase"
+}
+
+### Is 2FA on, and how many recovery codes are left?
+GET {{Trackr.Api_HostAddress}}/api/account/2fa
+
+### Start enrolment: returns the shared key, the otpauth URI and a QR code.
+POST {{Trackr.Api_HostAddress}}/api/account/2fa/enroll
+
+### Finish enrolment by proving the app works. Returns recovery codes once.
+POST {{Trackr.Api_HostAddress}}/api/account/2fa/enable
+Content-Type: application/json
+
+{
+  "code": "123456"
+}
+
+### Turn 2FA off. Needs the account password.
+POST {{Trackr.Api_HostAddress}}/api/account/2fa/disable
+Content-Type: application/json
+
+{
+  "password": "correct horse battery staple"
+}
+
+### Replace the recovery codes. Returns the new set once.
+POST {{Trackr.Api_HostAddress}}/api/account/2fa/recovery-codes
+
+###
+# Invites - how a household member gets an account without reopening sign-up.
+
+### Mint one. The token is returned once and only its hash is stored.
+POST {{Trackr.Api_HostAddress}}/api/invites
+Content-Type: application/json
+
+{
+  "note": "for Sam",
+  "expiresInHours": 168
+}
+
+### All invites and their state.
+GET {{Trackr.Api_HostAddress}}/api/invites
+
+### Revoke an unused invite.
+DELETE {{Trackr.Api_HostAddress}}/api/invites/00000000-0000-0000-0000-000000000000

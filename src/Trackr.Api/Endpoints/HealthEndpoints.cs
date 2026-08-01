@@ -25,9 +25,16 @@ public static class HealthEndpoints
         // Routes are written out in full rather than via MapGroup so that the exact
         // URL is obvious at a glance and there is no ambiguity about trailing slashes.
 
+        // AllowAnonymous on every route here is load-bearing, not decorative. Program.cs
+        // sets a fallback authorization policy that requires a signed-in user, and these
+        // probes have no credentials to offer: the container HEALTHCHECK wgets
+        // /api/health/live directly, and `frontend` will not start until `backend` reports
+        // healthy - so a 401 here stops the whole stack from coming up.
+
         // The endpoint the Blazor app calls. Returns the full HealthResponse so the
         // UI can show which dependency is broken rather than just "something failed".
         app.MapGet("/api/health", GetHealthAsync)
+            .AllowAnonymous()
             .WithName("Health")
             .WithSummary("Full health report, including database connectivity.");
 
@@ -36,6 +43,7 @@ public static class HealthEndpoints
         // just because Postgres is briefly unavailable, or Docker would restart a
         // perfectly healthy backend.
         app.MapGet("/api/health/live", () => Results.Ok(new { status = "alive" }))
+            .AllowAnonymous()
             .WithName("HealthLive")
             .WithSummary("Liveness probe. Always 200 while the process is running.");
 

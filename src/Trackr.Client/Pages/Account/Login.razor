@@ -1,0 +1,231 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject AuthClient Auth
+@inject NavigationManager Navigation
+
+@* One page, three steps: password, then - only if the account has 2FA - an authenticator
+   code, with a recovery code as the way out if the phone is gone. Keeping them on one
+   page means the 2FA challenge cannot be reached by URL without a live password step,
+   which matches how the server enforces it. *@
+
+<PageTitle>Sign in — Trackr</PageTitle>
+
+<main class="auth-card">
+    <h1>Sign in</h1>
+
+    @if (_problem is not null)
+    {
+        <div class="notice notice--bad" role="alert">
+            @foreach (var message in _problem)
+            {
+                <p>@message</p>
+            }
+        </div>
+    }
+
+    @if (_step is Step.Password)
+    {
+        <EditForm Model="_login" OnValidSubmit="SubmitPasswordAsync" FormName="login">
+            <DataAnnotationsValidator />
+
+            <label for="email">Email</label>
+            <InputText id="email" @bind-Value="_login.Email" autocomplete="username" type="email" />
+            <ValidationMessage For="() => _login.Email" />
+
+            <label for="password">Password</label>
+            <InputText id="password" @bind-Value="_login.Password" type="password"
+                       autocomplete="current-password" />
+            <ValidationMessage For="() => _login.Password" />
+
+            <label class="checkbox">
+                <InputCheckbox @bind-Value="_login.RememberMe" />
+                Stay signed in on this device
+            </label>
+
+            <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+        </EditForm>
+
+        <p class="auth-card__aside">
+            <a href="forgot-password">Forgot your password?</a>
+        </p>
+    }
+    else if (_step is Step.TwoFactorCode)
+    {
+        <p>Enter the current 6-digit code from your authenticator app.</p>
+
+        <EditForm Model="_twoFactor" OnValidSubmit="SubmitTwoFactorAsync" FormName="two-factor">
+            <DataAnnotationsValidator />
+
+            <label for="code">Authenticator code</label>
+            <InputText id="code" @bind-Value="_twoFactor.Code" autocomplete="one-time-code"
+                       inputmode="numeric" />
+            <ValidationMessage For="() => _twoFactor.Code" />
+
+            <label class="checkbox">
+                <InputCheckbox @bind-Value="_twoFactor.RememberMachine" />
+                Do not ask again on this device
+            </label>
+
+            <button type="submit" disabled="@_busy">@(_busy ? "Checking…" : "Verify")</button>
+        </EditForm>
+
+        <p class="auth-card__aside">
+            <button type="button" class="linklike" @onclick="() => SwitchTo(Step.RecoveryCode)">
+                Use a recovery code instead
+            </button>
+        </p>
+    }
+    else
+    {
+        <p>Enter one of the recovery codes you saved when you turned on two-factor authentication.</p>
+
+        <EditForm Model="_recovery" OnValidSubmit="SubmitRecoveryCodeAsync" FormName="recovery">
+            <DataAnnotationsValidator />
+
+            <label for="recoveryCode">Recovery code</label>
+            <InputText id="recoveryCode" @bind-Value="_recovery.RecoveryCode" autocomplete="off" />
+            <ValidationMessage For="() => _recovery.RecoveryCode" />
+
+            <button type="submit" disabled="@_busy">@(_busy ? "Checking…" : "Sign in")</button>
+        </EditForm>
+
+        <p class="auth-card__aside">
+            <button type="button" class="linklike" @onclick="() => SwitchTo(Step.TwoFactorCode)">
+                Use the authenticator app instead
+            </button>
+        </p>
+    }
+</main>
+
+@code {
+    private enum Step { Password, TwoFactorCode, RecoveryCode }
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    private readonly LoginRequest _login = new();
+    private readonly TwoFactorLoginRequest _twoFactor = new();
+    private readonly RecoveryCodeLoginRequest _recovery = new();
+
+    private Step _step = Step.Password;
+    private IReadOnlyList<string>? _problem;
+    private bool _busy;
+
+    private void SwitchTo(Step step)
+    {
+        _step = step;
+        _problem = null;
+    }
+
+    private async Task SubmitPasswordAsync()
+    {
+        var result = await RunAsync(() => Auth.LoginAsync(_login));
+        if (result is null)
+        {
+            return;
+        }
+
+        // RememberMe carries into the second step too, otherwise choosing it on the
+        // password screen would be silently discarded by a 2FA account.
+        _twoFactor.RememberMe = _login.RememberMe;
+        HandleLoginResult(result);
+    }
+
+    private async Task SubmitTwoFactorAsync()
+    {
+        var result = await RunAsync(() => Auth.LoginTwoFactorAsync(_twoFactor));
+        if (result is not null)
+        {
+            HandleLoginResult(result);
+        }
+    }
+
+    private async Task SubmitRecoveryCodeAsync()
+    {
+        var result = await RunAsync(() => Auth.LoginRecoveryCodeAsync(_recovery));
+        if (result is not null)
+        {
+            HandleLoginResult(result);
+        }
+    }
+
+    private async Task<LoginResponse?> RunAsync(Func<Task<ApiResult<LoginResponse>>> call)
+    {
+        _busy = true;
+        _problem = null;
+
+        try
+        {
+            var result = await call();
+
+            if (!result.Succeeded)
+            {
+                // A transport or rate-limit failure rather than a rejected credential.
+                _problem = result.Problem!.AllMessages.ToArray();
+                return null;
+            }
+
+            return result.Value;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void HandleLoginResult(LoginResponse response)
+    {
+        switch (response.Status)
+        {
+            case LoginStatus.Succeeded:
+                Navigation.NavigateTo(SafeReturnUrl(), replace: true);
+                break;
+
+            case LoginStatus.RequiresTwoFactor:
+                SwitchTo(Step.TwoFactorCode);
+                break;
+
+            case LoginStatus.LockedOut:
+                var until = response.LockoutEndUtc?.ToLocalTime().ToString("t");
+                _problem =
+                [
+                    until is null
+                        ? "This account is temporarily locked after too many failed attempts."
+                        : $"This account is locked after too many failed attempts. Try again after {until}."
+                ];
+                break;
+
+            case LoginStatus.ChallengeExpired:
+                _step = Step.Password;
+                _problem = ["That took too long. Please enter your password again."];
+                break;
+
+            default:
+                _problem = _step is Step.Password
+                    ? ["That email and password combination was not recognised."]
+                    : ["That code was not recognised."];
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Only ever navigate somewhere inside this app. An absolute returnUrl would turn the
+    /// login page into an open redirect - a phishing link that genuinely starts on the
+    /// real site.
+    /// </summary>
+    private string SafeReturnUrl()
+    {
+        if (string.IsNullOrWhiteSpace(ReturnUrl))
+        {
+            return "";
+        }
+
+        // Rejects "https://elsewhere", protocol-relative "//elsewhere" and anything with a
+        // scheme; keeps ordinary relative paths like "settings" or "some/page?x=1".
+        var candidate = ReturnUrl.TrimStart('/');
+
+        return Uri.IsWellFormedUriString(candidate, UriKind.Relative) && !candidate.Contains("//")
+            ? candidate
+            : "";
+    }
+}

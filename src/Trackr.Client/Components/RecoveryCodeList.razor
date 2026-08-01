@@ -1,0 +1,48 @@
+@inject IJSRuntime JS
+
+@* Shown exactly once. The server keeps only hashes, so if these are lost the only way
+   back is to generate a new set while still signed in. *@
+
+<div class="recovery-codes">
+    <div class="notice notice--warn" role="alert">
+        <p><strong>Save these now — they are shown only once.</strong></p>
+        <p>
+            Each code signs you in once if you lose your authenticator app. Keep them somewhere
+            you can reach without your phone.
+        </p>
+    </div>
+
+    <ul class="recovery-codes__list">
+        @* Not named `code`: inside markup, @code is read as the Razor directive. *@
+        @foreach (var recoveryCode in Codes)
+        {
+            <li><code>@recoveryCode</code></li>
+        }
+    </ul>
+
+    <button type="button" @onclick="CopyAsync">@(_copied ? "Copied" : "Copy all")</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<string> Codes { get; set; }
+
+    private bool _copied;
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            // The browser's own clipboard API, so this needs no JavaScript file of ours.
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", string.Join("\n", Codes));
+            _copied = true;
+        }
+        catch (JSException)
+        {
+            // Clipboard access can be refused (an insecure origin, or a browser prompt the
+            // user dismissed). The codes are on screen regardless, so there is nothing to
+            // recover from - just do not claim it worked.
+            _copied = false;
+        }
+    }
+}
