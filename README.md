@@ -22,16 +22,12 @@ tests/Trackr.Api.Tests/    Integration tests against a throwaway Postgres
 tests/Trackr.Mobile.Tests/ View-model tests, no device needed
 docker/                    Compose stacks and .env.example
 docs/.claude/decisions/    Why each milestone was built the way it was
-docs/wiki/                 The project wiki — a separate repo, see below
+docs/wiki/                 The project wiki — edited here, published from here
 ```
 
-The wiki is the GitHub/Gitea wiki repository cloned into place, so source and documentation
-can be edited together. It is **not** part of this repository and a fresh clone will not have
-it:
-
-```bash
-git clone https://github.com/greenmatthew/trackr.wiki.git docs/wiki
-```
+The wiki pages live in this repository, so a change to a flag and a change to the page
+documenting it are one commit. `just docs::publish` copies them to the GitHub and Gitea
+wikis; editing a page in either web UI will be overwritten on the next publish.
 
 One repository on purpose: `Trackr.Shared` is a project reference rather than a published
 package or a generated client, so a contract change is one commit rather than three.

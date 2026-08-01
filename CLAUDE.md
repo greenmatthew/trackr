@@ -14,7 +14,7 @@ server". What differs is whether it must be in context *before* the question is 
 | --- | --- | --- |
 | **`CLAUDE.md`** (this file) | Decisions and constraints. What we are building, what is locked in, what not to do. | Every session, unprompted. |
 | **`docs/.claude/`** | Claude-specific working material. `decisions/` holds one record per milestone — the *why* behind past choices. | Before changing anything a record covers. |
-| **`docs/wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. | On demand, when the question actually arises. |
+| **`docs/wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. Tracked in this repository and published to the GitHub/Gitea wiki. | On demand, when the question actually arises. |
 
 **The test for this file:** *would Claude make a worse decision without this in context?* If
 yes, it belongs here. If it merely answers a question — "which port", "what are the nutrient
@@ -26,34 +26,49 @@ Anything whose staleness would be *dangerous* — the cleartext-HTTP rule, the a
 the security posture in §8 — stays in `CLAUDE.md`. A wiki page that drifts out of step with
 the code is a mild annoyance for a how-to and a security misunderstanding for a constraint.
 
-### The wiki is a separate repository — set it up
+### The wiki is published from this repository
 
-`docs/wiki/` is **not part of this repository**. It is the project's GitHub/Gitea wiki
-(`trackr.wiki.git`), cloned into place so that source and documentation can be edited in one
-directory, and ignored via `docs/.gitignore` so it never lands in a Trackr commit.
+`docs/wiki/` holds ordinary tracked files. That is deliberate and is the whole point: a
+change to an environment variable and a change to the page documenting it land in **one
+commit**, reviewed together and impossible to half-forget.
 
-A fresh clone will not have it. Set it up once:
+`trackr.wiki.git` — the GitHub/Gitea wiki — is a **publishing target, not a source of
+truth**:
 
-```bash
-git clone https://github.com/greenmatthew/trackr.wiki.git docs/wiki
+```
+just docs::check      # what would change on the wiki
+just docs::publish    # copy docs/wiki/ to GitHub and Gitea
+just docs::lint       # links pointing at pages that do not exist
 ```
 
-**If `docs/wiki/` is missing, say so rather than working around it.** Do not silently write
-documentation into `CLAUDE.md` or `README.md` that belongs in the wiki, and do not recreate
-the directory as a plain folder — that would produce an untracked pile of markdown that is
-never published and never pushed.
+The wiki URLs are derived from this repository's own remotes (`<repo>.git` →
+`<repo>.wiki.git`), so they cannot drift apart.
 
-Two consequences of it being a second repository, both worth actively managing:
+Two consequences to hold on to:
 
-- **Nothing is atomic.** Renaming an environment variable cannot update the code and the wiki
-  page in one commit. When a change makes a wiki page wrong, update that page in the same
-  work session and say so, rather than leaving it for later.
-- **It has its own remotes, and `git status` in this repository will never mention it.** That
-  is exactly how unpushed work gets lost. Commit and push the wiki as its own repository.
+- **Editing a page in the GitHub or Gitea wiki UI is pointless** — the next publish
+  overwrites it. Change the file here. Say so if the user asks to edit the wiki directly.
+- **A wiki repository does not exist until its wiki has one page.** If `just docs::publish`
+  cannot clone, the fix is to create the first page through the web UI once per host, not to
+  work around it.
 
-Wiki pages are flat markdown at the wiki repo root, following the GitHub convention:
-`Self-Hosting.md`, `Testing-the-Android-App.md`. Dashes render as spaces in the page title,
-and `_Sidebar.md` supplies navigation.
+Rejected alternatives, so they are not revisited: cloning `trackr.wiki.git` into `docs/wiki/`
+and gitignoring it — editing is fine but nothing is ever atomic, and a second repository is a
+second thing to forget to push. A submodule is worse: still two commits, plus detached-HEAD
+friction. `git subtree` is atomic and was a genuine contender, but its merge semantics are
+hard to reason about for something as low-stakes as a docs folder.
+
+### Keeping documentation honest
+
+Prose cannot be generated — nothing writes "how to self-host behind a reverse proxy" from
+source. Two things can be, and they cover the material that drifts most:
+
+- **`API-Reference.md` is generated** from the OpenAPI document the API already serves. Never
+  hand-edit it.
+- **Tests fail when reference docs go stale.** Every `TRACKR_*` variable in
+  `docker/docker-compose.yml` must appear in `Configuration.md`, and every `just` recipe the
+  README mentions must exist. When adding a configuration knob, expect the test to fail until
+  the page is updated — that is the mechanism working, not an obstacle to route around.
 
 ---
 
@@ -319,7 +334,8 @@ The user explicitly wants a properly secured account system. Implement, roughly 
     - §4's container detail → `Self-Hosting.md`. Keep the service list.
     Write the self-hoster pages that exist nowhere today: `Home.md`, `_Sidebar.md`, `Self-Hosting.md`, `Configuration.md` (every `TRACKR_*` variable), `Accounts-and-2FA.md`, `Backup-and-Restore.md`, `Troubleshooting.md`. **Backup and restore is the notable gap** — the data-protection keys and the Postgres volume both matter and neither is documented anywhere.
     Then cut `README.md` back to an entry point: what Trackr is, the layout, a short getting-started with `just dev` / `just stop` / `just nuke` and the `http://10.0.2.2:8000` dev-server address, and links out. It should not be as technical as it currently is.
-    Leave every constraint in `CLAUDE.md` — see the exception in §0.
+    Add the drift checks from §0: a test asserting every `TRACKR_*` variable in `docker/docker-compose.yml` appears in `Configuration.md` and every `just` recipe the README names exists, plus a generated `API-Reference.md` built from the OpenAPI document.
+    Leave every constraint in `CLAUDE.md` — see the exception in §0. `Home.md`, `_Sidebar.md` and the `just docs::*` recipes already exist; `just docs::lint` lists exactly which pages are still missing.
 5. **Mobile UX & architecture planning** — a *planning* milestone, no feature code. The thin slice in milestone 3 makes the minimum viable choices to get a screen on a phone; this is where they get made properly, before the chat UI is built on top of them. Cover at least:
     - **Navigation** — `Shell` versus plain navigation, how the chat and stats tabs are laid out, and where server-setup and login sit relative to the signed-in shell.
     - **Styling and theming** — resource dictionaries, light/dark handling, and whether to lean on default Material styling or build a custom theme.

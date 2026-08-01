@@ -21,6 +21,7 @@
 
 mod server 'just/server.just'
 mod mobile 'just/mobile.just'
+mod docs 'just/docs.just'
 
 _default:
     @just --list --list-submodules
