@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Authentication;
 using Microsoft.Extensions.Logging;
+using Polly.CircuitBreaker;
+using Polly.Timeout;
 using Trackr.Mobile.Core.Platform;
 using Trackr.Shared.Auth;
 using Trackr.Shared.Health;
@@ -42,25 +45,11 @@ public sealed class TrackrApiClient(
 
             return ServerCheckResult.Reachable;
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (IsTransportFailure(ex))
         {
             logger.LogWarning(ex, "Server check failed for {BaseUrl}", baseUrl);
 
-            // Overwhelmingly the most common self-hosted failure: a certificate Android does
-            // not trust, because the reverse proxy uses a self-signed or private-CA cert.
-            // Worth naming explicitly - the generic message sends people hunting the wrong
-            // problem entirely.
-            var isTls = ex.InnerException is System.Security.Authentication.AuthenticationException;
-
-            return ServerCheckResult.Failed(isTls
-                ? "Could not verify the server's HTTPS certificate. If it is self-signed, install its "
-                  + "certificate on this phone first."
-                : "Could not reach that address. Check the server is running and that this phone is on "
-                  + "the right network or VPN.");
-        }
-        catch (TaskCanceledException)
-        {
-            return ServerCheckResult.Failed("The server took too long to answer.");
+            return ServerCheckResult.Failed(Describe(ex));
         }
     }
 
@@ -110,7 +99,7 @@ public sealed class TrackrApiClient(
                 LoginStatus.Failed,
                 Problem: $"The server answered with {(int)response.StatusCode}.");
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (IsTransportFailure(ex))
         {
             logger.LogWarning(ex, "Sign-in request failed");
 
@@ -138,7 +127,7 @@ public sealed class TrackrApiClient(
                 ? await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken)
                 : null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (IsTransportFailure(ex))
         {
             logger.LogWarning(ex, "Token refresh failed");
 
@@ -157,13 +146,70 @@ public sealed class TrackrApiClient(
                 ? await response.Content.ReadFromJsonAsync<MeResponse>(cancellationToken)
                 : null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (IsTransportFailure(ex))
         {
             logger.LogWarning(ex, "Identity lookup failed");
 
             return null;
         }
     }
+
+    /// <summary>
+    /// Whether an exception means the request did not get through, rather than that this app
+    /// has a bug.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The list is longer than it looks like it should be because
+    /// <c>AddStandardResilienceHandler</c> wraps this client in a Polly pipeline, and that
+    /// pipeline raises its own exception types rather than the <see cref="HttpRequestException"/>
+    /// a bare <see cref="HttpClient"/> would. Catching only the HTTP ones lets the rest escape
+    /// into an async command with nothing above it, which terminates the process.
+    /// </para>
+    /// <para>
+    /// <see cref="TimeoutRejectedException"/> is the one that bit: an address with no route to
+    /// it neither connects nor refuses, so the pipeline's total request timeout is what
+    /// eventually fires. This never reproduces on the emulator, where a wrong address is
+    /// refused immediately and cleanly - it needs a real phone pointed somewhere unroutable,
+    /// which is exactly what "10.0.2.2" is once you leave the emulator.
+    /// </para>
+    /// <para>
+    /// Deliberately a closed list rather than <c>catch (Exception)</c>. A genuine bug in here
+    /// should still crash loudly in testing instead of being reported to the user as a
+    /// network problem.
+    /// </para>
+    /// </remarks>
+    private static bool IsTransportFailure(Exception ex) =>
+        ex is HttpRequestException
+            or TaskCanceledException
+            or TimeoutRejectedException
+            or BrokenCircuitException;
+
+    /// <summary>
+    /// What to tell the user about a failure from <see cref="IsTransportFailure"/>.
+    /// </summary>
+    private static string Describe(Exception ex) => ex switch
+    {
+        // Overwhelmingly the most common self-hosted failure: a certificate Android does not
+        // trust, because the reverse proxy uses a self-signed or private-CA cert. Worth naming
+        // explicitly - the generic message sends people hunting the wrong problem entirely.
+        HttpRequestException { InnerException: AuthenticationException } =>
+            "Could not verify the server's HTTPS certificate. If it is self-signed, install its "
+            + "certificate on this phone first.",
+
+        // Nothing answered at all, as opposed to something answering with a refusal. Usually a
+        // typo in the address, or a phone that is not on the same network as the server.
+        TimeoutRejectedException or TaskCanceledException =>
+            "The server took too long to answer. Check the address, and that this phone is on "
+            + "the right network or VPN.",
+
+        BrokenCircuitException =>
+            "That address has failed repeatedly, so it is being left alone for a moment. Try "
+            + "again shortly.",
+
+        _ => "Could not reach that address. Check the server is running and that this phone is "
+             + "on the right network or VPN."
+    };
 
     private Uri Endpoint(string relativePath) =>
         serverSettings.BaseUrl is { } baseUrl
