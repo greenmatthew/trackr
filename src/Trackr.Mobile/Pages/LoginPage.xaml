@@ -80,6 +80,16 @@
                 IsVisible="{Binding IsBusy}"
                 HorizontalOptions="Center" />
 
+            <!-- The only route to sign-up. Without it a server with no accounts is a dead
+                 end on the phone, exactly as the web login page was before it gained the
+                 same link. -->
+            <Button
+                Text="No account yet? Create one"
+                Command="{Binding GoToRegisterCommand}"
+                BackgroundColor="Transparent"
+                TextColor="{StaticResource Primary}"
+                FontSize="13" />
+
             <Button
                 Text="Use a different server"
                 Command="{Binding ChangeServerCommand}"

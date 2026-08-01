@@ -15,5 +15,7 @@ public interface INavigationService
 
     Task GoToLoginAsync();
 
+    Task GoToRegisterAsync();
+
     Task GoToHomeAsync();
 }

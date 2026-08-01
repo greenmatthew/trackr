@@ -18,6 +18,21 @@ public interface ITrackrApiClient
     /// </summary>
     Task<ServerCheckResult> CheckServerAsync(Uri baseUrl, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Whether the server will accept a new account freely or only with an invite. Null when
+    /// the question could not be asked at all.
+    /// </summary>
+    Task<RegistrationMode?> GetRegistrationModeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates an account: the first one on an empty server, or one redeeming an invite.
+    /// </summary>
+    /// <remarks>
+    /// Does <b>not</b> sign the caller in. The endpoint issues a cookie, which is no use to a
+    /// native client, so the app follows a success with <see cref="SignInAsync"/>.
+    /// </remarks>
+    Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Password (and optionally 2FA) sign-in, returning bearer tokens.</summary>
     Task<SignInResult> SignInAsync(TokenRequest request, CancellationToken cancellationToken = default);
 
@@ -36,6 +51,20 @@ public sealed record ServerCheckResult(bool IsReachable, string? Problem = null)
     public static ServerCheckResult Reachable { get; } = new(true);
 
     public static ServerCheckResult Failed(string problem) => new(false, problem);
+}
+
+/// <summary>Outcome of creating an account.</summary>
+/// <param name="Succeeded">Whether the account now exists.</param>
+/// <param name="Problem">
+/// A message fit to show the user, null on success. Carries the server's own wording where it
+/// has any - Identity's "passwords must be at least 12 characters" is far more useful than
+/// anything this app could infer from a 400.
+/// </param>
+public sealed record RegisterResult(bool Succeeded, string? Problem = null)
+{
+    public static RegisterResult Ok { get; } = new(true);
+
+    public static RegisterResult Failed(string problem) => new(false, problem);
 }
 
 /// <summary>

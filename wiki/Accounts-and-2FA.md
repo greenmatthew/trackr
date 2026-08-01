@@ -8,9 +8,12 @@ and after that only by invitation.
 On an empty database, registration is open. Create your account at `/register` and
 **registration closes permanently** — the endpoint starts refusing anyone without an invite.
 
-Do this first, before signing in on the phone: **the Android app has no sign-up screen.**
-Trying to sign in on a server with no accounts simply fails, and that is the most common
-reason a first login does not work.
+Note that the root URL redirects to `/login`, not `/register`, even on a brand-new server:
+every page behind it needs an account, and the redirect cannot know you have none. Follow the
+*No account yet?* link on the login page, or go to `/register` directly.
+
+The Android app can do this too — *No account yet? Create one*, on its sign-in screen. Either
+way the effect is the same and registration closes afterwards.
 
 ## Invites
 
@@ -19,6 +22,21 @@ an expiry, and is shown to you exactly once — only a hash is stored, so a lost
 be recovered, only revoked and replaced.
 
 The redemption is transactional: if account creation fails, the invite is not consumed.
+
+### Redeeming one on a phone
+
+An invite can be redeemed entirely from the Android app, which is the point — someone you
+invite may not have a browser pointed at your server, and may not own a desktop at all. On the
+sign-in screen, tap *No account yet? Create one*, then paste either the invite code or the
+**whole invite link**; the app picks the code out of a link so nobody has to select it by hand
+on a phone keyboard.
+
+Registration is the *only* account task the app handles. Changing a password, enrolling in
+2FA, and minting invites all stay on the website.
+
+If the app reports that your account was created but signing in afterwards failed, the account
+really does exist and the invite really has been spent. **Sign in with it — do not register
+again**, which would consume a second invite and then fail on a duplicate email.
 
 ## Two-factor authentication
 

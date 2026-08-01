@@ -7,10 +7,10 @@
     Title="Trackr"
     FlyoutBehavior="Disabled">
 
-    <!-- Three flat routes, no tabs and no flyout: at milestone 3 the app has exactly one
-         signed-in screen, so there is nothing to navigate between. Milestone 4 (CLAUDE.md
-         section 9) decides the real structure, at which point Home becomes a TabBar holding
-         the chat and stats tabs and these two auth routes move out of the main stack.
+    <!-- Four flat routes, no tabs and no flyout: the app still has exactly one signed-in
+         screen, so there is nothing to navigate between. Milestone 4 (CLAUDE.md section 9)
+         decides the real structure, at which point Home becomes a TabBar holding the chat and
+         stats tabs and these three auth routes move out of the main stack.
 
          Route names are duplicated in Platform/ShellNavigationService.cs, which is what the
          navigation service uses - keep them in step. -->
@@ -22,6 +22,10 @@
     <ShellContent
         Route="login"
         ContentTemplate="{DataTemplate pages:LoginPage}" />
+
+    <ShellContent
+        Route="register"
+        ContentTemplate="{DataTemplate pages:RegisterPage}" />
 
     <ShellContent
         Route="home"

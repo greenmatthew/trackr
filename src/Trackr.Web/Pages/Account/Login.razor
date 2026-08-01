@@ -48,6 +48,15 @@
         <p class="auth-card__aside">
             <a href="forgot-password">Forgot your password?</a>
         </p>
+
+        @* The only signpost to /register. Without it a brand-new server is a dead end: the
+           root URL redirects here, and nothing on the page says the owner account has yet to
+           be created. Deliberately not conditional on the registration mode - asking the
+           server which it is would spend one of the ten-per-minute login attempts on every
+           page load, and the register page already explains both cases when it opens. *@
+        <p class="auth-card__aside">
+            No account yet? <a href="register">Set up this server, or use an invite</a>.
+        </p>
     }
     else if (_step is Step.TwoFactorCode)
     {

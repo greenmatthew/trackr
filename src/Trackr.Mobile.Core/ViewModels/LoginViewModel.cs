@@ -117,6 +117,13 @@ public sealed partial class LoginViewModel(
         }
     }
 
+    /// <summary>
+    /// Goes to sign-up. The only route to it, so that a server with no accounts is not a dead
+    /// end - the same gap the web login page had.
+    /// </summary>
+    [RelayCommand]
+    private Task GoToRegisterAsync() => navigation.GoToRegisterAsync();
+
     /// <summary>Abandons this server and returns to first-run setup.</summary>
     [RelayCommand]
     private async Task ChangeServerAsync()

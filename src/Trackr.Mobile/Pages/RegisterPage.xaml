@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="Trackr.Mobile.Pages.RegisterPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:RegisterViewModel"
+    Title="Create an account"
+    Shell.NavBarIsVisible="False">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="18" VerticalOptions="Center">
+
+            <Label
+                Text="Create an account"
+                FontSize="30"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <!-- Shown only on an empty server. Claiming it is a one-time event and worth
+                 saying out loud, because it is not obvious that registration then closes. -->
+            <Label
+                Text="This server has no accounts yet, so this one becomes the owner. Afterwards registration closes and further accounts need an invite."
+                IsVisible="{Binding IsBootstrap}"
+                FontSize="13"
+                HorizontalTextAlignment="Center"
+                Opacity="0.75" />
+
+            <Entry
+                Placeholder="Email"
+                Text="{Binding Email}"
+                Keyboard="Email"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+
+            <Entry
+                Placeholder="Password"
+                Text="{Binding Password}"
+                IsPassword="True"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+
+            <Label
+                Text="At least 12 characters. A memorable phrase beats a short scramble."
+                FontSize="12"
+                Opacity="0.6" />
+
+            <!-- Only once the server has said an invite is required, so the person claiming a
+                 new server is never shown a field they cannot fill. -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding NeedsInvite}">
+
+                <Entry
+                    Placeholder="Invite code or link"
+                    Text="{Binding InviteToken}"
+                    Keyboard="Plain"
+                    IsSpellCheckEnabled="False"
+                    IsTextPredictionEnabled="False"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
+                    ReturnType="Go"
+                    ReturnCommand="{Binding RegisterCommand}" />
+
+                <Label
+                    Text="Paste the whole invite link if it is easier - the code will be picked out of it."
+                    FontSize="12"
+                    Opacity="0.6" />
+
+            </VerticalStackLayout>
+
+            <Label
+                Text="{Binding Error}"
+                IsVisible="{Binding Error, Converter={StaticResource IsStringNotNullOrEmptyConverter}}"
+                TextColor="{StaticResource Error}" />
+
+            <Button
+                Text="Create account"
+                Command="{Binding RegisterCommand}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
+                HeightRequest="52" />
+
+            <ActivityIndicator
+                IsRunning="{Binding IsBusy}"
+                IsVisible="{Binding IsBusy}"
+                HorizontalOptions="Center" />
+
+            <Button
+                Text="Already have an account? Sign in"
+                Command="{Binding BackToLoginCommand}"
+                BackgroundColor="Transparent"
+                TextColor="{StaticResource Primary}"
+                FontSize="13" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

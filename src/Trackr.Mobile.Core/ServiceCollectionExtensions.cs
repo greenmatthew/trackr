@@ -38,6 +38,7 @@ public static class ServiceCollectionExtensions
         // the classic symptom of getting this wrong.
         services.AddTransient<ServerSetupViewModel>();
         services.AddTransient<LoginViewModel>();
+        services.AddTransient<RegisterViewModel>();
         services.AddTransient<HomeViewModel>();
 
         return services;

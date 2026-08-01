@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Authentication;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Polly.CircuitBreaker;
 using Polly.Timeout;
@@ -51,6 +52,121 @@ public sealed class TrackrApiClient(
 
             return ServerCheckResult.Failed(Describe(ex));
         }
+    }
+
+    public async Task<RegistrationMode?> GetRegistrationModeAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.GetAsync(
+                Endpoint("api/auth/registration-status"),
+                cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var status = await response.Content
+                .ReadFromJsonAsync<RegistrationStatusResponse>(cancellationToken);
+
+            return status?.Mode;
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Registration status lookup failed");
+
+            // Null rather than a guess. The caller assumes the stricter of the two modes, so
+            // a failure here never opens up a form that should have asked for an invite.
+            return null;
+        }
+    }
+
+    public async Task<RegisterResult> RegisterAsync(
+        RegisterRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.PostAsJsonAsync(
+                Endpoint("api/auth/register"),
+                request,
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return RegisterResult.Ok;
+            }
+
+            if (response.StatusCode is HttpStatusCode.TooManyRequests)
+            {
+                // CLAUDE.md section 5: rate limits reach the user as a plain message rather
+                // than vanishing into a generic failure. This one is easy to hit honestly -
+                // the register endpoint allows only five attempts every fifteen minutes.
+                return RegisterResult.Failed(
+                    "Too many attempts. Wait a few minutes and try again.");
+            }
+
+            return RegisterResult.Failed(await ReadProblemAsync(response, cancellationToken));
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Registration request failed");
+
+            return RegisterResult.Failed("Could not reach the server. Check your connection.");
+        }
+    }
+
+    /// <summary>
+    /// Turns an RFC 9457 problem document into one line of prose.
+    /// </summary>
+    /// <remarks>
+    /// Only the fields this app actually renders. The server puts the messages that matter in
+    /// two different places: Identity's password and duplicate-email complaints arrive as
+    /// per-field <c>errors</c>, while "registration is closed" arrives as <c>detail</c>. Both
+    /// are worth showing verbatim, so neither is flattened into a generic failure.
+    /// </remarks>
+    private static async Task<string> ReadProblemAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var problem = await response.Content
+                .ReadFromJsonAsync<ProblemPayload>(cancellationToken);
+
+            if (problem?.Errors is { Count: > 0 } errors)
+            {
+                return string.Join(" ", errors.SelectMany(entry => entry.Value));
+            }
+
+            if (!string.IsNullOrWhiteSpace(problem?.Detail))
+            {
+                return problem.Detail;
+            }
+
+            if (!string.IsNullOrWhiteSpace(problem?.Title))
+            {
+                return problem.Title;
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            // An unparseable body still has to produce a message, not a silent failure.
+        }
+
+        return $"The server answered with {(int)response.StatusCode}.";
+    }
+
+    /// <summary>The subset of problem+json this app reads.</summary>
+    private sealed class ProblemPayload
+    {
+        public string? Title { get; set; }
+
+        public string? Detail { get; set; }
+
+        public Dictionary<string, string[]>? Errors { get; set; }
     }
 
     public async Task<SignInResult> SignInAsync(

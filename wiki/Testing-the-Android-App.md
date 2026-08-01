@@ -67,7 +67,8 @@ Worth doing after any auth or navigation change:
 
 1. `just mobile::reset-app` — back to first-run setup.
 2. Enter `http://10.0.2.2:8000`, connect.
-3. Sign in with an account created in the browser first — **the app has no sign-up screen.**
+3. Sign in. On an empty database, use *No account yet? Create one* and claim the server from
+   the app itself; otherwise sign in with an existing account.
 4. Confirm the home screen shows the email the server returned.
 5. `just mobile::stop-app` then `just mobile::launch` — it must land on **home, not login**.
    This is the step that proves the token really persisted in the keystore.

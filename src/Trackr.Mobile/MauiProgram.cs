@@ -53,6 +53,7 @@ public static class MauiProgram
         // and fails on the parameterised constructors.
         builder.Services.AddTransient<ServerSetupPage>();
         builder.Services.AddTransient<LoginPage>();
+        builder.Services.AddTransient<RegisterPage>();
         builder.Services.AddTransient<HomePage>();
 
         return builder.Build();

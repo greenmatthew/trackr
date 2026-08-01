@@ -21,6 +21,8 @@ public sealed class ShellNavigationService : INavigationService
 
     public Task GoToLoginAsync() => GoToAsync($"//{Routes.Login}");
 
+    public Task GoToRegisterAsync() => GoToAsync($"//{Routes.Register}");
+
     public Task GoToHomeAsync() => GoToAsync($"//{Routes.Home}");
 
     private static Task GoToAsync(string route) =>
@@ -34,5 +36,6 @@ public static class Routes
 {
     public const string ServerSetup = "server-setup";
     public const string Login = "login";
+    public const string Register = "register";
     public const string Home = "home";
 }

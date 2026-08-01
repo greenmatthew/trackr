@@ -111,6 +111,97 @@ public sealed class TrackrApiClientTests
         Assert.Null(await client.GetMeAsync());
     }
 
+    [Fact]
+    public async Task Registration_status_survives_a_pipeline_timeout()
+    {
+        var client = ClientThatThrows(new TimeoutRejectedException(TimeSpan.FromSeconds(30)));
+
+        // Null, so the caller assumes the stricter mode rather than opening up the form.
+        Assert.Null(await client.GetRegistrationModeAsync());
+    }
+
+    [Fact]
+    public async Task Register_survives_a_pipeline_timeout()
+    {
+        var client = ClientThatThrows(new TimeoutRejectedException(TimeSpan.FromSeconds(30)));
+
+        var result = await client.RegisterAsync(new Trackr.Shared.Auth.RegisterRequest());
+
+        Assert.False(result.Succeeded);
+        Assert.False(string.IsNullOrWhiteSpace(result.Problem));
+    }
+
+    /// <summary>
+    /// Identity's complaints arrive as per-field errors in an RFC 9457 document. They are far
+    /// more useful than anything this app could infer, so they must survive to the screen.
+    /// </summary>
+    [Fact]
+    public async Task Surfaces_per_field_validation_messages_from_register()
+    {
+        var client = ClientThatResponds(
+            HttpStatusCode.BadRequest,
+            """
+            {
+              "title": "One or more validation errors occurred.",
+              "status": 400,
+              "errors": { "password": ["Passwords must be at least 12 characters."] }
+            }
+            """);
+
+        var result = await client.RegisterAsync(new Trackr.Shared.Auth.RegisterRequest());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("at least 12 characters", result.Problem);
+    }
+
+    /// <summary>"Registration is closed" arrives as `detail`, not as a field error.</summary>
+    [Fact]
+    public async Task Surfaces_the_detail_when_registration_is_closed()
+    {
+        var client = ClientThatResponds(
+            HttpStatusCode.Forbidden,
+            """
+            {
+              "title": "Registration is closed.",
+              "detail": "This server already has an account. Creating another needs an invite.",
+              "status": 403,
+              "code": "registration_closed"
+            }
+            """);
+
+        var result = await client.RegisterAsync(new Trackr.Shared.Auth.RegisterRequest());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("needs an invite", result.Problem);
+    }
+
+    /// <summary>
+    /// Register allows only five attempts every fifteen minutes, so this is reachable by an
+    /// honest person retyping a password - it must not read as a generic failure.
+    /// </summary>
+    [Fact]
+    public async Task Names_a_rate_limit_on_register()
+    {
+        var client = ClientThatResponds(HttpStatusCode.TooManyRequests);
+
+        var result = await client.RegisterAsync(new Trackr.Shared.Auth.RegisterRequest());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("Too many attempts", result.Problem);
+    }
+
+    /// <summary>An unparseable error body still has to produce a message, not a silent null.</summary>
+    [Fact]
+    public async Task Still_reports_something_when_the_error_body_is_not_json()
+    {
+        var client = ClientThatResponds(HttpStatusCode.BadGateway, "<html>nginx</html>");
+
+        var result = await client.RegisterAsync(new Trackr.Shared.Auth.RegisterRequest());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("502", result.Problem);
+    }
+
     /// <summary>A well-formed server that answers with an error still is not reachable.</summary>
     [Fact]
     public async Task Treats_a_non_success_status_as_unreachable()
@@ -137,6 +228,13 @@ public sealed class TrackrApiClientTests
     private static TrackrApiClient ClientThatResponds(HttpStatusCode status) =>
         Build(new StubHandler(_ => new HttpResponseMessage(status)));
 
+    private static TrackrApiClient ClientThatResponds(HttpStatusCode status, string body) =>
+        Build(new StubHandler(_ => new HttpResponseMessage(status)
+        {
+            // problem+json rather than application/json: ReadFromJsonAsync checks the media
+            // type, and the API really does send this one.
+            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/problem+json")
+        }));
 
     private static TrackrApiClient Build(HttpMessageHandler handler)
     {
