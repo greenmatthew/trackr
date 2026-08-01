@@ -76,16 +76,15 @@ changes made in the wiki's web UI are overwritten on the next publish.
 
 ## License
 
-Copyright © 2026 Matthew Green. Licensed under the
-[Elastic License 2.0](LICENSE) (`Elastic-2.0`).
+Free software. Copyright © 2026 Matthew Green, licensed under
+[AGPL-3.0-or-later](LICENSE).
 
-**Run it, modify it, host it — for yourself, your household, or your company.** All of that
-is explicitly permitted, at no cost and with nothing to ask.
+**Run it, modify it, self-host it** — for yourself, your household or your company. Nothing
+to ask and nothing to pay.
 
-The one thing you may not do is **provide Trackr to third parties as a hosted or managed
-service** — selling accounts on an instance you run. Trackr is meant to be self-hosted by the
-people using it, not resold to them.
+The AGPL adds one obligation that an ordinary GPL does not: if you modify Trackr and let
+other people use it **over a network**, those users are entitled to your modified source.
+Running an unmodified copy, or a modified one only you use, carries no such duty.
 
-This is a source-available licence rather than an open-source one, which is a deliberate
-trade: it costs F-Droid distribution and the OSI label in exchange for that single
-restriction.
+The same licence as [Immich](https://immich.app), [Nextcloud](https://nextcloud.com) and
+[Mastodon](https://joinmastodon.org) — self-hosted software with the same concerns.

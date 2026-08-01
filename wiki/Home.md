@@ -37,7 +37,7 @@ The only thing that ever leaves the machine is a barcode number, looked up again
 Edits made here in the web UI are overwritten on the next publish — change the files in the
 repository instead.*
 
-*Copyright © 2026 Matthew Green, licensed under the
-[Elastic License 2.0](https://github.com/greenmatthew/trackr/blob/master/LICENSE). Running,
-modifying and self-hosting Trackr is free for anyone, including businesses. Selling accounts
-on an instance you host for other people is not permitted.*
+*Trackr is free software: copyright © 2026 Matthew Green, licensed under
+[AGPL-3.0-or-later](https://github.com/greenmatthew/trackr/blob/master/LICENSE). Run, modify
+and self-host it freely. If you modify it and offer it to other people over a network, they
+are entitled to your changes.*

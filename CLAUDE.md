@@ -359,9 +359,9 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
 
 ## 10. Explicit non-goals / cautions
 
-- **Trackr is under the Elastic License 2.0** (`Elastic-2.0`) — source-available, not open source. Anyone may run, modify and self-host it, including commercially; nobody may offer it to third parties as a hosted or managed service. Two consequences that actually bite:
-  - **Dependencies must be permissive** — MIT, Apache-2.0, BSD. **Copyleft is not usable**: GPL and AGPL require the whole work to be distributed under their terms, which this licence cannot satisfy. LGPL is only safe as an unmodified dynamically-linked library, so avoid it too rather than reasoning case by case. Check before adding a package; a licence conflict found after it is woven in is expensive to undo.
-  - **No F-Droid.** It only accepts FOSS licences, so the APK is distributed by sideloading or Play Store. Do not write documentation implying otherwise.
+- **Trackr is AGPL-3.0-or-later** — free software, and the same licence Immich, Nextcloud and Mastodon use for the same reasons. Anyone may run, modify and self-host it, including commercially; anyone who modifies it and offers it to others *over a network* owes those users their source. That is a strong deterrent against a hosted commercial fork, **not a prohibition** — do not describe it as one.
+  - **Dependencies must be AGPL-compatible.** Permissive (MIT, Apache-2.0, BSD) and GPLv3-family licences are fine. **`GPL-2.0-only` is not** — it is incompatible with v3; `GPL-2.0-or-later` is. Proprietary and source-available licences are out. Check before adding a package; a conflict found after it is woven in is expensive to undo.
+  - **Copyright is the user's alone, and worth keeping that way.** As sole holder he can relicense or sell a commercial exception; accepting outside patches without a DCO or CLA would end that. Raise it if contributions ever start arriving.
 - No pre-loaded global food database; catalog is user-built over time.
 - No public/multi-tenant SaaS concerns; this is private and self-hosted.
 - Don't hand-roll authentication or password hashing — use Identity.
