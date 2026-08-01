@@ -229,7 +229,7 @@ The user explicitly wants a properly secured account system. Implement, roughly 
 
 ## 9. Build order (suggested milestones)
 
-1. **Scaffold** — solution with Blazor WASM (PWA) frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint. Confirm the stack runs end to end with a trivial API call.
+1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with Blazor WASM (PWA) frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions recorded in §4; how to run it is in `README.md`. **Next milestone: 2 (Auth).**
 2. **Auth** — ASP.NET Core Identity: register (possibly invite-only), login, protected API, authed PWA state. Enforce HTTPS.
 3. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the extensible nutrient store** (`Nutrient` + `NutrientAmount`, or JSONB map) from §7, seeding the §7a nutrient set. Basic CRUD API for catalog and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
 4. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive **User-Agent** on OFF requests (app name + version + contact) — OFF asks for this and may throttle callers without it. Handle full-match, partial-match, and no-match cases per §5, and surface rate-limit/timeout errors rather than swallowing them.
