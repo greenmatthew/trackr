@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>trackr-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Trackr.Shared\Trackr.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- Debug only: the API also serves the Blazor app so `dotnet watch` gives a
+       single-origin dev server with hot reload. Docker builds use -c Release, so
+       neither this reference nor the matching #if DEBUG block in Program.cs ends
+       up in the shipped image - nginx serves the app in production. -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+    <ProjectReference Include="..\Trackr.Client\Trackr.Client.csproj" />
+  </ItemGroup>
+
+</Project>

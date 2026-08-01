@@ -73,6 +73,13 @@ Open Food Facts is **not** a container — it's an external public API the backe
 
 The database may be Postgres from day one (recommended, since we want a real user/catalog store). Keep the data layer behind EF Core so the concrete provider is swappable.
 
+### Decided during milestone 1 (scaffold)
+
+- **nginx also reverse-proxies `/api/` to the backend.** §3 requires the WASM app and the API on the same origin so the session can be an HttpOnly cookie. The `frontend` container therefore does two jobs: serve the static PWA assets and forward `/api/` to `backend`. Only `frontend` joins the external reverse-proxy network; `backend` and `db` stay internal. Config lives in `src/Trackr.Client/nginx.conf`.
+- **No HTTPS inside the containers.** TLS terminates at the user's reverse proxy, so the backend speaks plain HTTP on 8080 and reads `X-Forwarded-Proto` (via `UseForwardedHeaders`) rather than redirecting. Milestone 2 needs this to mark the Identity cookie `Secure`.
+- **Two compose files.** `docker-compose.yml` is the Portainer deployment stack (external proxy network, no published ports, build-from-repo since nothing is pushed to a registry). `docker-compose.dev.yml` is a standalone local stack with published ports and throwaway credentials — standalone rather than an override because Compose merges networks additively and an override cannot drop the external network.
+- **Dev inner loop.** In `Debug` only, `Trackr.Api` also serves the Blazor client (`dotnet watch`, single origin, hot reload). The project reference and the matching `#if DEBUG` block are excluded from `Release`, so the shipped backend image does not contain the client.
+
 ---
 
 ## 5. The logging cascade (core flow)

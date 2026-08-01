@@ -1,0 +1,90 @@
+@page "/"
+@inject HttpClient Http
+
+@*
+    Milestone 1 probe page. It exists only to prove the chain
+    browser -> nginx -> API -> Postgres works end to end; the chat UI replaces it
+    in milestone 6. Keep it dependency-free and boring.
+*@
+
+<PageTitle>Trackr — status</PageTitle>
+
+<main class="probe">
+    <h1>Trackr</h1>
+    <p class="subtitle">Milestone 1 — stack connectivity check</p>
+
+    @if (_loading)
+    {
+        <p role="status">Checking…</p>
+    }
+    else if (_error is not null)
+    {
+        <div class="card card--bad" role="alert">
+            <h2>Could not reach the API</h2>
+            <p><code>GET /api/health</code> failed.</p>
+            <pre>@_error</pre>
+        </div>
+    }
+    else if (_health is not null)
+    {
+        <div class="card @(_health.Status == HealthState.Healthy ? "card--good" : "card--bad")">
+            <h2>API: @_health.Status</h2>
+            <dl>
+                <dt>Version</dt>
+                <dd>@_health.Version</dd>
+
+                <dt>@_health.Database.Name</dt>
+                <dd>
+                    @_health.Database.Status
+                    @if (_health.Database.Detail is { Length: > 0 } detail)
+                    {
+                        <div class="detail">@detail</div>
+                    }
+                </dd>
+
+                <dt>Checked</dt>
+                <dd>@_health.TimestampUtc.ToString("u")</dd>
+            </dl>
+        </div>
+    }
+
+    <button type="button" @onclick="LoadAsync" disabled="@_loading">Re-check</button>
+</main>
+
+@code {
+    private HealthResponse? _health;
+    private string? _error;
+    private bool _loading = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            // Not GetFromJsonAsync: an unhealthy API answers 503 but still sends a
+            // HealthResponse body explaining which dependency is down, and we want
+            // to show that rather than throw it away.
+            using var response = await Http.GetAsync("api/health");
+            _health = await response.Content.ReadFromJsonAsync<HealthResponse>();
+
+            if (_health is null)
+            {
+                _error = $"The API returned {(int)response.StatusCode} with no readable body.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _health = null;
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

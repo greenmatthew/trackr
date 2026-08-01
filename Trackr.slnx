@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Trackr.Api/Trackr.Api.csproj" />
+    <Project Path="src/Trackr.Client/Trackr.Client.csproj" />
+    <Project Path="src/Trackr.Shared/Trackr.Shared.csproj" />
+  </Folder>
+</Solution>

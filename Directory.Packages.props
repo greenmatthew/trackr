@@ -1,0 +1,39 @@
+<Project>
+
+  <!-- Central Package Management: every NuGet version lives here, and the
+       csproj files reference packages without a Version attribute. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Lets a PackageVersion below raise a transitive dependency's version
+         without having to take a direct PackageReference on it. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="ASP.NET Core / Blazor">
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.10" />
+    <!-- Debug-only: lets the API host the WASM app for the `dotnet watch` loop. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup Label="Data">
+    <!-- Npgsql 10.0.3 requires Microsoft.EntityFrameworkCore [10.0.4, 11.0.0). -->
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup Label="Transitive pins">
+    <!-- Microsoft.AspNetCore.OpenApi 10.0.10 pulls Microsoft.OpenApi 2.0.0, which
+         is affected by GHSA-v5pm-xwqc-g5wc (stack overflow on a circular schema
+         reference while *parsing* a document). We only generate documents, so we
+         are not exposed, but 2.7.5 is the first patched release. Drop this pin
+         once Microsoft.AspNetCore.OpenApi ships with a patched version itself. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.6" />
+  </ItemGroup>
+
+  <ItemGroup Label="Diagnostics">
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.10" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,22 @@
+# Build contexts are the repository root, so keep them small and make sure no
+# local build output or secret ever ends up in an image layer.
+
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+.git/
+.gitignore
+.vs/
+.vscode/
+.idea/
+
+# Secrets and local-only config.
+.env
+.env.*
+!.env.example
+
+# Docs and compose files are not needed inside any image.
+*.md
+docker-compose*.yml
