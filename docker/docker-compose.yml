@@ -1,0 +1,84 @@
+# Deployment stack (Portainer). Deploy this as a Git-repository stack so Portainer
+# builds the images itself - there is no registry involved.
+#
+# Nothing is published to the host: the existing reverse proxy terminates TLS and
+# reaches `frontend` over the external proxy network. `backend` and `db` stay on
+# the internal network and are not reachable from outside it.
+#
+# For local development use docker-compose.dev.yml instead.
+
+name: trackr
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trackr}
+      POSTGRES_USER: ${POSTGRES_USER:-trackr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (see .env.example)}
+    volumes:
+      # Postgres 18 keeps its data in /var/lib/postgresql/<major>/docker, so the
+      # volume goes on /var/lib/postgresql - NOT the /var/lib/postgresql/data path
+      # used by Postgres 17 and earlier.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trackr} -d ${POSTGRES_DB:-trackr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [internal]
+
+  backend:
+    build:
+      context: ..
+      dockerfile: src/Trackr.Api/Dockerfile
+    image: trackr-backend:${TRACKR_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Trackr: >-
+        Host=db;Port=5432;Database=${POSTGRES_DB:-trackr};Username=${POSTGRES_USER:-trackr};Password=${POSTGRES_PASSWORD}
+      # Password-reset delivery. Left as Log, the reset link is written to this
+      # container's log instead of being emailed - see README. All optional.
+      Trackr__Email__Provider: ${TRACKR_EMAIL_PROVIDER:-Log}
+      Trackr__Email__Host: ${TRACKR_SMTP_HOST:-}
+      Trackr__Email__Port: ${TRACKR_SMTP_PORT:-587}
+      Trackr__Email__UseSsl: ${TRACKR_SMTP_USE_SSL:-true}
+      Trackr__Email__UserName: ${TRACKR_SMTP_USER:-}
+      Trackr__Email__Password: ${TRACKR_SMTP_PASSWORD:-}
+      Trackr__Email__From: ${TRACKR_SMTP_FROM:-}
+      # Only needed if links come out with the wrong host, e.g. behind a proxy that
+      # does not forward Host and X-Forwarded-Proto.
+      Trackr__Email__PublicBaseUrl: ${TRACKR_PUBLIC_BASE_URL:-}
+      # Raise if a household behind one address keeps tripping the auth rate limits.
+      Trackr__RateLimiting__LoginPermitLimit: ${TRACKR_LOGIN_RATE_LIMIT:-10}
+      Trackr__RateLimiting__SensitivePermitLimit: ${TRACKR_SENSITIVE_RATE_LIMIT:-5}
+    networks: [internal]
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: src/Trackr.Web/Dockerfile
+    image: trackr-frontend:${TRACKR_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Attached to both networks: it serves the app to the reverse proxy and
+    # forwards /api/ to the backend on the internal network.
+    networks: [internal, proxy]
+
+networks:
+  internal:
+    driver: bridge
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-proxy}
+
+volumes:
+  db-data:

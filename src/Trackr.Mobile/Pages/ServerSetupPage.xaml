@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="Trackr.Mobile.Pages.ServerSetupPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:ServerSetupViewModel"
+    Title="Connect to your server"
+    Shell.NavBarIsVisible="False">
+
+    <!-- x:DataType above turns these bindings into compiled bindings: they are resolved at
+         build time, so a renamed property is a build error rather than a silently blank
+         field at runtime. Worth having on every page. -->
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="20" VerticalOptions="Center">
+
+            <Label
+                Text="Trackr"
+                FontSize="34"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Trackr runs on your own server. Enter its address to get started."
+                HorizontalTextAlignment="Center"
+                Opacity="0.75" />
+
+            <Entry
+                Placeholder="trackr.example.com"
+                Text="{Binding Address}"
+                Keyboard="Url"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
+                ReturnType="Go"
+                ReturnCommand="{Binding ConnectCommand}" />
+
+            <Label
+                Text="{Binding Error}"
+                IsVisible="{Binding Error, Converter={StaticResource IsStringNotNullOrEmptyConverter}}"
+                TextColor="{StaticResource Error}" />
+
+            <Button
+                Text="Connect"
+                Command="{Binding ConnectCommand}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
+                HeightRequest="52" />
+
+            <ActivityIndicator
+                IsRunning="{Binding IsBusy}"
+                IsVisible="{Binding IsBusy}"
+                HorizontalOptions="Center" />
+
+            <Label
+                Text="Uses https unless you type http:// yourself."
+                FontSize="12"
+                HorizontalTextAlignment="Center"
+                Opacity="0.6" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

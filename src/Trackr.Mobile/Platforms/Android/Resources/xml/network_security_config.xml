@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Release builds. No cleartext to anywhere - the same policy Android applies by default
+     for targetSdk 28 and above, stated explicitly so it is obvious the default was chosen
+     rather than overlooked.
+
+     The debug counterpart, network_security_config.debug.xml, opens an exception for the
+     emulator's host loopback so the plain-HTTP dev stack is reachable. That exception must
+     never reach a release build: this app talks to a server over the open internet or a VPN,
+     and its bearer token would be readable by anyone on the path. -->
+<network-security-config>
+
+    <base-config cleartextTrafficPermitted="false" />
+
+</network-security-config>

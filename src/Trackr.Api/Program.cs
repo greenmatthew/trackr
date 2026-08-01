@@ -44,11 +44,22 @@ builder.Services.AddDataProtection()
     .SetApplicationName("Trackr")
     .PersistKeysToDbContext<TrackrDbContext>();
 
-// Cookie authentication, not JWT (CLAUDE.md section 3). nginx serves the WASM app and
-// proxies /api/ to us, so the app and the API are one origin and the session can be a
-// cookie the browser handles itself. HttpOnly then means JavaScript cannot read it at
-// all, which removes session theft via XSS.
-builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
+// Two schemes, one per client (CLAUDE.md section 3):
+//
+//   Web     -> cookie. nginx serves the WASM app and proxies /api/ to us, so the app and
+//              the API are one origin and the session can be a cookie the browser handles
+//              itself. HttpOnly then means JavaScript cannot read it at all, which removes
+//              session theft via XSS. The default scheme, so nothing about it changes.
+//   Android -> bearer token, registered below. A native client is cross-origin and has no
+//              cookie jar worth the name.
+//
+// Note the section-3 note this supersedes: the original "cookies, not JWTs" decision reasoned
+// that tokens only matter for "cross-origin / multi-service / native-mobile setups, none of
+// which apply". The MAUI app made that premise false. The reasoning still holds for the
+// browser, which is why both schemes coexist rather than one replacing the other.
+var authentication = builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme);
+
+authentication
     .AddIdentityCookies(cookies =>
     {
         // Ordering here is load-bearing. AddIdentityCookies has already ASSIGNED an
@@ -108,6 +119,22 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
         }
     });
 
+// The Android app's scheme. A separate statement because AddIdentityCookies returns an
+// IdentityCookiesBuilder rather than the AuthenticationBuilder, so the two cannot chain.
+//
+// Identity's own bearer handler, not JWT bearer: the tokens are opaque and encrypted with
+// the data-protection key ring already persisted to Postgres, so they survive a redeploy and
+// there is no signing key to manage. Nothing here parses a JWT.
+authentication.AddBearerToken(IdentityConstants.BearerScheme, options =>
+{
+    // Short-lived access token plus a long-lived refresh token: a stolen access token has a
+    // small window, while the app still only asks for the password rarely. The refresh token
+    // is additionally tied to the user's security stamp, so a password or 2FA change
+    // invalidates it - see RefreshTokenAsync.
+    options.BearerTokenExpiration = TimeSpan.FromHours(1);
+    options.RefreshTokenExpiration = TimeSpan.FromDays(30);
+});
+
 // AddIdentityCore rather than AddIdentity: the latter also wires up cookie schemes
 // (already done above) and points DefaultSignInScheme at the external-login scheme, which
 // is not how this app signs anyone in. AddIdentityApiEndpoints is not used either - it
@@ -155,10 +182,18 @@ builder.Services.Configure<SecurityStampValidatorOptions>(
     options => options.ValidationInterval = TimeSpan.FromMinutes(5));
 
 // Fail safe: everything requires a signed-in user unless it explicitly opts out, so the
-// endpoints added in milestone 3 and beyond are protected by default rather than by
-// remembering to add an attribute.
+// endpoints added in later milestones are protected by default rather than by remembering
+// to add an attribute.
+//
+// AddAuthenticationSchemes is load-bearing now that there are two schemes. Without it the
+// policy authenticates against the DEFAULT scheme only - the cookie - so every request from
+// the Android app would carry a perfectly valid bearer token and still be rejected with a
+// 401 that looks like an expired session.
 builder.Services.AddAuthorizationBuilder()
-    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+        .AddAuthenticationSchemes(IdentityConstants.ApplicationScheme, IdentityConstants.BearerScheme)
+        .RequireAuthenticatedUser()
+        .Build());
 
 builder.Services.AddTrackrRateLimiting(builder.Configuration);
 

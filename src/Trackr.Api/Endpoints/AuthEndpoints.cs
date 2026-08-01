@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,22 @@ public static class AuthEndpoints
             .RequireRateLimiting(RateLimitPolicies.Login)
             .WithName("LoginRecoveryCode")
             .WithSummary("Second step of sign-in using a single-use recovery code instead.");
+
+        // --- native clients (Android) -------------------------------------------------
+        // Bearer tokens rather than the cookie routes above. See TokenContracts for why 2FA
+        // is one endpoint here and two on the web.
+
+        app.MapPost("/api/auth/token", TokenAsync)
+            .AllowAnonymous()
+            .RequireRateLimiting(RateLimitPolicies.Login)
+            .WithName("Token")
+            .WithSummary("Password sign-in for a native client, returning bearer tokens.");
+
+        app.MapPost("/api/auth/token/refresh", RefreshTokenAsync)
+            .AllowAnonymous()
+            .RequireRateLimiting(RateLimitPolicies.Login)
+            .WithName("RefreshToken")
+            .WithSummary("Exchange a refresh token for a new access token.");
 
         app.MapPost("/api/auth/logout", LogoutAsync)
             .WithName("Logout")
@@ -288,6 +305,164 @@ public static class AuthEndpoints
                 new LoginResponse(LoginStatus.Failed),
                 statusCode: StatusCodes.Status401Unauthorized);
     }
+
+    /// <summary>
+    /// Password sign-in for a native client, issuing bearer tokens instead of a cookie.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The password and 2FA steps are checked explicitly here rather than being delegated to
+    /// <c>PasswordSignInAsync</c> + <c>TwoFactorAuthenticatorSignInAsync</c> the way
+    /// <see cref="LoginAsync"/> does. That pair communicates between the two calls through
+    /// Identity's <c>TwoFactorUserId</c> <b>cookie</b>: the first call writes it to the
+    /// response, the second reads it from the next request. A native client posting once
+    /// with the code already in hand never makes that round trip, so the handshake has
+    /// nothing to read.
+    /// </para>
+    /// <para>
+    /// Consequence to keep in mind: because this does not go through
+    /// <c>TwoFactorAuthenticatorSignInAsync</c>, a wrong 2FA code does not feed the lockout
+    /// counter automatically. <c>AccessFailedAsync</c> is called by hand below to keep the
+    /// behaviour identical to the web path.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> TokenAsync(
+        TokenRequest request,
+        UserManager<TrackrUser> userManager,
+        SignInManager<TrackrUser> signInManager)
+    {
+        var user = await userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+        {
+            // Indistinguishable from a wrong password, so this cannot enumerate accounts.
+            return TokenFailure(LoginStatus.Failed);
+        }
+
+        // Checks the password and counts the failure towards lockout, but does not sign
+        // anyone in - the 2FA step below may still reject them. Resets the failed count on
+        // success, so a correct password after four wrong ones clears the slate.
+        var passwordResult = await signInManager.CheckPasswordSignInAsync(
+            user,
+            request.Password,
+            lockoutOnFailure: true);
+
+        if (passwordResult.IsLockedOut)
+        {
+            return TokenFailure(LoginStatus.LockedOut, await userManager.GetLockoutEndDateAsync(user));
+        }
+
+        if (!passwordResult.Succeeded)
+        {
+            return TokenFailure(LoginStatus.Failed);
+        }
+
+        if (await userManager.GetTwoFactorEnabledAsync(user))
+        {
+            var twoFactorResult = await VerifySecondFactorAsync(request, user, userManager);
+            if (twoFactorResult is not null)
+            {
+                return twoFactorResult;
+            }
+        }
+
+        // Pointing the manager at the bearer scheme makes SignInAsync hand off to the bearer
+        // handler, which serialises the access and refresh tokens straight into the response
+        // body. That is why nothing is returned here: writing our own body as well would
+        // append a second JSON document to the first.
+        signInManager.AuthenticationScheme = IdentityConstants.BearerScheme;
+        await signInManager.SignInAsync(user, isPersistent: false);
+
+        return Results.Empty;
+    }
+
+    /// <summary>
+    /// Verifies the second factor. Returns null when it passed, or the failing result.
+    /// </summary>
+    private static async Task<IResult?> VerifySecondFactorAsync(
+        TokenRequest request,
+        TrackrUser user,
+        UserManager<TrackrUser> userManager)
+    {
+        if (!string.IsNullOrWhiteSpace(request.TwoFactorCode))
+        {
+            // Authenticator apps and users both like to insert spaces or dashes.
+            var code = request.TwoFactorCode.Replace(" ", "").Replace("-", "");
+
+            var valid = await userManager.VerifyTwoFactorTokenAsync(
+                user,
+                userManager.Options.Tokens.AuthenticatorTokenProvider,
+                code);
+
+            if (valid)
+            {
+                return null;
+            }
+
+            // Mirrors what TwoFactorAuthenticatorSignInAsync does internally, so 2FA guesses
+            // feed the same lockout counter as password guesses.
+            await userManager.AccessFailedAsync(user);
+
+            return await userManager.IsLockedOutAsync(user)
+                ? TokenFailure(LoginStatus.LockedOut, await userManager.GetLockoutEndDateAsync(user))
+                : TokenFailure(LoginStatus.Failed);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.TwoFactorRecoveryCode))
+        {
+            // Spaces only. Identity issues recovery codes as "abcde-fghij" and compares them
+            // verbatim, so stripping the dash the way a TOTP code needs would fail every
+            // valid code.
+            var recoveryCode = request.TwoFactorRecoveryCode.Replace(" ", "");
+
+            var redeemed = await userManager.RedeemTwoFactorRecoveryCodeAsync(user, recoveryCode);
+
+            // Identity deliberately does not count a wrong recovery code towards lockout -
+            // they are high-entropy, so guessing is not a realistic attack.
+            return redeemed.Succeeded ? null : TokenFailure(LoginStatus.Failed);
+        }
+
+        // Password was right, but the account has an authenticator enrolled. The client is
+        // expected to prompt and post the whole request again with a code.
+        return TokenFailure(LoginStatus.RequiresTwoFactor);
+    }
+
+    /// <summary>
+    /// Exchanges a refresh token for a fresh pair, so the app only asks for the password
+    /// when the refresh token itself expires.
+    /// </summary>
+    private static async Task<IResult> RefreshTokenAsync(
+        RefreshRequest request,
+        SignInManager<TrackrUser> signInManager,
+        IOptionsMonitor<BearerTokenOptions> bearerTokenOptions,
+        TimeProvider timeProvider)
+    {
+        var protector = bearerTokenOptions.Get(IdentityConstants.BearerScheme).RefreshTokenProtector;
+        var ticket = protector.Unprotect(request.RefreshToken);
+
+        // ValidateSecurityStampAsync is the part that matters: it re-reads the user's
+        // security stamp, so a password change, a 2FA change or a sign-out-everywhere
+        // invalidates refresh tokens issued before it. Without it a stolen refresh token
+        // would outlive the password it was obtained with.
+        if (ticket?.Properties.ExpiresUtc is not { } expiresUtc
+            || timeProvider.GetUtcNow() >= expiresUtc
+            || await signInManager.ValidateSecurityStampAsync(ticket.Principal) is not { } user)
+        {
+            return Results.Json(
+                new TokenLoginResponse(LoginStatus.Failed),
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        // As in TokenAsync, the bearer handler writes the new token pair itself.
+        signInManager.AuthenticationScheme = IdentityConstants.BearerScheme;
+        await signInManager.SignInAsync(user, isPersistent: false);
+
+        return Results.Empty;
+    }
+
+    private static IResult TokenFailure(LoginStatus status, DateTimeOffset? lockoutEnd = null) =>
+        Results.Json(
+            new TokenLoginResponse(status, lockoutEnd),
+            statusCode: StatusCodes.Status401Unauthorized);
 
     private static async Task<IResult> LogoutAsync(
         HttpContext httpContext,

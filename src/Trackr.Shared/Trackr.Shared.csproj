@@ -1,6 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Contracts shared by the API and the WASM client. Keep this project free of
-       dependencies: it is trimmed into the browser bundle. -->
+  <!-- Contracts shared by the API, the web app and the Android app. Keep this project
+       free of dependencies: it is trimmed into the browser bundle and linked into the
+       APK. Sharing the request/response types by project reference - rather than
+       generating a client from the OpenAPI document - is the main reason all three
+       front ends and the backend live in one repository. -->
+
+  <PropertyGroup>
+    <TargetFramework>$(TrackrTargetFramework)</TargetFramework>
+  </PropertyGroup>
 
 </Project>

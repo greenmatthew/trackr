@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- allowBackup is false deliberately. CLAUDE.md section 8 asks that this data be treated
+       as sensitive personal health information, and Android's auto-backup would copy the
+       app's storage - including the encrypted token store - to Google Drive. The keystore
+       key is device-bound and is NOT backed up, so a restore onto another device would
+       produce undecryptable ciphertext anyway (which SecureStorageTokenStore handles by
+       signing the user out). Turning it off means the data never leaves the device at all,
+       which is rather the point of self-hosting. -->
+  <!-- networkSecurityConfig always points at the same resource name; which FILE supplies it
+       is switched by build configuration in Trackr.Mobile.csproj. Release forbids cleartext
+       everywhere (Android's own default, stated explicitly); Debug opens a narrow exception
+       for the emulator's host loopback so the plain-HTTP dev stack is reachable. -->
+  <application
+      android:allowBackup="false"
+      android:fullBackupContent="false"
+      android:dataExtractionRules="@xml/data_extraction_rules"
+      android:networkSecurityConfig="@xml/network_security_config"
+      android:icon="@mipmap/appicon"
+      android:roundIcon="@mipmap/appicon_round"
+      android:supportsRtl="true" />
+
+  <!-- The whole app is a client of the user's own server, so without INTERNET it does
+       nothing at all. ACCESS_NETWORK_STATE lets the resilience handler tell "offline" from
+       "the server is down", which are different messages to show. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+</manifest>

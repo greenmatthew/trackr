@@ -1,12 +1,20 @@
 <Project>
 
-  <!-- Shared settings for every project in the solution. Keeping the target
-       framework here means a .NET upgrade is a one-line change. -->
+  <!-- Shared settings for every project in the solution. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- The single place the .NET version is written down, so an upgrade is still a
+         one-line change. Projects set their own TargetFramework FROM this rather than
+         inheriting one directly, because Trackr.Mobile targets `net10.0-android` and a
+         value inherited from here could not be suffixed. -->
+    <TrackrTargetFramework>net10.0</TrackrTargetFramework>
+
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+
+    <!-- Dropping ICU suits the server and the web app, whose formatted strings are
+         machine-read. Trackr.Mobile sets this back to false: it formats dates and
+         numbers for a person, and section 9.10 makes per-user time zones load-bearing. -->
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 

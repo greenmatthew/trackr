@@ -1,4 +1,4 @@
-# Build context is the repository root (see docker-compose.yml), because this
+# Build context is the repository root (see docker/docker-compose.yml), because this
 # project also needs Trackr.Shared and the Directory.*.props files.
 #
 #   docker build -f src/Trackr.Api/Dockerfile .
@@ -8,7 +8,7 @@ WORKDIR /src
 
 # Restore against the project files alone so the (slow) restore layer stays cached
 # when only source changes. Configuration=Release matters here: Trackr.Api.csproj
-# references Trackr.Client in Debug only, and that project is not in this context.
+# references Trackr.Web in Debug only, and that project is not in this context.
 COPY Directory.Build.props Directory.Packages.props ./
 COPY src/Trackr.Api/Trackr.Api.csproj src/Trackr.Api/
 COPY src/Trackr.Shared/Trackr.Shared.csproj src/Trackr.Shared/

@@ -1,0 +1,23 @@
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.AspNetCore.Components.WebAssembly.Http
+@using Microsoft.JSInterop
+@using Trackr.Web
+@using Trackr.Web.Components
+@using Trackr.Web.Layout
+@using Trackr.Web.Services
+@using Trackr.Shared.Auth
+@using Trackr.Shared.Health
+
+@* Mirrors the server's fallback authorization policy: every page requires a signed-in
+   user unless it opts out with [AllowAnonymous]. Adding a page therefore protects it by
+   default rather than by remembering to. The pages that must stay open are Login,
+   Register, ForgotPassword, ResetPassword and NotFound. *@
+@attribute [Authorize]

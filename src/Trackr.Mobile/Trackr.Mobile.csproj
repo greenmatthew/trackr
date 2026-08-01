@@ -1,0 +1,89 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Android app: the product (CLAUDE.md section 1).
+
+       Deliberately thin. View models, the API client and every abstraction live in
+       Trackr.Mobile.Core, which is a plain net10.0 library and therefore unit-testable
+       without the Android SDK. What belongs HERE is XAML, Shell wiring and the Android
+       implementations of Core's interfaces - see CLAUDE.md section 10. -->
+
+  <PropertyGroup>
+    <!-- Android only. The template also offers iOS, Mac Catalyst and Windows; those are
+         out of scope (section 12) and listing them would make the build fail on any
+         machine without those workloads, including this one. -->
+    <TargetFramework>$(TrackrTargetFramework)-android</TargetFramework>
+
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Trackr.Mobile</RootNamespace>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+
+    <!-- Generates C# from XAML at compile time rather than inflating it at runtime.
+         Faster startup, and XAML errors become build errors instead of crashes on the
+         device - which matters more here than usual, since the feedback loop involves
+         deploying to a phone. -->
+    <MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+    <ApplicationTitle>Trackr</ApplicationTitle>
+    <ApplicationId>dev.trackr.app</ApplicationId>
+    <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+
+    <!-- Android 5.0. Nothing here needs anything newer, and a low floor costs nothing. -->
+    <SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
+
+    <!-- Overrides Directory.Build.props, which drops ICU for the server and the web app.
+         This app formats dates and numbers for a person to read, and section 9.12 makes
+         per-user time zones load-bearing - both need the real globalisation data. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Debug builds default to Fast Deployment, which leaves the managed assemblies OUT of
+       the APK for `dotnet run` to push separately over adb. That makes the inner loop
+       marginally quicker and the resulting APK useless: it installs without complaint and
+       then aborts on launch with
+
+         No assemblies found in '/data/user/0/dev.trackr.app/files/.__override__/x86_64'
+
+       which names Fast Deployment but reads like a corrupt build. Since every APK here is
+       installed with `adb install` - onto the emulator, onto a real phone, or handed to a
+       household member - a self-contained APK is worth far more than the saved seconds. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+    <MauiImage Include="Resources\Images\*" />
+    <MauiFont Include="Resources\Fonts\*" />
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" />
+    <PackageReference Include="CommunityToolkit.Maui" />
+    <!-- Debug only: this is what puts ILogger output into `adb logcat`, which is the main
+         way to see what a running APK is doing. No reason to ship it in a release build. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Trackr.Mobile.Core\Trackr.Mobile.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The manifest always references @xml/network_security_config. These items decide which
+       file provides it, so the cleartext exception the emulator needs cannot leak into a
+       release build by being forgotten. The `.debug.` file is never shipped under its own
+       name in either configuration. -->
+  <ItemGroup>
+    <AndroidResource Remove="Platforms\Android\Resources\xml\network_security_config.debug.xml" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <AndroidResource Remove="Platforms\Android\Resources\xml\network_security_config.xml" />
+    <AndroidResource Include="Platforms\Android\Resources\xml\network_security_config.debug.xml"
+                     Link="Resources\xml\network_security_config.xml" />
+  </ItemGroup>
+
+</Project>

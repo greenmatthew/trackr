@@ -1,10 +1,13 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Trackr.Api/Trackr.Api.csproj" />
-    <Project Path="src/Trackr.Client/Trackr.Client.csproj" />
+    <Project Path="src/Trackr.Web/Trackr.Web.csproj" />
+    <Project Path="src/Trackr.Mobile.Core/Trackr.Mobile.Core.csproj" />
+    <Project Path="src/Trackr.Mobile/Trackr.Mobile.csproj" />
     <Project Path="src/Trackr.Shared/Trackr.Shared.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Trackr.Api.Tests/Trackr.Api.Tests.csproj" />
+    <Project Path="tests/Trackr.Mobile.Tests/Trackr.Mobile.Tests.csproj" />
   </Folder>
 </Solution>

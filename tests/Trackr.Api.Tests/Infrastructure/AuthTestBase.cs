@@ -74,6 +74,22 @@ public abstract class AuthTestBase : IAsyncLifetime
             ?? throw new InvalidOperationException("The login endpoint returned no body.");
     }
 
+    /// <summary>Runs the 2FA enrolment flow and returns the issued recovery codes.</summary>
+    protected async Task<IReadOnlyList<string>> EnableTwoFactorAsync(HttpClient client)
+    {
+        using var enroll = await client.PostAsync("/api/account/2fa/enroll", content: null);
+        enroll.EnsureSuccessStatusCode();
+
+        using var enable = await client.PostAsJsonAsync(
+            "/api/account/2fa/enable",
+            new TwoFactorCodeRequest { Code = await Factory.GenerateTotpAsync(OwnerEmail) });
+        enable.EnsureSuccessStatusCode();
+
+        var codes = await enable.Content.ReadFromJsonAsync<RecoveryCodesResponse>();
+
+        return codes!.RecoveryCodes;
+    }
+
     /// <summary>Mints an invite using an already signed-in client, returning the raw token.</summary>
     protected static async Task<string> CreateInviteAsync(HttpClient ownerClient)
     {

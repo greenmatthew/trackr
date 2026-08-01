@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="Trackr.Mobile.Pages.HomePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:HomeViewModel"
+    Title="Trackr">
+
+    <!-- Placeholder for milestone 3. Its only job is to prove the slice worked end to end:
+         everything shown here came back from a protected endpoint, authenticated by the
+         token in Android's keystore. Milestone 8 replaces this with the chat. -->
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="18" VerticalOptions="Center">
+
+            <Label
+                Text="You're signed in"
+                FontSize="26"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
+
+            <Border Padding="16" StrokeThickness="1" StrokeShape="RoundRectangle 12">
+                <VerticalStackLayout Spacing="10">
+
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Account" FontSize="12" Opacity="0.6" />
+                        <Label Text="{Binding Email}" FontSize="16" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Server" FontSize="12" Opacity="0.6" />
+                        <Label Text="{Binding ServerDescription}" FontSize="16" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Two-factor authentication" FontSize="12" Opacity="0.6" />
+                        <Label Text="{Binding TwoFactorEnabled}" FontSize="16" />
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <Label
+                Text="Meal logging arrives in a later milestone."
+                HorizontalTextAlignment="Center"
+                FontSize="13"
+                Opacity="0.6" />
+
+            <Button
+                Text="Sign out"
+                Command="{Binding SignOutCommand}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
+                HeightRequest="52" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- DEBUG BUILDS ONLY. Swapped in by Trackr.Mobile.csproj; Release gets
+     network_security_config.xml next to this file, which permits no cleartext at all.
+
+     Android has blocked cleartext HTTP by default since API 28, and this app targets 36.
+     The dev compose stack serves plain HTTP on port 8000 by design - TLS terminates at the
+     user's reverse proxy in production, not inside the containers - so without an exception
+     the app cannot reach it, failing with a connection error that looks like a bug in the
+     app rather than a platform policy.
+
+     The exception is deliberately narrow: 10.0.2.2 is the Android emulator's fixed alias for
+     the host's loopback interface, and localhost is the device's own. Neither can ever be a
+     real Trackr server, so nothing an attacker controls is reachable in cleartext. Every
+     other destination still requires HTTPS, in debug builds too. -->
+<network-security-config>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+
+    <base-config cleartextTrafficPermitted="false" />
+
+</network-security-config>

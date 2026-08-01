@@ -31,6 +31,30 @@
     <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="3.1.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Mobile (MAUI Android)">
+    <!-- The MAUI framework itself. Versioned here like everything else, but note it is
+         paired with the `maui-android` workload rather than restored in isolation - the
+         workload supplies the Android SDK bindings this builds against. -->
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.90" />
+    <!-- Source-generated MVVM: [ObservableProperty] and [RelayCommand]. Used by
+         Trackr.Mobile.Core, which is a plain net10.0 library, so this is deliberately not
+         a MAUI-specific package. -->
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Converters, behaviors, toast/snackbar and popups. Needs .UseMauiCommunityToolkit()
+         in MauiProgram - it is not purely additive like the MVVM toolkit. -->
+    <PackageVersion Include="CommunityToolkit.Maui" Version="15.0.0" />
+    <!-- IHttpClientFactory. Taken chiefly for AddHttpMessageHandler, which is how the
+         bearer-token attach-and-refresh handler is wired - the same shape as the web app's
+         UnauthorizedResponseHandler. -->
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
+    <!-- Retry, timeout and circuit breaker. A phone roams between wifi, cellular and VPN,
+         so transient failures are normal here in a way they are not on the server. -->
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
+    <!-- builder.Logging.AddDebug(). MAUI ships the logging abstractions but not the Debug
+         provider, which is the one that reaches `adb logcat`. Debug builds only. -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
+  </ItemGroup>
+
   <ItemGroup Label="Data">
     <!-- Npgsql 10.0.3 requires Microsoft.EntityFrameworkCore [10.0.4, 11.0.0). -->
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
@@ -60,6 +84,10 @@
          so in either case the migrations - the thing most worth testing - would
          never be exercised. Cost: `dotnet test` needs Docker. -->
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <!-- Substitutes for the API client in the mobile view-model tests. Trackr.Api.Tests
+         deliberately uses no mocking library - it drives the real application instead - so
+         this is scoped to Trackr.Mobile.Tests, where there is no real app to drive. -->
+    <PackageVersion Include="NSubstitute" Version="6.0.0" />
   </ItemGroup>
 
 </Project>

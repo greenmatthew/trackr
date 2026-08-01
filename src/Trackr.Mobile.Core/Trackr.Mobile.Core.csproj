@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Everything the Android app does that is not drawing.
+
+       Plain net10.0, NOT net10.0-android, and that is the whole point: view models, the
+       API client and the platform abstractions can then be exercised by `dotnet test` with
+       no Android SDK, no emulator and no workload. Anything that needs a MAUI type belongs
+       in Trackr.Mobile instead, behind an interface declared here. -->
+
+  <PropertyGroup>
+    <TargetFramework>$(TrackrTargetFramework)</TargetFramework>
+    <RootNamespace>Trackr.Mobile.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Trackr.Shared\Trackr.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- So URL normalisation can be tested directly. It is internal rather than public
+         because it is an implementation detail of the setup screen, not something other
+         code should call. -->
+    <InternalsVisibleTo Include="Trackr.Mobile.Tests" />
+  </ItemGroup>
+
+</Project>

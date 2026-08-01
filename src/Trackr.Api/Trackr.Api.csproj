@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
+    <TargetFramework>$(TrackrTargetFramework)</TargetFramework>
     <UserSecretsId>trackr-api</UserSecretsId>
   </PropertyGroup>
 
@@ -26,7 +27,7 @@
        up in the shipped image - nginx serves the app in production. -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
-    <ProjectReference Include="..\Trackr.Client\Trackr.Client.csproj" />
+    <ProjectReference Include="..\Trackr.Web\Trackr.Web.csproj" />
   </ItemGroup>
 
 </Project>

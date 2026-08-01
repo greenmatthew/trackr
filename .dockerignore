@@ -12,11 +12,18 @@
 .vscode/
 .idea/
 
-# Secrets and local-only config.
-.env
-.env.*
-!.env.example
+# Secrets and local-only config. Globbed rather than anchored: the env files live
+# in docker/ alongside the compose files, and a bare `.env` would only match at the
+# context root - which is exactly the mistake that leaks a password into a layer.
+**/.env
+**/.env.*
 
-# Docs and compose files are not needed inside any image.
+# Docs and deployment config are not needed inside any image. `docker/` also holds
+# the compose files and .env.example.
 *.md
-docker-compose*.yml
+docs/
+docker/
+
+# The mobile app is not built in a container - it produces an APK, not an image.
+src/Trackr.Mobile/
+src/Trackr.Mobile.Core/

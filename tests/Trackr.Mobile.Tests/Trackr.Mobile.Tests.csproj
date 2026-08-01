@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- View-model tests. Needs neither Docker nor the Android SDK, so it is the fast tier
+       of the three described in CLAUDE.md section 11 - and the reason Trackr.Mobile.Core
+       exists as a separate project at all. -->
+
+  <PropertyGroup>
+    <TargetFramework>$(TrackrTargetFramework)</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Trackr.Mobile.Core\Trackr.Mobile.Core.csproj" />
+  </ItemGroup>
+
+</Project>

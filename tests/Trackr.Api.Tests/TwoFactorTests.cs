@@ -179,19 +179,4 @@ public sealed class TwoFactorTests(PostgresFixture postgres) : AuthTestBase(post
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
     }
 
-    /// <summary>Runs the enrolment flow and returns the issued recovery codes.</summary>
-    private async Task<IReadOnlyList<string>> EnableTwoFactorAsync(HttpClient client)
-    {
-        using var enroll = await client.PostAsync("/api/account/2fa/enroll", content: null);
-        enroll.EnsureSuccessStatusCode();
-
-        using var enable = await client.PostAsJsonAsync(
-            "/api/account/2fa/enable",
-            new TwoFactorCodeRequest { Code = await Factory.GenerateTotpAsync(OwnerEmail) });
-        enable.EnsureSuccessStatusCode();
-
-        var codes = await enable.Content.ReadFromJsonAsync<RecoveryCodesResponse>();
-
-        return codes!.RecoveryCodes;
-    }
 }
