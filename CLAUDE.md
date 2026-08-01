@@ -4,6 +4,59 @@ This file is the project brief and working agreement for Claude Code. Read it fu
 
 ---
 
+## 0. Where documentation lives
+
+Three homes, split by **when something is read** rather than by who reads it. The audience
+overlap is near-total: a self-hoster and Claude both need "how do I point the app at my
+server". What differs is whether it must be in context *before* the question is asked.
+
+| Home | Holds | Read |
+| --- | --- | --- |
+| **`CLAUDE.md`** (this file) | Decisions and constraints. What we are building, what is locked in, what not to do. | Every session, unprompted. |
+| **`docs/.claude/`** | Claude-specific working material. `decisions/` holds one record per milestone — the *why* behind past choices. | Before changing anything a record covers. |
+| **`docs/wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. | On demand, when the question actually arises. |
+
+**The test for this file:** *would Claude make a worse decision without this in context?* If
+yes, it belongs here. If it merely answers a question — "which port", "what are the nutrient
+keys", "how do I start the emulator" — it belongs in the wiki, where it can be looked up at
+the moment it is needed instead of costing context in every unrelated session.
+
+**One exception, and it matters: constraints stay here even when they read like reference.**
+Anything whose staleness would be *dangerous* — the cleartext-HTTP rule, the auth schemes,
+the security posture in §8 — stays in `CLAUDE.md`. A wiki page that drifts out of step with
+the code is a mild annoyance for a how-to and a security misunderstanding for a constraint.
+
+### The wiki is a separate repository — set it up
+
+`docs/wiki/` is **not part of this repository**. It is the project's GitHub/Gitea wiki
+(`trackr.wiki.git`), cloned into place so that source and documentation can be edited in one
+directory, and ignored via `docs/.gitignore` so it never lands in a Trackr commit.
+
+A fresh clone will not have it. Set it up once:
+
+```bash
+git clone https://github.com/greenmatthew/trackr.wiki.git docs/wiki
+```
+
+**If `docs/wiki/` is missing, say so rather than working around it.** Do not silently write
+documentation into `CLAUDE.md` or `README.md` that belongs in the wiki, and do not recreate
+the directory as a plain folder — that would produce an untracked pile of markdown that is
+never published and never pushed.
+
+Two consequences of it being a second repository, both worth actively managing:
+
+- **Nothing is atomic.** Renaming an environment variable cannot update the code and the wiki
+  page in one commit. When a change makes a wiki page wrong, update that page in the same
+  work session and say so, rather than leaving it for later.
+- **It has its own remotes, and `git status` in this repository will never mention it.** That
+  is exactly how unpushed work gets lost. Commit and push the wiki as its own repository.
+
+Wiki pages are flat markdown at the wiki repo root, following the GitHub convention:
+`Self-Hosting.md`, `Testing-the-Android-App.md`. Dashes render as spaces in the page title,
+and `_Sidebar.md` supplies navigation.
+
+---
+
 ## 1. What we are building
 
 A **self-hosted personal nutrition / calorie tracker** that runs on the user's home server. It is for the user (and possibly a small number of household members) only — not a public product.
@@ -53,7 +106,7 @@ There is **no pre-loaded food/ingredient database**. The catalog is built up gra
   - *Already built into MAUI — do not add packages for these:* dependency injection (`builder.Services` on `MauiAppBuilder`), logging (`builder.Logging`) and configuration (`builder.Configuration`).
   - *Deliberately NOT `Microsoft.Extensions.Hosting`.* `MauiAppBuilder` is modelled on `HostApplicationBuilder` but is not an `IHostBuilder`, and MAUI never runs `IHostedService` — adding it bolts on a host nothing drives. Likewise no `appsettings.json`: the only real configuration is the server URL, which the user types and which belongs in `SecureStorage`.
   - *Cleartext HTTP is blocked, except for the emulator in Debug.* Android has forbidden cleartext by default since API 28 and the app targets 36, so a plain-HTTP server is simply unreachable — which the dev compose stack is, by design. `Platforms/Android/Resources/xml/network_security_config.xml` (Release) forbids it everywhere; `network_security_config.debug.xml` opens it for `10.0.2.2`, `localhost` and `127.0.0.1` only — addresses that can never be a real server. `Trackr.Mobile.csproj` decides which file supplies the resource, so the exception cannot reach a release build by being forgotten. **Verify this by dumping the manifest out of a built APK** (`aapt2 dump xmltree <apk> --file res/xml/network_security_config.xml`), not by reading the source.
-  - *Not MAUI Blazor Hybrid.* It would reuse the Razor components, but renders them in a WebView — the thing this design moved away from. See [03-android-pivot.md](docs/decisions/03-android-pivot.md).
+  - *Not MAUI Blazor Hybrid.* It would reuse the Razor components, but renders them in a WebView — the thing this design moved away from. See [03-android-pivot.md](docs/.claude/decisions/03-android-pivot.md).
   - iOS is out of scope. Nothing should *prevent* it later, but do not spend effort on it.
 - **Web:** Blazor WebAssembly (`Trackr.Web`), served by nginx. Scope is **account self-service and administration only** — login, password change, 2FA enrolment, invites, and an admin page later. Any user may log in. It is deliberately **not** a food-logging surface; do not build the chat or stats views here.
   - *Note:* the user initially thought of "Razor Pages." That is server-rendered HTML; Blazor WASM was chosen instead and the choice still stands now that the scope has narrowed.
@@ -62,7 +115,7 @@ There is **no pre-loaded food/ingredient database**. The catalog is built up gra
 - **Database:** PostgreSQL (containerized).
 - **Shared contracts:** `Trackr.Shared` — request/response DTOs referenced by the API, the web app and the mobile app alike. Sharing types by **project reference** rather than generating a client from the OpenAPI document is the main reason everything lives in one repository. Keep it dependency-free: it is trimmed into the browser bundle and linked into the APK.
 - **Auth:** ASP.NET Core **Identity** (do NOT hand-roll auth). Password hashing, login, session handling, **2FA (TOTP authenticator apps)**, and account **lockout** all come from Identity. See §8 for the full auth-hardening list. **Two schemes, by client:**
-  - *Web → HttpOnly cookie.* Same origin (nginx serves the app and proxies `/api/`), so the browser handles the session itself and JavaScript cannot read it — an XSS bug cannot steal the session. Every hardening decision in [02-auth.md](docs/decisions/02-auth.md) stands unchanged.
+  - *Web → HttpOnly cookie.* Same origin (nginx serves the app and proxies `/api/`), so the browser handles the session itself and JavaScript cannot read it — an XSS bug cannot steal the session. Every hardening decision in [02-auth.md](docs/.claude/decisions/02-auth.md) stands unchanged.
   - *Android → Identity bearer token.* The app is a native cross-origin client and cannot hold a cookie usefully, so it gets `IdentityConstants.BearerScheme` with a refresh token, stored in Android `SecureStorage`. This is **additive** — it changes nothing about the cookie path.
   - *Historical note:* §3 previously read "cookies, not JWTs" on the reasoning that tokens only matter for "cross-origin / multi-service / native-mobile setups, none of which apply." The Android app made that premise false. The conclusion still holds for the browser, which is why both schemes coexist rather than one replacing the other.
   - *No CORS.* MAUI uses a native `HttpClient`, and CORS is a browser-only mechanism. Do not add CORS configuration for the app — it would be pure attack surface.
@@ -94,15 +147,15 @@ to `frontend` over the network like any other client.
 
 ### Decisions made so far
 
-Recorded per milestone in [`docs/decisions/`](docs/decisions/), which is where the *why*
+Recorded per milestone in [`docs/.claude/decisions/`](docs/.claude/decisions/), which is where the *why*
 lives — read the relevant one before changing anything it covers.
 
-- [01-scaffold.md](docs/decisions/01-scaffold.md) — nginx also proxying `/api/`, plain HTTP
+- [01-scaffold.md](docs/.claude/decisions/01-scaffold.md) — nginx also proxying `/api/`, plain HTTP
   inside the containers, the two compose files, the `dotnet watch` inner loop.
-- [02-auth.md](docs/decisions/02-auth.md) — `AddIdentityCore` with hand-written endpoints,
+- [02-auth.md](docs/.claude/decisions/02-auth.md) — `AddIdentityCore` with hand-written endpoints,
   bootstrap-then-invite registration, the fail-safe fallback policy, cookie hardening,
   data-protection keys in Postgres, `Guid` user keys, startup migrations.
-- [03-android-pivot.md](docs/decisions/03-android-pivot.md) — why the phone became the
+- [03-android-pivot.md](docs/.claude/decisions/03-android-pivot.md) — why the phone became the
   product, why MAUI XAML over Blazor Hybrid, why one repository, and why the API now issues
   bearer tokens as well as cookies.
 
@@ -255,25 +308,34 @@ The user explicitly wants a properly secured account system. Implement, roughly 
 
 ## 9. Build order (suggested milestones)
 
-1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with a Blazor WASM frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions in [01-scaffold.md](docs/decisions/01-scaffold.md); how to run it is in `README.md`.
-2. ~~**Auth**~~ — ✅ **DONE.** ASP.NET Core Identity behind an HttpOnly cookie: bootstrap-then-invite-only registration, login, TOTP 2FA with QR enrolment and recovery codes, account lockout, rate limiting, password change and log-delivered reset, and a fully authed web app (auth state, protected routes, login/settings pages). First EF migration and first test project. Decisions in [02-auth.md](docs/decisions/02-auth.md); account handling is in `README.md`.
+1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with a Blazor WASM frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions in [01-scaffold.md](docs/.claude/decisions/01-scaffold.md); how to run it is in `README.md`.
+2. ~~**Auth**~~ — ✅ **DONE.** ASP.NET Core Identity behind an HttpOnly cookie: bootstrap-then-invite-only registration, login, TOTP 2FA with QR enrolment and recovery codes, account lockout, rate limiting, password change and log-delivered reset, and a fully authed web app (auth state, protected routes, login/settings pages). First EF migration and first test project. Decisions in [02-auth.md](docs/.claude/decisions/02-auth.md); account handling is in `README.md`.
 3. **Mobile foundation** — the thin end-to-end slice, deliberately **before** the backend milestones because the Android toolchain and the token auth were the two unknowns in the pivot. Bearer-token scheme on the API alongside the cookie (`/api/auth/token`, refresh, optional 2FA code in one request); `Trackr.Mobile.Core` + `Trackr.Mobile`; a first-run **server-URL** screen, login, 2FA, and one placeholder page. Done when a signed APK installs on a real phone, points at the server and logs in through 2FA. No food logging.
-4. **Mobile UX & architecture planning** — a *planning* milestone, no feature code. The thin slice in milestone 3 makes the minimum viable choices to get a screen on a phone; this is where they get made properly, before the chat UI is built on top of them. Cover at least:
+4. **Documentation migration** — no feature code. Move reference and how-to material out of `CLAUDE.md` and `README.md` into the wiki, per §0. `CLAUDE.md` is ~41KB and loaded in full every session; §3 and §11 together are nearly a third of it and are now mostly reference rather than decisions. Target ~22-25KB by moving:
+    - §11 (dev environment, building, Android testing) → `Development-Environment.md`, `Building.md`, `Testing-the-Android-App.md`.
+    - The §7a nutrient list → `Nutrient-Reference.md`. Keep the *principle* (config-driven, units always explicit, missing ≠ zero) here.
+    - §6's model-selection and RAM advice → `Ollama-Setup.md`. Keep the `keep_alive` decision here.
+    - §3's package lists, versions and toolchain specifics → wiki. Keep the choices and the reasons.
+    - §4's container detail → `Self-Hosting.md`. Keep the service list.
+    Write the self-hoster pages that exist nowhere today: `Home.md`, `_Sidebar.md`, `Self-Hosting.md`, `Configuration.md` (every `TRACKR_*` variable), `Accounts-and-2FA.md`, `Backup-and-Restore.md`, `Troubleshooting.md`. **Backup and restore is the notable gap** — the data-protection keys and the Postgres volume both matter and neither is documented anywhere.
+    Then cut `README.md` back to an entry point: what Trackr is, the layout, a short getting-started with `just dev` / `just stop` / `just nuke` and the `http://10.0.2.2:8000` dev-server address, and links out. It should not be as technical as it currently is.
+    Leave every constraint in `CLAUDE.md` — see the exception in §0.
+5. **Mobile UX & architecture planning** — a *planning* milestone, no feature code. The thin slice in milestone 3 makes the minimum viable choices to get a screen on a phone; this is where they get made properly, before the chat UI is built on top of them. Cover at least:
     - **Navigation** — `Shell` versus plain navigation, how the chat and stats tabs are laid out, and where server-setup and login sit relative to the signed-in shell.
     - **Styling and theming** — resource dictionaries, light/dark handling, and whether to lean on default Material styling or build a custom theme.
-    - **Local storage** — what the app persists beyond the token: cached stats, an offline log queue, and whether that needs SQLite now or waits for §9.13.
-   Record the outcome in `docs/decisions/` and revise milestone 3's provisional choices to match.
-5. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the extensible nutrient store** (`Nutrient` + `NutrientAmount`, or JSONB map) from §7, seeding the §7a nutrient set. Basic CRUD API for catalog and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
-6. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive **User-Agent** on OFF requests (app name + version + contact) — OFF asks for this and may throttle callers without it. Handle full-match, partial-match, and no-match cases per §5, and surface rate-limit/timeout errors rather than swallowing them.
-7. **Ollama integration** — add the ollama service, wire the backend to call it, define the strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the JSON. Configure `keep_alive`.
-8. **Chat UI + cascade + confirm** — build the chat interface **in the Android app** (new-chat flow, message list, text box with a `+` button in the bottom-left to attach images) and wire the full cascade from §5 into it. The parsed result appears as an in-chat **confirmation card** (calories/macros/servings, editable) with any fallback warnings (e.g. rate-limited), and only writes to the DB on confirm. Include the serving-count math. This is also where the camera and photo-picker permissions land.
-9. **Catalog growth** — upsert items from OFF/AI into the catalog; let the user pick from previously logged items for fast re-logging.
-10. **Stats views (REQUIRED)** — the output surface from §1, a tab in the app. "Today so far" running totals (calories + full nutrient breakdown, updating as entries are confirmed), then week/month summaries with basic trend charts. Aggregations read from the nutrient snapshots on LogItems. This is core, not polish — build it before goals.
-11. **Goals (LATE)** — let the user set calorie / macro / specific-nutrient targets and show progress against them, layered on top of the stats views. Explicitly a late milestone.
-12. **User profile (LATE, potential)** — per-account settings beyond credentials: display name, **time zone**, unit preferences (metric/imperial, kcal vs kJ), and optional body metrics (height, weight, age, sex, activity level). Also the natural home for the account self-service milestone 2 deliberately left out — changing the account email, exporting the account's data, deleting the account. Two parts are load-bearing rather than cosmetic, so respect them earlier even though the milestone itself is late:
-    - **Time zone decides what "today" means.** The stats views (§9.10) total a *local* day while the server stores UTC. Until a per-user zone exists, keep the day boundary in exactly one helper (defaulting to UTC or a single configured server zone) so making it per-user later is one change rather than a rewrite of every aggregate. Note the phone knows its own zone, which is a tempting shortcut — but the *server* does the aggregation, so the zone still has to be stored per user rather than sent per request.
-    - **Body metrics feed the goal maths.** Goals (§9.11) can suggest a calorie target from BMR/TDEE instead of asking the user to invent a number. Goals must still accept a hand-typed target, so it never hard-depends on this milestone.
-13. **Polish** — offline/queued logging when the phone has no connection to the server, edit/delete entries, richer charts, per-nutrient detail views, export, an admin page on the web app.
+    - **Local storage** — what the app persists beyond the token: cached stats, an offline log queue, and whether that needs SQLite now or waits for §9.14.
+   Record the outcome in `docs/.claude/decisions/` and revise milestone 3's provisional choices to match.
+6. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the extensible nutrient store** (`Nutrient` + `NutrientAmount`, or JSONB map) from §7, seeding the §7a nutrient set. Basic CRUD API for catalog and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
+7. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive **User-Agent** on OFF requests (app name + version + contact) — OFF asks for this and may throttle callers without it. Handle full-match, partial-match, and no-match cases per §5, and surface rate-limit/timeout errors rather than swallowing them.
+8. **Ollama integration** — add the ollama service, wire the backend to call it, define the strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the JSON. Configure `keep_alive`.
+9. **Chat UI + cascade + confirm** — build the chat interface **in the Android app** (new-chat flow, message list, text box with a `+` button in the bottom-left to attach images) and wire the full cascade from §5 into it. The parsed result appears as an in-chat **confirmation card** (calories/macros/servings, editable) with any fallback warnings (e.g. rate-limited), and only writes to the DB on confirm. Include the serving-count math. This is also where the camera and photo-picker permissions land.
+10. **Catalog growth** — upsert items from OFF/AI into the catalog; let the user pick from previously logged items for fast re-logging.
+11. **Stats views (REQUIRED)** — the output surface from §1, a tab in the app. "Today so far" running totals (calories + full nutrient breakdown, updating as entries are confirmed), then week/month summaries with basic trend charts. Aggregations read from the nutrient snapshots on LogItems. This is core, not polish — build it before goals.
+12. **Goals (LATE)** — let the user set calorie / macro / specific-nutrient targets and show progress against them, layered on top of the stats views. Explicitly a late milestone.
+13. **User profile (LATE, potential)** — per-account settings beyond credentials: display name, **time zone**, unit preferences (metric/imperial, kcal vs kJ), and optional body metrics (height, weight, age, sex, activity level). Also the natural home for the account self-service milestone 2 deliberately left out — changing the account email, exporting the account's data, deleting the account. Two parts are load-bearing rather than cosmetic, so respect them earlier even though the milestone itself is late:
+    - **Time zone decides what "today" means.** The stats views (§9.11) total a *local* day while the server stores UTC. Until a per-user zone exists, keep the day boundary in exactly one helper (defaulting to UTC or a single configured server zone) so making it per-user later is one change rather than a rewrite of every aggregate. Note the phone knows its own zone, which is a tempting shortcut — but the *server* does the aggregation, so the zone still has to be stored per user rather than sent per request.
+    - **Body metrics feed the goal maths.** Goals (§9.12) can suggest a calorie target from BMR/TDEE instead of asking the user to invent a number. Goals must still accept a hand-typed target, so it never hard-depends on this milestone.
+14. **Polish** — offline/queued logging when the phone has no connection to the server, edit/delete entries, richer charts, per-nutrient detail views, export, an admin page on the web app.
 
 Do each milestone as a working, testable slice before moving on. Keep the three cascade stages (barcode, OFF, AI) behind interfaces from the start so they stay swappable.
 

@@ -7,6 +7,10 @@ importantly — *why*, so a later change can tell a deliberate decision from an 
 the build order. These files hold the archaeology. When the two disagree, `CLAUDE.md` is the
 intent and these are the history.
 
+Both are Claude-facing, which is why they live under `docs/.claude/`. Reference and how-to
+material — installation, configuration, troubleshooting, the dev environment — belongs in
+the wiki at `docs/wiki/` instead, where the self-hoster can read it too. See CLAUDE.md §0.
+
 | Milestone | Record |
 | --- | --- |
 | 1 — Scaffold | [01-scaffold.md](01-scaffold.md) |

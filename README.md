@@ -2,7 +2,7 @@
 
 A self-hosted personal nutrition tracker with a chat-first interface. The product is an
 **Android app**; the website is account and administration only. See [CLAUDE.md](CLAUDE.md)
-for the full project brief and [docs/decisions/](docs/decisions/) for why things are the way
+for the full project brief and [docs/.claude/decisions/](docs/.claude/decisions/) for why things are the way
 they are.
 
 **Status: milestone 2 (auth) complete; milestone 3 (mobile foundation) in progress.** The
@@ -21,7 +21,16 @@ src/Trackr.Shared/         DTOs referenced by all of the above
 tests/Trackr.Api.Tests/    Integration tests against a throwaway Postgres
 tests/Trackr.Mobile.Tests/ View-model tests, no device needed
 docker/                    Compose stacks and .env.example
-docs/decisions/            Why each milestone was built the way it was
+docs/.claude/decisions/    Why each milestone was built the way it was
+docs/wiki/                 The project wiki — a separate repo, see below
+```
+
+The wiki is the GitHub/Gitea wiki repository cloned into place, so source and documentation
+can be edited together. It is **not** part of this repository and a fresh clone will not have
+it:
+
+```bash
+git clone https://github.com/greenmatthew/trackr.wiki.git docs/wiki
 ```
 
 One repository on purpose: `Trackr.Shared` is a project reference rather than a published
