@@ -222,6 +222,11 @@ lives — read the relevant one before changing anything it covers.
 - [06-mobile-ux.md](docs/decisions/06-mobile-ux.md) — the two-shell swap, the three tabs and
   the avatar, pruning `Styles.xaml`, the server-stored profile picture, and SQLite on the
   phone with the account cache as its first job.
+- [07-data-layer.md](docs/decisions/07-data-layer.md) — the relational nutrient store and
+  key-as-primary-key, the core four as columns *and* catalog rows but never amounts, totals
+  rather than per-serving values on `LogItem`, the **shared catalog** (which amends §7 below),
+  wiki-style edits to global items, meal photos as `bytea`, the startup seeder over `HasData`,
+  and the day-boundary helper.
 
 ---
 
@@ -314,8 +319,13 @@ Sizing, model selection and how to test a candidate against real label photos:
 
 - **User** — via ASP.NET Core Identity.
 - **FoodItem (catalog)** — id, name, brand (nullable), barcode (nullable), serving size + unit,
-  source (`off` | `ai` | `manual`), timestamps, owning user, **plus a full set of per-serving
-  nutrients**.
+  source (`off` | `ai` | `manual`), timestamps, **owning user (nullable)**, **plus a full set of
+  per-serving nutrients**.
+  - **A null owner means the item is global** — visible to every account on the server, and
+    editable by any of them wiki-style. Non-null means personal to that account. The user chooses
+    at creation; promotion to global is one-way. This amends the original "owning user" here, and
+    the reasoning is in [07-data-layer.md](docs/decisions/07-data-layer.md). Do **not** build
+    per-user duplicates of a shared product.
 - **LogEntry** — id, user, timestamp/date, free-text note (nullable).
 - **LogItem** — id, log entry id, food item id (nullable if ad-hoc), quantity (number of
   servings), **full computed nutrient snapshot** at time of logging.
@@ -414,14 +424,26 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    **Left open:** the Android status bar renders `colorPrimary` and clashes with the title bar.
    The fix is going edge-to-edge and handling insets, which is a layout change wanting its own
    slice; two cheaper approaches were tried and both fail structurally (see the record).
-6. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the
-   extensible nutrient store** from §7, seeding the nutrient set. Basic CRUD API for catalog
-   and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
+6. ~~**Data layer**~~ ✅ — [07-data-layer.md](docs/decisions/07-data-layer.md). Seven entities,
+   the relational nutrient store seeded with 29 nutrients, and CRUD for catalog, log and meal
+   photos. The acceptance criterion — store and read back a full multi-nutrient item — is
+   `FoodCatalogTests.A_food_item_keeps_every_nutrient_it_was_given`.
+   **API only: it has no UI and is not meant to acquire one** (§10 still forbids a food-logging
+   surface on the web; the chat is milestone 9). Two things it settled beyond the original scope:
+   the **catalog is shared across accounts** (see §7) and meal photos are stored now, because
+   milestone 9 needs somewhere to put them before a confirmation card exists.
 7. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the
    choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive
    **User-Agent** (app name + version + contact) — OFF asks for this and may throttle callers
    without it. Handle full-match, partial-match and no-match per §5, and surface
    rate-limit/timeout errors rather than swallowing them.
+   - **7a. Composite / recipe items** — a slice of its own, sequenced here because it wants a
+     global catalog holding real OFF-sourced ingredients to compose. Barcode+OFF covers packaged
+     food and fails completely on home cooking, which is the case the AI fallback handles worst.
+     A composite is still a `FoodItem`, plus a `FoodItemComponent` join and a `Yield`; nutrition
+     is **materialized on write**, so nothing downstream learns that composites exist. The shape
+     is settled in [07-data-layer.md](docs/decisions/07-data-layer.md) and the schema needs no
+     backfill — the real work is the cycle check and the fan-out recompute.
 8. **Ollama integration** — add the service, wire the backend to call it, define the
    strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the
    JSON. Configure `keep_alive`.

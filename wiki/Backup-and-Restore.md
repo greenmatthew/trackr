@@ -32,6 +32,20 @@ docker compose -f docker/docker-compose.yml exec -T db \
 Store `docker/.env` — or at least `POSTGRES_PASSWORD` — somewhere separate. A dump you cannot
 decrypt the keys of is not a backup.
 
+### Meal photos are in the dump, and they are what makes it big
+
+Photos attached to log entries are stored in Postgres, not on a separate volume, so the command
+above already includes them and there is nothing else to remember. That is the point of storing
+them there.
+
+The cost is size. A phone photo lands around 3 MB, so an account logging five photographed meals a
+day adds roughly **5.5 GB a year** to the dump — and the dump takes proportionally longer to write
+and to restore. Nothing else in the database is remotely that large.
+
+If that becomes awkward, the options in increasing order of effort are: dump less often but keep
+more generations, use the volume snapshot below (which is a file copy rather than a re-encode), or
+delete old entries you no longer want, which takes their photos with them.
+
 ### Volume snapshot instead
 
 Backing up the `db-data` volume directly also works, but only with the stack **stopped** —
