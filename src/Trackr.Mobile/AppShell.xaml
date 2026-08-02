@@ -8,27 +8,13 @@
     Title="Trackr"
     FlyoutBehavior="Disabled">
 
-    <!-- Four flat routes, no tabs and no flyout: the app still has exactly one signed-in
-         screen, so there is nothing to navigate between. Milestone 5 (CLAUDE.md section 9)
-         decides the real structure, at which point Home becomes a TabBar holding the chat and
-         stats tabs and these three auth routes move out of the main stack.
+    <!-- The signed-in shell. Only reachable with a live session: App swaps Window.Page to
+         this one when AuthSession says so, and back to AuthShell on sign-out, so there is no
+         route out of here and no back gesture that returns to login.
 
-         Routes come from Trackr.Mobile.Core rather than being written here as literals. They
-         were duplicated once, and the failure mode was poor: renaming one side compiled and
-         threw at runtime inside a fire-and-forget handler, so it looked like a dead button
-         rather than a crash. RoutesTests holds the pair together if x:Static is ever undone. -->
-
-    <ShellContent
-        Route="{x:Static vm:Routes.ServerSetup}"
-        ContentTemplate="{DataTemplate pages:ServerSetupPage}" />
-
-    <ShellContent
-        Route="{x:Static vm:Routes.Login}"
-        ContentTemplate="{DataTemplate pages:LoginPage}" />
-
-    <ShellContent
-        Route="{x:Static vm:Routes.Register}"
-        ContentTemplate="{DataTemplate pages:RegisterPage}" />
+         Still one screen. The Home | Chat | Trends TabBar and the profile avatar land in the
+         next slice of milestone 5; the split from AuthShell had to come first, because the
+         tabs only make sense once auth lives somewhere else. -->
 
     <ShellContent
         Route="{x:Static vm:Routes.Home}"

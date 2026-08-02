@@ -104,7 +104,7 @@ public sealed class RegisterViewModelTests
     // --- registering ------------------------------------------------------------------
 
     [Fact]
-    public async Task Registers_then_signs_in_then_goes_home()
+    public async Task Registers_then_signs_in_and_leaves_the_shell_swap_to_take_over()
     {
         var (viewModel, api, tokenStore, navigation) = Build();
         api.GetRegistrationModeAsync().ReturnsForAnyArgs(RegistrationMode.Bootstrap);
@@ -124,7 +124,10 @@ public sealed class RegisterViewModelTests
         await api.Received(1).RegisterAsync(Arg.Any<RegisterRequest>(), Arg.Any<CancellationToken>());
         // The token is what makes the account usable; registering alone does not issue one.
         await tokenStore.Received(1).WriteAsync(Arg.Any<StoredTokens>());
-        await navigation.Received(1).GoToHomeAsync();
+
+        // Signing in raised AuthSession.Changed, and App swaps the shell on that. The view
+        // model must not also navigate - it would race the swap it does not own.
+        Assert.Empty(navigation.ReceivedCalls());
     }
 
     [Fact]
@@ -181,7 +184,7 @@ public sealed class RegisterViewModelTests
         await viewModel.RegisterCommand.ExecuteAsync(null);
 
         Assert.Equal("Passwords must be at least 12 characters.", viewModel.Error);
-        await navigation.DidNotReceive().GoToHomeAsync();
+        Assert.Empty(navigation.ReceivedCalls());
     }
 
     [Fact]
@@ -226,8 +229,10 @@ public sealed class RegisterViewModelTests
 
         Assert.Contains("was created", viewModel.Error);
         Assert.Contains("not register again", viewModel.Error);
+        // Login, not the signed-in shell: there is no session to swap to, and the whole point
+        // of this state is that the user must sign in by hand.
         await navigation.Received(1).GoToLoginAsync();
-        await navigation.DidNotReceive().GoToHomeAsync();
+        Assert.Single(navigation.ReceivedCalls());
     }
 
     [Fact]

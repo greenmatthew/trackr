@@ -35,7 +35,14 @@ public sealed class LoginViewModelTests
 
         await tokenStore.Received(1).WriteAsync(Arg.Is<StoredTokens>(t =>
             t.AccessToken == "access" && t.RefreshToken == "refresh"));
-        await navigation.Received(1).GoToHomeAsync();
+
+        // Fetching the account is what populates AuthSession.CurrentUser, which is what
+        // raises Changed, which is what makes App swap to the signed-in shell.
+        await api.Received(1).GetMeAsync(Arg.Any<CancellationToken>());
+
+        // And the view model itself must not navigate. Crossing the auth boundary is the
+        // shell swap's job; a view model doing it too would race the swap.
+        Assert.Empty(navigation.ReceivedCalls());
         Assert.Null(viewModel.Error);
     }
 
@@ -57,7 +64,7 @@ public sealed class LoginViewModelTests
         Assert.True(viewModel.NeedsTwoFactor);
         Assert.Null(viewModel.Error);
         await tokenStore.DidNotReceive().WriteAsync(Arg.Any<StoredTokens>());
-        await navigation.DidNotReceive().GoToHomeAsync();
+        Assert.Empty(navigation.ReceivedCalls());
     }
 
     [Fact]

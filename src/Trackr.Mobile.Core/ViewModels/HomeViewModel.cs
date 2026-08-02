@@ -15,8 +15,7 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// </remarks>
 public sealed partial class HomeViewModel(
     AuthSession session,
-    IServerSettings serverSettings,
-    INavigationService navigation) : ObservableObject
+    IServerSettings serverSettings) : ObservableObject
 {
     public string Email => session.CurrentUser?.Email ?? "not signed in";
 
@@ -34,8 +33,9 @@ public sealed partial class HomeViewModel(
 
         try
         {
+            // No navigation: SignOutAsync raises AuthSession.Changed, and App swaps back to
+            // the signed-out shell in response.
             await session.SignOutAsync();
-            await navigation.GoToLoginAsync();
         }
         finally
         {

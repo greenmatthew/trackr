@@ -4,10 +4,15 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// Moving between screens, without this project needing to know what a Shell is.
 /// </summary>
 /// <remarks>
-/// Provisional, and deliberately so: milestone 5 (CLAUDE.md section 9) settles navigation
-/// properly. Named methods rather than a general <c>GoToAsync(route)</c> because there are
-/// four screens and named methods can be asserted on in a test without matching strings.
-/// Expect this to grow into something route-shaped once the chat and stats tabs exist.
+/// Every method here moves <i>within</i> the signed-out shell. Crossing the auth boundary is
+/// deliberately not available: signing in or out changes <c>AuthSession</c>, and App swaps the
+/// whole shell in response. A view model that tried to navigate to the signed-in shell would
+/// be describing a transition it does not own, and could get it wrong in a way that leaves the
+/// user on a screen whose every request fails.
+/// <para>
+/// Named methods rather than a general <c>GoToAsync(route)</c> so that a test can assert on
+/// the intent without matching strings. See <see cref="Routes"/> for the names themselves.
+/// </para>
 /// </remarks>
 public interface INavigationService
 {
@@ -16,6 +21,4 @@ public interface INavigationService
     Task GoToLoginAsync();
 
     Task GoToRegisterAsync();
-
-    Task GoToHomeAsync();
 }

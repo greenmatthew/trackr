@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="Trackr.Mobile.AuthShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:pages="clr-namespace:Trackr.Mobile.Pages"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    Title="Trackr"
+    FlyoutBehavior="Disabled">
+
+    <!-- Getting signed in: choose a server, then log in or redeem an invite. Separate from
+         AppShell rather than three more routes inside it, so that no absolute "//route" can
+         cross the auth boundary - the two shells never coexist, so there is nothing to cross
+         to. App swaps Window.Page between them on AuthSession.Changed.
+
+         Server setup is declared first because it is the first run in order, but App selects
+         login via CurrentItem when a server address is already stored. -->
+
+    <ShellContent
+        x:Name="ServerSetupContent"
+        Route="{x:Static vm:Routes.ServerSetup}"
+        ContentTemplate="{DataTemplate pages:ServerSetupPage}" />
+
+    <ShellContent
+        x:Name="LoginContent"
+        Route="{x:Static vm:Routes.Login}"
+        ContentTemplate="{DataTemplate pages:LoginPage}" />
+
+    <ShellContent
+        Route="{x:Static vm:Routes.Register}"
+        ContentTemplate="{DataTemplate pages:RegisterPage}" />
+
+</Shell>

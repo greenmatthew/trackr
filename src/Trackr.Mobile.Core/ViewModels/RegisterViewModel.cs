@@ -135,7 +135,8 @@ public sealed partial class RegisterViewModel(
             {
                 Password = "";
                 InviteToken = "";
-                await navigation.GoToHomeAsync();
+                // No navigation: SignInAsync raised AuthSession.Changed, and App swaps the
+                // whole shell in response.
                 return;
             }
 
