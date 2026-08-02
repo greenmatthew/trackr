@@ -40,6 +40,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<LoginViewModel>();
         services.AddTransient<RegisterViewModel>();
         services.AddTransient<HomeViewModel>();
+        services.AddTransient<ProfileViewModel>();
+        services.AddTransient<AppShellViewModel>();
 
         return services;
     }

@@ -55,6 +55,14 @@ public static class MauiProgram
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<RegisterPage>();
         builder.Services.AddTransient<HomePage>();
+        builder.Services.AddTransient<ChatPage>();
+        builder.Services.AddTransient<TrendsPage>();
+        builder.Services.AddTransient<ProfilePage>();
+
+        // Both shells too, for the same reason: App resolves one on each auth transition, and
+        // AppShell constructor-injects the view model behind its title bar.
+        builder.Services.AddTransient<AuthShell>();
+        builder.Services.AddTransient<AppShell>();
 
         return builder.Build();
     }

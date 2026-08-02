@@ -21,4 +21,10 @@ public interface INavigationService
     Task GoToLoginAsync();
 
     Task GoToRegisterAsync();
+
+    /// <summary>
+    /// Opens the profile from the avatar in the title bar. The one route that pushes rather
+    /// than replaces, so it gets a back arrow and returns to the tab it was opened from.
+    /// </summary>
+    Task GoToProfileAsync();
 }

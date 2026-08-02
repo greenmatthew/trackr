@@ -1,45 +1,23 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using Trackr.Mobile.Core.Auth;
-using Trackr.Mobile.Core.Platform;
 
 namespace Trackr.Mobile.Core.ViewModels;
 
 /// <summary>
-/// The placeholder signed-in screen for milestone 3.
+/// Today's totals - the output surface, and the tab the app opens on.
 /// </summary>
 /// <remarks>
-/// Its whole job is to prove the slice end to end: the token in Android's keystore reached a
-/// protected endpoint and came back with a real account. Milestone 8 replaces this with the
-/// chat, and milestone 10 adds the stats tab beside it.
+/// Deliberately an honest empty state rather than a dashboard of invented numbers: nothing
+/// can be logged until the cascade exists (milestone 9) and there is nothing to aggregate
+/// until the data layer does (milestone 6). Milestone 11 fills this in from the nutrient
+/// snapshots on LogItems.
+/// <para>
+/// The date here is for display only. What counts as "today" for an *aggregate* is a server
+/// question, because the server aggregates and the day boundary has to follow the account's
+/// time zone rather than whichever zone the phone happens to be in - see CLAUDE.md section
+/// 9.13. Do not let a phone-local date leak into a total.
+/// </para>
 /// </remarks>
-public sealed partial class HomeViewModel(
-    AuthSession session,
-    IServerSettings serverSettings) : ObservableObject
+public sealed partial class HomeViewModel : ObservableObject
 {
-    public string Email => session.CurrentUser?.Email ?? "not signed in";
-
-    public string ServerDescription => serverSettings.BaseUrl?.Host ?? "no server configured";
-
-    public bool TwoFactorEnabled => session.CurrentUser?.TwoFactorEnabled ?? false;
-
-    [ObservableProperty]
-    public partial bool IsBusy { get; set; }
-
-    [RelayCommand]
-    private async Task SignOutAsync()
-    {
-        IsBusy = true;
-
-        try
-        {
-            // No navigation: SignOutAsync raises AuthSession.Changed, and App swaps back to
-            // the signed-out shell in response.
-            await session.SignOutAsync();
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    public string Today => DateTime.Now.ToString("dddd d MMMM");
 }

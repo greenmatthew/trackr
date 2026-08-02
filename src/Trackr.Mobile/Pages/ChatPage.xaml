@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="Trackr.Mobile.Pages.ChatPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- The input surface, and the defining UX decision of the app (CLAUDE.md section 1):
+         describe what you ate in plain language, optionally attach a photo with a + button
+         bottom-left, and confirm a card before anything is written.
+
+         Empty until milestone 9, which builds the chat and wires the cascade behind it. The
+         tab exists now so the shell it lives in was settled once, rather than being rebuilt
+         underneath the chat later. -->
+
+    <VerticalStackLayout Padding="24" Spacing="12" VerticalOptions="Center">
+
+        <Label
+            Text="Chat"
+            FontSize="26"
+            FontAttributes="Bold"
+            HorizontalOptions="Center" />
+
+        <Label
+            Text="Tell Trackr what you ate and it works out the numbers. Arriving in a later milestone."
+            HorizontalTextAlignment="Center"
+            FontSize="13"
+            Opacity="0.6" />
+
+    </VerticalStackLayout>
+
+</ContentPage>

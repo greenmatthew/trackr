@@ -4,56 +4,35 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
-    x:DataType="vm:HomeViewModel"
-    Title="Trackr">
+    x:DataType="vm:HomeViewModel">
 
-    <!-- Placeholder for milestone 3. Its only job is to prove the slice worked end to end:
-         everything shown here came back from a protected endpoint, authenticated by the
-         token in Android's keystore. Milestone 8 replaces this with the chat. -->
+    <!-- Today's totals: the output surface, and the tab the app opens on.
 
-    <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="18" VerticalOptions="Center">
+         An honest empty state rather than a dashboard of invented numbers. Nothing can be
+         logged until the cascade exists (milestone 9) and there is nothing to aggregate until
+         the data layer does (milestone 6); milestone 11 fills this in from the nutrient
+         snapshots on LogItems. The shape is here so that work is a fill-in, not a redesign. -->
 
-            <Label
-                Text="You're signed in"
-                FontSize="26"
-                FontAttributes="Bold"
-                HorizontalOptions="Center" />
+    <VerticalStackLayout Padding="24" Spacing="12" VerticalOptions="Center">
 
-            <Border Padding="16" StrokeThickness="1" StrokeShape="RoundRectangle 12">
-                <VerticalStackLayout Spacing="10">
+        <Label
+            Text="{Binding Today}"
+            FontSize="13"
+            Opacity="0.6"
+            HorizontalOptions="Center" />
 
-                    <VerticalStackLayout Spacing="2">
-                        <Label Text="Account" FontSize="12" Opacity="0.6" />
-                        <Label Text="{Binding Email}" FontSize="16" />
-                    </VerticalStackLayout>
+        <Label
+            Text="Nothing logged yet"
+            FontSize="26"
+            FontAttributes="Bold"
+            HorizontalOptions="Center" />
 
-                    <VerticalStackLayout Spacing="2">
-                        <Label Text="Server" FontSize="12" Opacity="0.6" />
-                        <Label Text="{Binding ServerDescription}" FontSize="16" />
-                    </VerticalStackLayout>
+        <Label
+            Text="Your day's calories and nutrients will appear here once meal logging arrives."
+            HorizontalTextAlignment="Center"
+            FontSize="13"
+            Opacity="0.6" />
 
-                    <VerticalStackLayout Spacing="2">
-                        <Label Text="Two-factor authentication" FontSize="12" Opacity="0.6" />
-                        <Label Text="{Binding TwoFactorEnabled}" FontSize="16" />
-                    </VerticalStackLayout>
-
-                </VerticalStackLayout>
-            </Border>
-
-            <Label
-                Text="Meal logging arrives in a later milestone."
-                HorizontalTextAlignment="Center"
-                FontSize="13"
-                Opacity="0.6" />
-
-            <Button
-                Text="Sign out"
-                Command="{Binding SignOutCommand}"
-                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
-                HeightRequest="52" />
-
-        </VerticalStackLayout>
-    </ScrollView>
+    </VerticalStackLayout>
 
 </ContentPage>

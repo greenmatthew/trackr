@@ -6,14 +6,20 @@ namespace Trackr.Mobile;
 public partial class App : Application
 {
     private readonly AuthSession _session;
+    private readonly IServiceProvider _services;
 
     private Window? _window;
 
-    public App(AuthSession session)
+    public App(AuthSession session, IServiceProvider services)
     {
         InitializeComponent();
 
         _session = session;
+
+        // Both shells have constructor dependencies - AppShell a view model for its title
+        // bar, AuthShell the session it reads HasServer from - and each swap needs a fresh
+        // one, so they are resolved on demand rather than injected once.
+        _services = services;
 
         // The subscriber AuthSession.Changed was added for and then went without: signing in
         // or out swaps the whole shell, so no view model needs to navigate across the auth
@@ -68,12 +74,12 @@ public partial class App : Application
             {
                 if (_window.Page is not AppShell)
                 {
-                    _window.Page = new AppShell();
+                    _window.Page = _services.GetRequiredService<AppShell>();
                 }
             }
             else if (_window.Page is not AuthShell)
             {
-                _window.Page = new AuthShell(_session.HasServer);
+                _window.Page = _services.GetRequiredService<AuthShell>();
             }
         });
 }

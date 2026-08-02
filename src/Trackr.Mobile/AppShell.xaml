@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:Trackr.Mobile.Pages"
     xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:AppShellViewModel"
     Title="Trackr"
     FlyoutBehavior="Disabled">
 
@@ -12,12 +13,71 @@
          this one when AuthSession says so, and back to AuthShell on sign-out, so there is no
          route out of here and no back gesture that returns to login.
 
-         Still one screen. The Home | Chat | Trends TabBar and the profile avatar land in the
-         next slice of milestone 5; the split from AuthShell had to come first, because the
-         tabs only make sense once auth lives somewhere else. -->
+         Three tabs, and no more. Goals layer onto Trends rather than earning a tab of their
+         own (CLAUDE.md 9.12), re-logging a previous item belongs in the chat rather than in a
+         browse-and-pick screen (section 10), and history is a drill-down from a day in
+         Trends. The profile is reached from the avatar below, because it is somewhere you go
+         occasionally and the tab strip is for the two surfaces the app exists for. -->
 
-    <ShellContent
-        Route="{x:Static vm:Routes.Home}"
-        ContentTemplate="{DataTemplate pages:HomePage}" />
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="*,Auto" VerticalOptions="Fill" Padding="0,0,4,0">
+
+            <Label
+                Text="Trackr"
+                FontSize="20"
+                FontAttributes="Bold"
+                VerticalOptions="Center"
+                TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
+
+            <!-- Initials until the account has a picture. Dark text on a brand fill, never
+                 light: the brand colours are 1.8-2.4:1 against #F2FBFD and would fail
+                 contrast the other way round - see docs/decisions/04-branding.md. -->
+            <Border
+                Grid.Column="1"
+                WidthRequest="36"
+                HeightRequest="36"
+                Padding="0"
+                StrokeThickness="0"
+                VerticalOptions="Center"
+                BackgroundColor="{StaticResource Primary}"
+                StrokeShape="Ellipse"
+                AutomationId="ProfileAvatar"
+                SemanticProperties.Description="Open your profile">
+
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenProfileCommand}" />
+                </Border.GestureRecognizers>
+
+                <Label
+                    Text="{Binding Initials}"
+                    FontSize="14"
+                    FontAttributes="Bold"
+                    TextColor="{StaticResource PrimaryDarkText}"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center" />
+
+            </Border>
+
+        </Grid>
+    </Shell.TitleView>
+
+    <TabBar>
+
+        <ShellContent
+            Title="Home"
+            Route="{x:Static vm:Routes.Home}"
+            ContentTemplate="{DataTemplate pages:HomePage}" />
+
+        <ShellContent
+            Title="Chat"
+            Route="{x:Static vm:Routes.Chat}"
+            ContentTemplate="{DataTemplate pages:ChatPage}" />
+
+        <ShellContent
+            Title="Trends"
+            Route="{x:Static vm:Routes.Trends}"
+            ContentTemplate="{DataTemplate pages:TrendsPage}" />
+
+    </TabBar>
 
 </Shell>

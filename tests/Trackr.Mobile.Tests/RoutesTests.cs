@@ -38,23 +38,25 @@ public class RoutesTests
 
     [Theory]
     [MemberData(nameof(RouteNames))]
-    public void Every_route_constant_is_declared_in_a_shell(string name)
+    public void Every_route_constant_is_wired_up_in_a_shell(string name)
     {
-        var declarations = ShellXaml();
+        var declarations = ShellSources();
 
         Assert.True(
             declarations.Contains($"Routes.{name}", StringComparison.Ordinal),
-            $"Routes.{name} has no ShellContent in any *Shell.xaml. Navigating to it would "
-                + "throw at runtime inside a command, which looks like a dead button.");
+            $"Routes.{name} is not wired up in any shell - it needs either a ShellContent in "
+                + "*Shell.xaml or a Routing.RegisterRoute in *Shell.xaml.cs. Navigating to an "
+                + "unregistered route throws inside a command, which looks like a dead button.");
     }
 
     [Fact]
-    public void The_constants_and_the_shell_xaml_are_both_being_read()
+    public void The_constants_and_the_shell_sources_are_both_being_read()
     {
-        // Guards the guard: an empty constant list or an unfound XAML file would make the
+        // Guards the guard: an empty constant list or an unfound shell file would make the
         // theory above vacuously pass.
         Assert.NotEmpty(Constants());
-        Assert.Contains("ShellContent", ShellXaml(), StringComparison.Ordinal);
+        Assert.Contains("ShellContent", ShellSources(), StringComparison.Ordinal);
+        Assert.Contains("RegisterRoute", ShellSources(), StringComparison.Ordinal);
     }
 
     private static FieldInfo[] Constants() =>
@@ -63,6 +65,13 @@ public class RoutesTests
             .Where(f => f is { IsLiteral: true, IsInitOnly: false })
             .ToArray();
 
-    private static string ShellXaml() =>
-        string.Concat(RepoRoot.Glob("src/Trackr.Mobile", "*Shell.xaml").Select(File.ReadAllText));
+    /// <summary>
+    /// Both the XAML and its code-behind: a tab is a <c>ShellContent</c> in the markup, but a
+    /// pushed route is a <c>Routing.RegisterRoute</c> in the constructor, and either counts as
+    /// being wired up.
+    /// </summary>
+    private static string ShellSources() =>
+        string.Concat(RepoRoot
+            .Glob("src/Trackr.Mobile", "*Shell.xaml*")
+            .Select(File.ReadAllText));
 }

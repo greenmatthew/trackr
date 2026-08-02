@@ -23,6 +23,10 @@ public sealed class ShellNavigationService : INavigationService
 
     public Task GoToRegisterAsync() => GoToAsync($"//{Routes.Register}");
 
+    // Relative, unlike every other route here: pushing onto the current tab's stack is what
+    // gives the profile a back arrow and returns the user to the tab they opened it from.
+    public Task GoToProfileAsync() => GoToAsync(Routes.Profile);
+
     private static Task GoToAsync(string route) =>
         // Shell navigation must happen on the UI thread, and commands may complete on a
         // thread-pool thread after an await.

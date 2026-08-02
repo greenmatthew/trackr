@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="Trackr.Mobile.Pages.ProfilePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:ProfileViewModel"
+    Title="Profile">
+
+    <!-- The account details that lived on the milestone 3 home screen. None of it was ever
+         about the home screen; Home is the day's totals now.
+
+         Overrides the shell's title view deliberately: this page is what the avatar opens,
+         so showing the avatar again on it would offer to open the page you are on. -->
+
+    <Shell.TitleView>
+        <Label
+            Text="Profile"
+            FontSize="20"
+            FontAttributes="Bold"
+            VerticalOptions="Center"
+            TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
+    </Shell.TitleView>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="18">
+
+            <Border
+                WidthRequest="72"
+                HeightRequest="72"
+                Padding="0"
+                StrokeThickness="0"
+                HorizontalOptions="Center"
+                BackgroundColor="{StaticResource Primary}"
+                StrokeShape="Ellipse">
+
+                <Label
+                    Text="{Binding Initials}"
+                    FontSize="28"
+                    FontAttributes="Bold"
+                    TextColor="{StaticResource PrimaryDarkText}"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center" />
+
+            </Border>
+
+            <Border Padding="16" StrokeThickness="1" StrokeShape="RoundRectangle 12">
+                <VerticalStackLayout Spacing="10">
+
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Account" FontSize="12" Opacity="0.6" />
+                        <Label Text="{Binding Email}" FontSize="16" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Server" FontSize="12" Opacity="0.6" />
+                        <Label Text="{Binding ServerDescription}" FontSize="16" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Two-factor authentication" FontSize="12" Opacity="0.6" />
+                        <Label Text="{Binding TwoFactorDescription}" FontSize="16" />
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <Label
+                Text="Changing your password and managing 2FA happen on the website."
+                HorizontalTextAlignment="Center"
+                FontSize="13"
+                Opacity="0.6" />
+
+            <Button
+                Text="Sign out"
+                Command="{Binding SignOutCommand}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
+                HeightRequest="52" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
