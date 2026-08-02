@@ -16,15 +16,12 @@
 
         <Label
             Text="Chat"
-            FontSize="26"
-            FontAttributes="Bold"
+            Style="{StaticResource PageTitle}"
             HorizontalOptions="Center" />
 
         <Label
             Text="Tell Trackr what you ate and it works out the numbers. Arriving in a later milestone."
-            HorizontalTextAlignment="Center"
-            FontSize="13"
-            Opacity="0.6" />
+            Style="{StaticResource Caption}" />
 
     </VerticalStackLayout>
 

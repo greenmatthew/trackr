@@ -172,19 +172,9 @@
         </Setter>
     </Style>
 
-    <Style TargetType="Label" x:Key="Headline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource White}}" />
-        <Setter Property="FontSize" Value="32" />
-        <Setter Property="HorizontalOptions" Value="Center" />
-        <Setter Property="HorizontalTextAlignment" Value="Center" />
-    </Style>
-
-    <Style TargetType="Label" x:Key="SubHeadline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource White}}" />
-        <Setter Property="FontSize" Value="24" />
-        <Setter Property="HorizontalOptions" Value="Center" />
-        <Setter Property="HorizontalTextAlignment" Value="Center" />
-    </Style>
+    <!-- Headline and SubHeadline removed: they came with the template, no page ever
+         referenced them, and PageTitle/Metric in the Trackr layer below replace them. They
+         also hard-centred, which is a layout decision a type style should not be making. -->
 
     <Style TargetType="Picker">
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
@@ -274,26 +264,9 @@
         </Setter>
     </Style>
 
-    <Style TargetType="SearchHandler">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource Gray500}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal" />
-                    <VisualState x:Name="Disabled">
-                        <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
+    <!-- SearchHandler removed: it styles the search box Shell can put in its nav bar, and
+         nothing in the app turns that on. Finding a past meal happens by describing it in the
+         chat, not by searching a list (CLAUDE.md section 10). -->
 
     <Style TargetType="Shadow">
         <Setter Property="Radius" Value="15" />
@@ -376,29 +349,8 @@
         </Setter>
     </Style>
   
-    <!--
-    <Style TargetType="TitleBar">
-        <Setter Property="MinimumHeightRequest" Value="32"/>
-        <Setter Property="VisualStateManager.VisualStateGroups">
-            <VisualStateGroupList>
-                <VisualStateGroup x:Name="TitleActiveStates">
-                    <VisualState x:Name="TitleBarTitleActive">
-                        <VisualState.Setters>
-                            <Setter Property="BackgroundColor" Value="Transparent" />
-                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                    <VisualState x:Name="TitleBarTitleInactive">
-                        <VisualState.Setters>
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-                            <Setter Property="ForegroundColor" Value="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}" />
-                        </VisualState.Setters>
-                    </VisualState>
-                </VisualStateGroup>
-            </VisualStateGroupList>
-        </Setter>
-    </Style>
-    -->
+    <!-- TitleBar removed: it is the desktop window caption, which an Android app has no
+         equivalent of. It arrived commented out with the MAUI template and stayed that way. -->
 
     <Style TargetType="Page" ApplyToDerivedTypes="True">
         <Setter Property="Padding" Value="0"/>
@@ -418,17 +370,91 @@
         <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
     </Style>
 
-    <Style TargetType="NavigationPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray950}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource White}}" />
-        <Setter Property="IconColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource White}}" />
+    <!-- NavigationPage and TabbedPage removed: the app navigates entirely through Shell, and
+         the tab strip is a Shell TabBar, styled by the Shell.TabBar* setters above. Neither
+         control is ever constructed, so both styles were unreachable. -->
+
+    <!-- ===================================================================================
+         Trackr layer.
+
+         Everything above is MAUI's template, pruned and recoloured. Everything below is ours.
+
+         It exists because the pages were hand-writing FontSize="13" and Opacity="0.6" inline,
+         which is survivable across four screens and will not be across a chat transcript, a
+         confirmation card and a nutrient breakdown. Named styles now, so milestone 9 has
+         something to build against rather than a fresh set of magic numbers.
+
+         Type scale is deliberately short - five sizes. A phone does not need more, and a long
+         scale is how inconsistency creeps back in.
+         =================================================================================== -->
+
+    <!-- 26. One per screen, at most. -->
+    <Style TargetType="Label" x:Key="PageTitle">
+        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource White}}" />
     </Style>
 
-    <Style TargetType="TabbedPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray950}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource PrimaryOnLight}, Dark={StaticResource White}}" />
-        <Setter Property="UnselectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}" />
-        <Setter Property="SelectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+    <!-- 34, tabular. For the number that is the whole point of a screen: the day's calories. -->
+    <Style TargetType="Label" x:Key="Metric">
+        <Setter Property="FontSize" Value="34" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource White}}" />
+    </Style>
+
+    <!-- 16. Ordinary reading text. -->
+    <Style TargetType="Label" x:Key="Body">
+        <Setter Property="FontSize" Value="16" />
+    </Style>
+
+    <!-- 12, quiet. The label above a value, not the value. -->
+    <Style TargetType="Label" x:Key="FieldLabel">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Opacity" Value="0.6" />
+    </Style>
+
+    <!-- 13, quiet, centred. Explanatory text under something. -->
+    <Style TargetType="Label" x:Key="Caption">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Opacity" Value="0.6" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+    </Style>
+
+    <!-- Error text. ErrorOnLight and ErrorOnDark rather than the bare Error, which clears AA
+         on neither background - see docs/decisions/04-branding.md. -->
+    <Style TargetType="Label" x:Key="ErrorText">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource ErrorOnLight}, Dark={StaticResource ErrorOnDark}}" />
+    </Style>
+
+    <!-- The grouping box: account details today, a confirmation card in milestone 9. -->
+    <Style TargetType="Border" x:Key="Card">
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+    </Style>
+
+    <!-- A brand-filled circle. Sized by the caller; the fill and the dark-text-on-fill rule
+         are what this carries. Never light text on a brand fill: they run 1.8-2.4:1. -->
+    <Style TargetType="Border" x:Key="AvatarCircle">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+        <Setter Property="StrokeShape" Value="Ellipse" />
+    </Style>
+
+    <!-- Full-width primary action. 52 rather than the 44 minimum: this is the button at the
+         bottom of a form, reached one-handed with a thumb. -->
+    <Style TargetType="Button" x:Key="PrimaryAction">
+        <Setter Property="HeightRequest" Value="52" />
+        <Setter Property="FontSize" Value="16" />
+    </Style>
+
+    <!-- Looks like a link, behaves like a button. "Create one", "Use a different server". -->
+    <Style TargetType="Button" x:Key="LinkAction">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource PrimaryOnLight}, Dark={StaticResource PrimaryDark}}" />
     </Style>
 
 </ResourceDictionary>

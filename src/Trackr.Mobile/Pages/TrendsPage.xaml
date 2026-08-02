@@ -14,15 +14,12 @@
 
         <Label
             Text="Trends"
-            FontSize="26"
-            FontAttributes="Bold"
+            Style="{StaticResource PageTitle}"
             HorizontalOptions="Center" />
 
         <Label
             Text="Weekly and monthly summaries will appear here once there is something to summarise."
-            HorizontalTextAlignment="Center"
-            FontSize="13"
-            Opacity="0.6" />
+            Style="{StaticResource Caption}" />
 
     </VerticalStackLayout>
 

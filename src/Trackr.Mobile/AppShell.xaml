@@ -34,13 +34,10 @@
                  contrast the other way round - see docs/decisions/04-branding.md. -->
             <Border
                 Grid.Column="1"
+                Style="{StaticResource AvatarCircle}"
                 WidthRequest="36"
                 HeightRequest="36"
-                Padding="0"
-                StrokeThickness="0"
                 VerticalOptions="Center"
-                BackgroundColor="{StaticResource Primary}"
-                StrokeShape="Ellipse"
                 AutomationId="ProfileAvatar"
                 SemanticProperties.Description="Open your profile">
 

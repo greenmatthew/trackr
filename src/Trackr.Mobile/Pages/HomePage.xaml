@@ -17,21 +17,17 @@
 
         <Label
             Text="{Binding Today}"
-            FontSize="13"
-            Opacity="0.6"
+            Style="{StaticResource Caption}"
             HorizontalOptions="Center" />
 
         <Label
             Text="Nothing logged yet"
-            FontSize="26"
-            FontAttributes="Bold"
+            Style="{StaticResource PageTitle}"
             HorizontalOptions="Center" />
 
         <Label
             Text="Your day's calories and nutrients will appear here once meal logging arrives."
-            HorizontalTextAlignment="Center"
-            FontSize="13"
-            Opacity="0.6" />
+            Style="{StaticResource Caption}" />
 
     </VerticalStackLayout>
 

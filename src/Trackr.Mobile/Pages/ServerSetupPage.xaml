@@ -37,13 +37,13 @@
             <Label
                 Text="{Binding Error}"
                 IsVisible="{Binding Error, Converter={StaticResource IsStringNotNullOrEmptyConverter}}"
-                TextColor="{AppThemeBinding Light={StaticResource ErrorOnLight}, Dark={StaticResource ErrorOnDark}}" />
+                Style="{StaticResource ErrorText}" />
 
             <Button
                 Text="Connect"
                 Command="{Binding ConnectCommand}"
                 IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
-                HeightRequest="52" />
+                Style="{StaticResource PrimaryAction}" />
 
             <ActivityIndicator
                 IsRunning="{Binding IsBusy}"

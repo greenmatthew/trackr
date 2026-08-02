@@ -26,13 +26,10 @@
         <VerticalStackLayout Padding="24" Spacing="18">
 
             <Border
+                Style="{StaticResource AvatarCircle}"
                 WidthRequest="72"
                 HeightRequest="72"
-                Padding="0"
-                StrokeThickness="0"
-                HorizontalOptions="Center"
-                BackgroundColor="{StaticResource Primary}"
-                StrokeShape="Ellipse">
+                HorizontalOptions="Center">
 
                 <Label
                     Text="{Binding Initials}"
@@ -44,22 +41,22 @@
 
             </Border>
 
-            <Border Padding="16" StrokeThickness="1" StrokeShape="RoundRectangle 12">
+            <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="10">
 
                     <VerticalStackLayout Spacing="2">
-                        <Label Text="Account" FontSize="12" Opacity="0.6" />
-                        <Label Text="{Binding Email}" FontSize="16" />
+                        <Label Text="Account" Style="{StaticResource FieldLabel}" />
+                        <Label Text="{Binding Email}" Style="{StaticResource Body}" />
                     </VerticalStackLayout>
 
                     <VerticalStackLayout Spacing="2">
-                        <Label Text="Server" FontSize="12" Opacity="0.6" />
-                        <Label Text="{Binding ServerDescription}" FontSize="16" />
+                        <Label Text="Server" Style="{StaticResource FieldLabel}" />
+                        <Label Text="{Binding ServerDescription}" Style="{StaticResource Body}" />
                     </VerticalStackLayout>
 
                     <VerticalStackLayout Spacing="2">
-                        <Label Text="Two-factor authentication" FontSize="12" Opacity="0.6" />
-                        <Label Text="{Binding TwoFactorDescription}" FontSize="16" />
+                        <Label Text="Two-factor authentication" Style="{StaticResource FieldLabel}" />
+                        <Label Text="{Binding TwoFactorDescription}" Style="{StaticResource Body}" />
                     </VerticalStackLayout>
 
                 </VerticalStackLayout>
@@ -67,15 +64,13 @@
 
             <Label
                 Text="Changing your password and managing 2FA happen on the website."
-                HorizontalTextAlignment="Center"
-                FontSize="13"
-                Opacity="0.6" />
+                Style="{StaticResource Caption}" />
 
             <Button
                 Text="Sign out"
+                Style="{StaticResource PrimaryAction}"
                 Command="{Binding SignOutCommand}"
-                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}"
-                HeightRequest="52" />
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
 
         </VerticalStackLayout>
     </ScrollView>
