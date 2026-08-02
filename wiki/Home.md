@@ -9,8 +9,9 @@ are decoded locally, and images go only to an AI model running in a container on
 The only thing that ever leaves the machine is a barcode number, looked up against
 [Open Food Facts](https://world.openfoodfacts.org/).
 
-> **Status: early.** Accounts, 2FA and the Android app's sign-in work today. Meal logging
-> does not exist yet. See the build order in the repository's `CLAUDE.md`.
+> **Status: early.** Accounts, 2FA, and the Android app's sign-in and profile work today —
+> the app has its three tabs, and it opens without a connection. Meal logging does not exist
+> yet: Home and Trends are placeholders. See the build order in the repository's `CLAUDE.md`.
 
 ## Running your own instance
 

@@ -90,9 +90,19 @@ application, migrations included. They never touch the development stack's datab
 
 The mobile tests run against `Trackr.Mobile.Core`, which is plain `net10.0` — no Android SDK,
 no emulator, no workload. If something is hard to test there, that is usually a sign logic has
-leaked into the MAUI project.
+leaked into the MAUI project. They include the phone's SQLite store, run as real SQLite
+against `:memory:` rather than as a substitute — which is why that code lives in Core.
+
+What they cannot tell you is whether SQLite's *native* library loads on a device. That is a
+separate fact from the build succeeding; see
+[Testing the Android App](Testing-the-Android-App).
 
 ## Database migrations
+
+This is the **server's** database. The Android app has a small SQLite database of its own with
+an entirely separate mechanism — an ordered list of statements in `LocalDatabase`, versioned by
+`PRAGMA user_version`, applied when the app first opens it. Adding a table there is an append
+to that list, not a `dotnet ef` command.
 
 ```bash
 just server::migration AddFoodItems

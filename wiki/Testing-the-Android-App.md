@@ -69,13 +69,50 @@ Worth doing after any auth or navigation change:
 2. Enter `http://10.0.2.2:8000`, connect.
 3. Sign in. On an empty database, use *No account yet? Create one* and claim the server from
    the app itself; otherwise sign in with an existing account.
-4. Confirm the home screen shows the email the server returned.
-5. `just mobile::stop-app` then `just mobile::launch` — it must land on **home, not login**.
-   This is the step that proves the token really persisted in the keystore.
-6. Sign out; confirm it returns to login with the server address retained.
+4. Confirm it lands on **Home** with the three tabs along the bottom, and that the launch did
+   not flicker through another screen on the way.
+5. Tap the avatar at the top right. Profile opens *with a back arrow*, and shows the email the
+   server returned. Go back; you should return to the tab you came from.
+6. *Change picture*, choose an image. The circle becomes the photo in **both** places — the
+   profile and the title bar — without a relaunch. *Remove* puts the initials back, also in
+   both.
+7. `just mobile::stop-app` then `just mobile::launch` — it must land on **Home, not login**,
+   with the picture still there.
+8. Sign out; confirm it returns to login with the server address retained.
 
-Step 5 is the one that matters. It exercises the secure token store, the bearer handler and
-the API's token scheme together, and nothing below this tier can.
+Steps 7 and 8 are the ones that matter, for different reasons. Step 7 exercises the secure
+token store, the bearer handler and the API's token scheme together, and nothing below this
+tier can. Step 8 is a privacy check as much as a navigation one: signing out must empty the
+local database, not merely stop drawing it.
+
+### Checking the offline path
+
+The app keeps the account and the picture locally so it opens without a network. Worth a look
+after anything touching `AuthSession` or the local store:
+
+```bash
+docker stop trackr-dev-backend-1
+just mobile::stop-app && just mobile::launch
+```
+
+It must open **signed in**, on Home, with the avatar drawn from disk — not on the login
+screen. Signing someone out because their phone has no signal is the bug this prevents. Then:
+
+```bash
+docker start trackr-dev-backend-1
+```
+
+To look at what is actually stored, read the database off the device — this is also the check
+that SQLite's native library really loaded, which a successful build does not prove:
+
+```bash
+adb shell run-as gg.matthewgreen.trackr cat files/trackr.db > /tmp/trackr.db
+sqlite3 /tmp/trackr.db 'PRAGMA user_version; SELECT email FROM account;'
+```
+
+A rejected session is different from an unreachable one and must still sign you out. There is
+no convenient way to force that from the emulator; changing the account's password on the web
+app rolls the security stamp and does it.
 
 ## 3. A physical phone
 

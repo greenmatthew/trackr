@@ -24,6 +24,32 @@ Almost always one of three things:
 3. **A certificate Android does not trust.** The app reports this specifically. If your
    reverse proxy uses a self-signed or private-CA certificate, install that CA on the phone.
 
+## The app opens signed in, but nothing it shows is current
+
+Deliberate. The app keeps the account and your profile picture in a small local database, so
+that a phone with no signal opens on the app rather than on the login screen — being signed
+out because you went into a tunnel would be worse than seeing details a few minutes old.
+
+A server that *answers* and rejects the session still signs you out immediately; only a server
+that cannot be reached at all produces this. Anything you try to do will fail with a
+connection error until the server is reachable again, at which point the next launch corrects
+itself.
+
+Signing out clears that database, so it is also the way to be sure nothing of yours is left on
+a phone you are handing on.
+
+## A profile picture will not upload
+
+The app shrinks images before sending, so size is rarely the cause. In order of likelihood:
+
+- **The file is not really an image**, or is in a format the phone's decoder does not handle.
+  The app says so rather than sending it.
+- **The server rejected the format.** It stores JPEG, PNG and WebP only. Since the phone
+  re-encodes to JPEG, seeing this means the upload reached a server that disagrees — most
+  likely a mismatched app and server version.
+- **You are offline.** The picture is stored on the server, so setting one needs a connection
+  even though showing one does not.
+
 ## "Could not verify the server's HTTPS certificate"
 
 Exactly what it says: the phone does not trust your certificate chain. Either install your CA

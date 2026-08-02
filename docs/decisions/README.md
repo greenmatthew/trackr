@@ -18,6 +18,7 @@ the wiki at `wiki/` instead, where the self-hoster can read it too. See CLAUDE.m
 | — Android-first pivot | [03-android-pivot.md](03-android-pivot.md) |
 | — Branding and theming | [04-branding.md](04-branding.md) |
 | 4 — Documentation migration | [05-documentation.md](05-documentation.md) |
+| 5 — Mobile UX & architecture | [06-mobile-ux.md](06-mobile-ux.md) |
 
 A decision that is later reversed stays in its original file, with a note pointing at the
 record that superseded it. Deleting it would hide the reasoning that made the reversal

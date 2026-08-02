@@ -31,8 +31,21 @@ sign-in screen, tap *No account yet? Create one*, then paste either the invite c
 **whole invite link**; the app picks the code out of a link so nobody has to select it by hand
 on a phone keyboard.
 
-Registration is the *only* account task the app handles. Changing a password, enrolling in
-2FA, and minting invites all stay on the website.
+Registration and the profile picture are the *only* account tasks the app handles. Changing a
+password, enrolling in 2FA, and minting invites all stay on the website.
+
+## Your profile picture
+
+Set it from the phone: tap the circle at the top right, then *Change picture*. It is stored on
+the server against your account, so it follows you to another device, and *Remove* puts your
+initials back.
+
+The phone shrinks the image to 512 pixels on its longest edge and re-encodes it as JPEG before
+uploading. That is not only about size — re-encoding drops the EXIF block, so a photo taken on
+a phone does not carry the coordinates it was taken at up to the server.
+
+Android's photo picker grants Trackr access to the one image you choose, so there is no
+prompt asking for your whole photo library, and it never has it.
 
 If the app reports that your account was created but signing in afterwards failed, the account
 really does exist and the invite really has been spent. **Sign in with it — do not register

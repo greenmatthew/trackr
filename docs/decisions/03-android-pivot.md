@@ -187,3 +187,16 @@ account surface the new shape calls for. The pivot would only get more expensive
 - The PWA install/offline shell is dropped from the polish milestone. Live camera barcode
   scanning stops being a speculative future extension and becomes an ordinary native
   capability.
+
+## Since superseded
+
+- **"Navigation is provisional" was resolved by milestone 5**
+  ([06-mobile-ux.md](06-mobile-ux.md)). `INavigationService` kept its named methods and lost
+  `GoToHomeAsync`: reaching the signed-in shell stopped being navigation at all and became a swap
+  of `Window.Page`. `AppShell`'s flat routes became a three-tab `TabBar` plus one pushed route, and
+  the route names moved into `Trackr.Mobile.Core` where the XAML binds them with `{x:Static}`
+  instead of repeating them as literals.
+- **`SecureStorage` is no longer the app's only persistence.** Milestone 5 added a SQLite database
+  in app-private storage for the account and the profile picture. The tokens have not moved — they
+  are still Keystore-backed, and the asymmetry with the web app's HttpOnly cookie described above
+  is unchanged.

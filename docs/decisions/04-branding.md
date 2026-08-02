@@ -103,3 +103,14 @@ magick -size 1024x1024 gradient:'#38D7E5-#17B8A0' -depth 8 \
 or the old artwork survives the build. And **Android caches launcher icons per package** —
 `just mobile::uninstall` before reinstalling, otherwise the old icon keeps showing and reads
 as a failure that is not one. `adb shell cmd uimode night yes|no` flips the theme on device.
+
+## Since superseded
+
+- **Everything this record left to milestone 5 has been decided**
+  ([06-mobile-ux.md](06-mobile-ux.md)): `Shell` versus plain navigation (two shells, swapped on the
+  window), the tab layout (Home | Chat | Trends, with the profile behind an avatar rather than a
+  fourth tab), local storage (SQLite on the phone now), and Material versus a custom theme (prune
+  the template, then a thin Trackr layer over Material).
+- **The contrast rule stated here is now load-bearing in code.** Every brand fill in the app —
+  the avatar circle, the primary action — takes `PrimaryDarkText`, because the brand colours are
+  1.8–2.4:1 against `#F2FBFD` and fail the other way round.

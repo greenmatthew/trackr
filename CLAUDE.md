@@ -125,6 +125,13 @@ for each. Toolchain setup is in [Development-Environment](wiki/Development-Envir
     `IHostedService`, so it would bolt on a host nothing drives. Likewise no `appsettings.json`
     — the only real configuration is the server URL, which the user types and which belongs in
     `SecureStorage`.
+  - **Two kinds of local storage, and the split is a security boundary.** Tokens go in
+    `SecureStorage`, which is Keystore-backed. Everything else — the cached account, the
+    profile picture, and the offline log queue when it arrives — goes in a **SQLite database**
+    in app-private storage, via `Microsoft.Data.Sqlite` in `Trackr.Mobile.Core` (hand-written
+    SQL, *not* EF Core; that is the server's ORM and the phone's schema is a handful of tables).
+    Core rather than the MAUI project so the real SQL is testable against `:memory:`. Never put
+    a credential in the database, and never put bulk data in `SecureStorage`.
   - **Cleartext HTTP is blocked, except for the emulator in Debug.** Android has forbidden it
     by default since API 28 and the app targets 36. The Release network security config forbids
     it everywhere; the Debug one opens it for `10.0.2.2`, `localhost` and `127.0.0.1` only —
@@ -212,6 +219,9 @@ lives — read the relevant one before changing anything it covers.
   with a derived light theme, and why each brand colour ships as a light/dark triple.
 - [05-documentation.md](docs/decisions/05-documentation.md) — the three homes, publishing the
   wiki from this repository, and generating/testing the reference material that drifts.
+- [06-mobile-ux.md](docs/decisions/06-mobile-ux.md) — the two-shell swap, the three tabs and
+  the avatar, pruning `Styles.xaml`, the server-stored profile picture, and SQLite on the
+  phone with the account cache as its first job.
 
 ---
 
@@ -393,20 +403,17 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    milestones because the Android toolchain and token auth were the two unknowns in the pivot.
    [03-android-pivot.md](docs/decisions/03-android-pivot.md)
 4. ~~**Documentation migration**~~ ✅ — [05-documentation.md](docs/decisions/05-documentation.md)
-5. **Mobile UX & architecture planning** — a *planning* milestone, no feature code. Milestone 3
-   made the minimum viable choices to get a screen on a phone; this is where they get made
-   properly, before the chat UI is built on top of them. Record the outcome in
-   `docs/decisions/` and revise milestone 3's provisional choices to match. Cover at least:
-    - **Navigation** — `Shell` versus plain navigation, the chat/stats tab layout, and where
-      server-setup and login sit relative to the signed-in shell. Today: auth routing is a
-      post-launch correction rather than a shell swap, `AuthSession.Changed` exists for that
-      swap with no subscribers, and route names are duplicated between `AppShell.xaml` and
-      `ShellNavigationService`.
-    - **Styling and theming** — default Material styling or a custom theme. `Styles.xaml` is
-      still the untouched MAUI template; [04-branding.md](docs/decisions/04-branding.md)
-      settled the palette and light/dark and explicitly left this open.
-    - **Local storage** — what the app persists beyond the token: cached stats, an offline log
-      queue, and whether that needs SQLite now or waits for §9.14.
+5. ~~**Mobile UX & architecture**~~ ✅ — [06-mobile-ux.md](docs/decisions/06-mobile-ux.md).
+   Scoped as planning; it grew structural code because the questions were facts about a build,
+   not opinions about a design. Two shells swapped on the window, three tabs (Home | Chat |
+   Trends) with the profile behind a title-bar avatar, `Styles.xaml` pruned to a Trackr layer
+   over Material, a server-stored profile picture, and SQLite on the phone.
+   **Two things it pulled forward on purpose:** the avatar needed an EF entity, a migration and
+   endpoints (milestone 6 work) and a profile screen (§9.13). Neither means those milestones
+   partly shipped — the record says what was and was not taken.
+   **Left open:** the Android status bar renders `colorPrimary` and clashes with the title bar.
+   The fix is going edge-to-edge and handling insets, which is a layout change wanting its own
+   slice; two cheaper approaches were tried and both fail structurally (see the record).
 6. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the
    extensible nutrient store** from §7, seeding the nutrient set. Basic CRUD API for catalog
    and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
@@ -513,9 +520,11 @@ What is a constraint rather than a how-to:
   config (ports, test DB creds) separate from anything deployment-related, via env files.
 - **Say which testing tier a claim of "it works" rests on.** There are three — view-model tests
   (no device), emulator, and a physical phone — and "the APK builds" and "the app runs" are
-  very different statements. The emulator additionally needs the invoking user in the `kvm`
-  group, which needs the user's own shell; building and signing an APK does not. So a build can
-  always be verified even when a run cannot. Say which of the two a claim rests on.
+  very different statements. Say which one a claim rests on.
+  - **The emulator is runnable from Claude Code's own shell on this machine.** It needs the
+    invoking user in the `kvm` group and that user is; this file previously implied otherwise.
+    So "I could not run it" is not an available excuse for anything short of a physical phone.
+    `just mobile::ui` dumps the on-screen text, which beats a screenshot for asserting a label.
 - If logic cannot be covered by a view-model test, that is a sign it has leaked out of
   `Trackr.Mobile.Core` and into the MAUI project.
 
