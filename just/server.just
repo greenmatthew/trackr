@@ -77,14 +77,20 @@ check-prod:
 
 # Named projects rather than the solution: `dotnet build Trackr.slnx` would also try the
 # MAUI app and fail on any machine without the maui-android workload.
+#
+# One invocation each, because the .NET 10 SDK rejects several projects in one `dotnet build`
+# ("MSB1008: Only one project can be specified"). Trackr.Shared builds as a dependency of both,
+# so it needs no line of its own.
 
 # Build the backend and web app.
 build:
-    dotnet build src/Trackr.Api src/Trackr.Web src/Trackr.Shared
+    dotnet build src/Trackr.Api
+    dotnet build src/Trackr.Web
 
 # Build the backend and web app in Release.
 build-release:
-    dotnet build src/Trackr.Api src/Trackr.Web src/Trackr.Shared -c Release
+    dotnet build src/Trackr.Api -c Release
+    dotnet build src/Trackr.Web -c Release
 
 # In Debug the API also serves the Blazor app, so this is the whole thing on one origin.
 
