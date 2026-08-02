@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:Trackr.Mobile.Pages"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
     Title="Trackr"
     FlyoutBehavior="Disabled">
 
@@ -12,23 +13,25 @@
          decides the real structure, at which point Home becomes a TabBar holding the chat and
          stats tabs and these three auth routes move out of the main stack.
 
-         Route names are duplicated in Platform/ShellNavigationService.cs, which is what the
-         navigation service uses - keep them in step. -->
+         Routes come from Trackr.Mobile.Core rather than being written here as literals. They
+         were duplicated once, and the failure mode was poor: renaming one side compiled and
+         threw at runtime inside a fire-and-forget handler, so it looked like a dead button
+         rather than a crash. RoutesTests holds the pair together if x:Static is ever undone. -->
 
     <ShellContent
-        Route="server-setup"
+        Route="{x:Static vm:Routes.ServerSetup}"
         ContentTemplate="{DataTemplate pages:ServerSetupPage}" />
 
     <ShellContent
-        Route="login"
+        Route="{x:Static vm:Routes.Login}"
         ContentTemplate="{DataTemplate pages:LoginPage}" />
 
     <ShellContent
-        Route="register"
+        Route="{x:Static vm:Routes.Register}"
         ContentTemplate="{DataTemplate pages:RegisterPage}" />
 
     <ShellContent
-        Route="home"
+        Route="{x:Static vm:Routes.Home}"
         ContentTemplate="{DataTemplate pages:HomePage}" />
 
 </Shell>

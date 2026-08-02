@@ -30,12 +30,3 @@ public sealed class ShellNavigationService : INavigationService
         // thread-pool thread after an await.
         MainThread.InvokeOnMainThreadAsync(() => Shell.Current.GoToAsync(route));
 }
-
-/// <summary>Route names, shared between AppShell.xaml and the navigation service.</summary>
-public static class Routes
-{
-    public const string ServerSetup = "server-setup";
-    public const string Login = "login";
-    public const string Register = "register";
-    public const string Home = "home";
-}
