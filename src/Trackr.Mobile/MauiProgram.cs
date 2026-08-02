@@ -44,6 +44,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<ITokenStore, SecureStorageTokenStore>();
         builder.Services.AddSingleton<IServerSettings, PreferencesServerSettings>();
         builder.Services.AddSingleton<INavigationService, ShellNavigationService>();
+        builder.Services.AddSingleton<IPhotoPicker, MediaPickerPhotoPicker>();
+        builder.Services.AddSingleton<IImageDownsizer, GraphicsImageDownsizer>();
 
         // View models, the API client and its handler pipeline.
         builder.Services.AddTrackrCore();

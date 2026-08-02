@@ -75,6 +75,24 @@ public sealed class AuthSession(
         return result;
     }
 
+    /// <summary>
+    /// Records that this device just changed the profile picture, so the avatar marker here
+    /// matches what the server would now report.
+    /// </summary>
+    /// <remarks>
+    /// The alternative is re-fetching <c>/me</c> after every upload, which is a round trip to
+    /// learn a value the upload already returned. Deliberately does not raise
+    /// <see cref="Changed"/>: sign-in state has not changed, and the shell must not be swapped
+    /// because someone chose a photograph.
+    /// </remarks>
+    public void NoteAvatarChanged(DateTimeOffset? updatedUtc)
+    {
+        if (CurrentUser is { } user)
+        {
+            CurrentUser = user with { AvatarUpdatedUtc = updatedUtc };
+        }
+    }
+
     public async Task SignOutAsync()
     {
         // Local only. There is no server call to make: bearer tokens are stateless, so the

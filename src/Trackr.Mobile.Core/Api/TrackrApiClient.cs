@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Authentication;
 using System.Text.Json;
@@ -267,6 +268,125 @@ public sealed class TrackrApiClient(
             logger.LogWarning(ex, "Identity lookup failed");
 
             return null;
+        }
+    }
+
+    public async Task<AvatarFetchResult> GetAvatarAsync(
+        string? knownETag = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint("api/account/avatar"));
+
+            if (!string.IsNullOrWhiteSpace(knownETag))
+            {
+                // TryAddWithoutValidation because the value is the server's own tag, quotes
+                // and all, handed straight back. Parsing it apart only to reassemble it
+                // would be a chance to get it subtly wrong.
+                request.Headers.TryAddWithoutValidation("If-None-Match", knownETag);
+            }
+
+            using var response = await http.SendAsync(request, cancellationToken);
+
+            if (response.StatusCode is HttpStatusCode.NotModified)
+            {
+                return AvatarFetchResult.Unchanged;
+            }
+
+            if (response.StatusCode is HttpStatusCode.NotFound)
+            {
+                // Having no picture is the ordinary state, not a failure. The caller draws
+                // initials instead.
+                return AvatarFetchResult.None;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "Avatar fetch answered with {StatusCode}",
+                    (int)response.StatusCode);
+
+                return AvatarFetchResult.Failed;
+            }
+
+            return new AvatarFetchResult(
+                AvatarFetchStatus.Fetched,
+                await response.Content.ReadAsByteArrayAsync(cancellationToken),
+                response.Content.Headers.ContentType?.MediaType,
+                response.Headers.ETag?.ToString());
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Avatar fetch failed");
+
+            return AvatarFetchResult.Failed;
+        }
+    }
+
+    public async Task<AvatarChangeResult> UploadAvatarAsync(
+        byte[] content,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Raw bytes with a Content-Type, not multipart: there is exactly one file and no
+            // fields to go with it, so a form part would be envelope around nothing.
+            using var body = new ByteArrayContent(content);
+            body.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+            using var response = await http.PutAsync(
+                Endpoint("api/account/avatar"),
+                body,
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content
+                    .ReadFromJsonAsync<AvatarResponse>(cancellationToken);
+
+                return result is null
+                    ? AvatarChangeResult.Failed("The server returned an empty response.")
+                    : AvatarChangeResult.Ok(result.UpdatedUtc);
+            }
+
+            if (response.StatusCode is HttpStatusCode.RequestEntityTooLarge)
+            {
+                // The client downsizes first, so reaching this means the resize did not get
+                // it small enough - worth saying plainly rather than as a bare 413.
+                return AvatarChangeResult.Failed(
+                    $"That picture is over {AvatarRules.MaxBytes / 1024} KB even after resizing.");
+            }
+
+            return AvatarChangeResult.Failed(await ReadProblemAsync(response, cancellationToken));
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Avatar upload failed");
+
+            return AvatarChangeResult.Failed("Could not reach the server. Check your connection.");
+        }
+    }
+
+    public async Task<AvatarChangeResult> DeleteAvatarAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.DeleteAsync(
+                Endpoint("api/account/avatar"),
+                cancellationToken);
+
+            return response.IsSuccessStatusCode
+                ? AvatarChangeResult.Ok()
+                : AvatarChangeResult.Failed(await ReadProblemAsync(response, cancellationToken));
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Avatar removal failed");
+
+            return AvatarChangeResult.Failed("Could not reach the server. Check your connection.");
         }
     }
 

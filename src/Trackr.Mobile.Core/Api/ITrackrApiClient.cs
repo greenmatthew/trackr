@@ -41,6 +41,30 @@ public interface ITrackrApiClient
 
     /// <summary>Who the stored token belongs to. Also the app's "am I still signed in" probe.</summary>
     Task<MeResponse?> GetMeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The account's profile picture.
+    /// </summary>
+    /// <param name="knownETag">
+    /// The tag of the copy the caller already holds, if any. The server answers 304 when it
+    /// still matches, which is the whole point of keeping the tag: the app re-checks on every
+    /// launch and almost always gets headers back instead of an image.
+    /// </param>
+    Task<AvatarFetchResult> GetAvatarAsync(
+        string? knownETag = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the profile picture. The bytes must already be within
+    /// <see cref="Trackr.Shared.Auth.AvatarRules"/> - the server enforces them regardless.
+    /// </summary>
+    Task<AvatarChangeResult> UploadAvatarAsync(
+        byte[] content,
+        string contentType,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Removes the profile picture, falling back to initials. Idempotent.</summary>
+    Task<AvatarChangeResult> DeleteAvatarAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>Outcome of probing a candidate server address.</summary>
@@ -82,3 +106,51 @@ public sealed record SignInResult(
     TokenResponse? Tokens = null,
     DateTimeOffset? LockoutEndUtc = null,
     string? Problem = null);
+
+/// <summary>What asking for the profile picture produced.</summary>
+public enum AvatarFetchStatus
+{
+    /// <summary>The picture came back and is in <see cref="AvatarFetchResult.Content"/>.</summary>
+    Fetched,
+
+    /// <summary>The copy the caller already holds is still current. Nothing was transferred.</summary>
+    Unchanged,
+
+    /// <summary>The account has no picture. Not an error - it is the default state.</summary>
+    None,
+
+    /// <summary>The question could not be asked. The caller keeps whatever it had.</summary>
+    Failed,
+}
+
+/// <param name="ETag">
+/// The server's tag for these bytes, to send back on the next request. Null unless
+/// <paramref name="Status"/> is <see cref="AvatarFetchStatus.Fetched"/>.
+/// </param>
+public sealed record AvatarFetchResult(
+    AvatarFetchStatus Status,
+    byte[]? Content = null,
+    string? ContentType = null,
+    string? ETag = null)
+{
+    public static AvatarFetchResult Unchanged { get; } = new(AvatarFetchStatus.Unchanged);
+
+    public static AvatarFetchResult None { get; } = new(AvatarFetchStatus.None);
+
+    public static AvatarFetchResult Failed { get; } = new(AvatarFetchStatus.Failed);
+}
+
+/// <summary>Outcome of setting or removing the profile picture.</summary>
+/// <param name="UpdatedUtc">
+/// The account's new avatar marker - the value <c>GET /api/auth/me</c> will report from now
+/// on. Null after a removal, because there is no longer a picture to have a marker.
+/// </param>
+public sealed record AvatarChangeResult(
+    bool Succeeded,
+    DateTimeOffset? UpdatedUtc = null,
+    string? Problem = null)
+{
+    public static AvatarChangeResult Ok(DateTimeOffset? updatedUtc = null) => new(true, updatedUtc);
+
+    public static AvatarChangeResult Failed(string problem) => new(false, Problem: problem);
+}

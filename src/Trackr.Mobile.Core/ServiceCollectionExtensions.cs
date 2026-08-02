@@ -20,6 +20,11 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<AuthSession>();
 
+        // Singleton because two screens draw the same picture and must agree the moment it
+        // changes - and because it subscribes to AuthSession.Changed to drop the bytes on
+        // sign-out, which only works if there is exactly one of it.
+        services.AddSingleton<AvatarStore>();
+
         services.AddTransient<BearerTokenHandler>();
 
         services.AddHttpClient<ITrackrApiClient, TrackrApiClient>(client =>

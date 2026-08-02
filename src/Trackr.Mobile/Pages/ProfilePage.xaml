@@ -31,15 +31,51 @@
                 HeightRequest="72"
                 HorizontalOptions="Center">
 
-                <Label
-                    Text="{Binding Initials}"
-                    FontSize="28"
-                    FontAttributes="Bold"
-                    TextColor="{StaticResource PrimaryDarkText}"
-                    HorizontalOptions="Center"
-                    VerticalOptions="Center" />
+                <Grid>
+
+                    <Label
+                        Text="{Binding Initials}"
+                        FontSize="28"
+                        FontAttributes="Bold"
+                        TextColor="{StaticResource PrimaryDarkText}"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center"
+                        IsVisible="{Binding HasPicture, Converter={StaticResource InvertedBoolConverter}}" />
+
+                    <Image
+                        Source="{Binding Picture, Converter={StaticResource ByteArrayToImageSourceConverter}}"
+                        Aspect="AspectFill"
+                        IsVisible="{Binding HasPicture}" />
+
+                </Grid>
 
             </Border>
+
+            <!-- Two buttons rather than a menu on the circle: "remove" only exists when there
+                 is something to remove, and a tap target that changes meaning is worse than
+                 one that comes and goes. -->
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="4">
+
+                <Button
+                    Text="Change picture"
+                    Style="{StaticResource LinkAction}"
+                    Command="{Binding ChangePictureCommand}"
+                    IsEnabled="{Binding IsPictureBusy, Converter={StaticResource InvertedBoolConverter}}" />
+
+                <Button
+                    Text="Remove"
+                    Style="{StaticResource LinkAction}"
+                    Command="{Binding RemovePictureCommand}"
+                    IsVisible="{Binding HasPicture}"
+                    IsEnabled="{Binding IsPictureBusy, Converter={StaticResource InvertedBoolConverter}}" />
+
+            </HorizontalStackLayout>
+
+            <Label
+                Text="{Binding PictureError}"
+                Style="{StaticResource ErrorText}"
+                HorizontalTextAlignment="Center"
+                IsVisible="{Binding PictureError, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
 
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="10">

@@ -17,6 +17,11 @@
             <toolkit:InvertedBoolConverter x:Key="InvertedBoolConverter" />
             <toolkit:IsStringNotNullOrEmptyConverter x:Key="IsStringNotNullOrEmptyConverter" />
 
+            <!-- The profile picture arrives as bytes, because that is what the API returns
+                 and what the local cache will hold. This is what lets an Image bind to them
+                 without a view model in Core having to know the MAUI ImageSource type. -->
+            <toolkit:ByteArrayToImageSourceConverter x:Key="ByteArrayToImageSourceConverter" />
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>
