@@ -124,8 +124,12 @@ account surface the new shape calls for. The pivot would only get more expensive
   saved as a server address. Non-http(s) schemes are rejected, and a missing scheme defaults
   to https — never http, since silently downgrading would ship a password in plaintext.
 - **Navigation is provisional.** `INavigationService` has three named methods rather than a
-  route-shaped API, and `AppShell` has three flat routes with no tabs. Milestone 4 replaces
+  route-shaped API, and `AppShell` has three flat routes with no tabs. Milestone 5 replaces
   both; they exist now only because the slice needs to move between three screens.
+
+  *(Counts are as this milestone shipped. A fourth route and method — registration — arrived
+  afterwards, and the milestone that replaces them became 5 when the documentation migration
+  was inserted ahead of it.)*
 
 ## Decided while setting up testing
 

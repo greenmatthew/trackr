@@ -21,7 +21,7 @@ src/Trackr.Web/            Blazor WebAssembly, accounts  + Dockerfile + nginx.co
 src/Trackr.Mobile/         .NET MAUI Android app          (the product)
 src/Trackr.Mobile.Core/    Its view models and API client (testable without Android)
 src/Trackr.Shared/         DTOs referenced by all of the above
-tests/                     API integration tests, and view-model tests
+tests/                     API integration, view-model and documentation-drift tests
 docker/                    Compose stacks and .env.example
 just/                      Task-runner recipes
 wiki/                      The project wiki — edited here, published from here
@@ -46,8 +46,9 @@ just nuke     # also delete the dev database, images and build output
 
 `just dev` is safe to re-run, so it doubles as "make sure everything is up". Then:
 
-1. **Create an account** at <http://localhost:8000>. On an empty database the first account
-   claims the server. Do this first — **the app has no sign-up screen**, and skipping it is
+1. **Create an account.** On an empty database the first account claims the server, and
+   registration closes permanently afterwards. Do it either at <http://localhost:8000> or
+   from the app's own sign-in screen — *No account yet? Create one*. Skipping this step is
    the usual reason a first login fails.
 2. **In the emulator, enter the server address `http://10.0.2.2:8000`.** That is the
    emulator's alias for your machine; `localhost` there means the emulator itself.

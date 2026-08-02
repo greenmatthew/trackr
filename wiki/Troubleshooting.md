@@ -15,8 +15,9 @@ Reach it over HTTPS. See [Self-Hosting](Self-Hosting).
 
 Almost always one of three things:
 
-1. **The account does not exist.** The app has no sign-up screen. Create the account in a
-   browser first — see [Accounts and 2FA](Accounts-and-2FA).
+1. **The account does not exist.** Create it first — either in a browser, or from the app's
+   own sign-in screen via *No account yet? Create one*. See
+   [Accounts and 2FA](Accounts-and-2FA).
 2. **Wrong address.** In the emulator the dev stack is `http://10.0.2.2:8000`; `localhost`
    there means the emulator itself. A real phone cannot use `10.0.2.2` at all and must point
    at your deployed HTTPS server.

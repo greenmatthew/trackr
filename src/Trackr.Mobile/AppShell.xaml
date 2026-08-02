@@ -8,7 +8,7 @@
     FlyoutBehavior="Disabled">
 
     <!-- Four flat routes, no tabs and no flyout: the app still has exactly one signed-in
-         screen, so there is nothing to navigate between. Milestone 4 (CLAUDE.md section 9)
+         screen, so there is nothing to navigate between. Milestone 5 (CLAUDE.md section 9)
          decides the real structure, at which point Home becomes a TabBar holding the chat and
          stats tabs and these three auth routes move out of the main stack.
 

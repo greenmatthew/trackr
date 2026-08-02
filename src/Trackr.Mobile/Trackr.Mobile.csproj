@@ -72,7 +72,8 @@
     <!-- Splash background is the brand Background rather than the icon's cyan, so the
          boot screen sits closer to the app's own dark-theme surface. -->
     <MauiSplashScreen Include="Resources\Splash\splash.png" Color="#122E42" BaseSize="128,128" />
-    <MauiImage Include="Resources\Images\*" />
+    <!-- No MauiImage glob: Resources\Images went with the template's dotnet_bot.png and the
+         app has no bundled images of its own. Add one back alongside the directory. -->
     <MauiFont Include="Resources\Fonts\*" />
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

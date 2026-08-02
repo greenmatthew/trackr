@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Documentation drift checks. Reads repository files and asserts they agree with each
+       other - so it references no source project, needs no Docker and no Android SDK, and
+       is the fastest of the three suites by a wide margin.
+
+       The reasoning is in CLAUDE.md section 0: prose cannot be generated, but the reference
+       material that drifts most CAN be checked. Adding a configuration knob is meant to fail
+       this suite until the wiki is updated. That is the mechanism working. -->
+
+  <PropertyGroup>
+    <TargetFramework>$(TrackrTargetFramework)</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

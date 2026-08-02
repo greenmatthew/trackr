@@ -1,20 +1,20 @@
 # CLAUDE.md — Self-Hosted Nutrition Tracker
 
-This file is the project brief and working agreement for Claude Code. Read it fully before generating code. When in doubt about scope or a design decision, prefer the choices recorded here; if something here is ambiguous, ask before inventing a new pattern.
+This file is the project brief and working agreement for Claude Code. Read it fully before
+generating code. When in doubt about scope or a design decision, prefer the choices recorded
+here; if something here is ambiguous, ask before inventing a new pattern.
 
 ---
 
 ## 0. Where documentation lives
 
-Three homes, split by **when something is read** rather than by who reads it. The audience
-overlap is near-total: a self-hoster and Claude both need "how do I point the app at my
-server". What differs is whether it must be in context *before* the question is asked.
+Three homes, split by **when something is read** rather than by who reads it.
 
 | Home | Holds | Read |
 | --- | --- | --- |
 | **`CLAUDE.md`** (this file) | Decisions and constraints. What we are building, what is locked in, what not to do. | Every session, unprompted. |
-| **`docs/`** | Claude-facing working material, not published anywhere. `decisions/` holds one record per milestone — the *why* behind past choices. | Before changing anything a record covers. |
-| **`wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. Tracked in this repository and published to the GitHub/Gitea wiki. | On demand, when the question actually arises. |
+| **`docs/`** | Claude-facing working material. `decisions/` holds one record per milestone — the *why* behind past choices. | Before changing anything a record covers. |
+| **`wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. Tracked here, published to the GitHub/Gitea wiki. | On demand, when the question actually arises. |
 
 **The test for this file:** *would Claude make a worse decision without this in context?* If
 yes, it belongs here. If it merely answers a question — "which port", "what are the nutrient
@@ -26,140 +26,174 @@ Anything whose staleness would be *dangerous* — the cleartext-HTTP rule, the a
 the security posture in §8 — stays in `CLAUDE.md`. A wiki page that drifts out of step with
 the code is a mild annoyance for a how-to and a security misunderstanding for a constraint.
 
-### The wiki is published from this repository
+**The wiki is published from here, not cloned into here** (`just docs::publish`), so a change
+to a flag and a change to the page documenting it land in **one commit**. Consequence worth
+stating out loud: editing a page in the GitHub or Gitea wiki UI is pointless, because the next
+publish overwrites it — say so if asked to.
 
-`wiki/` holds ordinary tracked files. That is deliberate and is the whole point: a
-change to an environment variable and a change to the page documenting it land in **one
-commit**, reviewed together and impossible to half-forget.
+**Documentation is kept honest by tests, not by discipline.** `API-Reference.md` is generated
+(`just docs::api`) — never hand-edit it. `tests/Trackr.Docs.Tests` fails when a `TRACKR_*`
+variable is undocumented or a documented `just` recipe does not exist. Adding a configuration
+knob is *meant* to fail that suite until the wiki is updated — the mechanism working, not an
+obstacle to route around.
 
-`trackr.wiki.git` — the GitHub/Gitea wiki — is a **publishing target, not a source of
-truth**:
-
-```
-just docs::check      # what would change on the wiki
-just docs::publish    # copy wiki/ to GitHub and Gitea
-just docs::lint       # links pointing at pages that do not exist
-```
-
-The wiki URLs are derived from this repository's own remotes (`<repo>.git` →
-`<repo>.wiki.git`), so they cannot drift apart.
-
-Two consequences to hold on to:
-
-- **Editing a page in the GitHub or Gitea wiki UI is pointless** — the next publish
-  overwrites it. Change the file here. Say so if the user asks to edit the wiki directly.
-- **A wiki repository does not exist until its wiki has one page.** If `just docs::publish`
-  cannot clone, the fix is to create the first page through the web UI once per host, not to
-  work around it.
-
-Rejected alternatives, so they are not revisited: cloning `trackr.wiki.git` into `wiki/`
-and gitignoring it — editing is fine but nothing is ever atomic, and a second repository is a
-second thing to forget to push. A submodule is worse: still two commits, plus detached-HEAD
-friction. `git subtree` is atomic and was a genuine contender, but its merge semantics are
-hard to reason about for something as low-stakes as a docs folder.
-
-### Keeping documentation honest
-
-Prose cannot be generated — nothing writes "how to self-host behind a reverse proxy" from
-source. Two things can be, and they cover the material that drifts most:
-
-- **`API-Reference.md` is generated** from the OpenAPI document the API already serves. Never
-  hand-edit it.
-- **Tests fail when reference docs go stale.** Every `TRACKR_*` variable in
-  `docker/docker-compose.yml` must appear in `Configuration.md`, and every `just` recipe the
-  README mentions must exist. When adding a configuration knob, expect the test to fail until
-  the page is updated — that is the mechanism working, not an obstacle to route around.
+Rationale and rejected alternatives: [05-documentation.md](docs/decisions/05-documentation.md).
 
 ---
 
 ## 1. What we are building
 
-A **self-hosted personal nutrition / calorie tracker** that runs on the user's home server. It is for the user (and possibly a small number of household members) only — not a public product.
+A **self-hosted personal nutrition / calorie tracker** that runs on the user's home server. It
+is for the user (and possibly a small number of household members) only — not a public product.
 
-**The product is an Android app.** Logging a meal happens on the phone, because that is where you are when you eat. The server is the backend — database, AI, cascade orchestration — and the website is an account and administration surface, not a place to log food. See §3 for what each surface owns.
+**The product is an Android app.** Logging a meal happens on the phone, because that is where
+you are when you eat. The server is the backend — database, AI, cascade orchestration — and
+the website is an account and administration surface, not a place to log food. See §3.
 
-**The interface is a chat.** This is the defining UX decision and everything else serves it. The app should feel like Claude chat or Google Health: the user starts a new chat, types what they ate in plain language ("two eggs and a slice of toast", "I had 2 of these"), and — optionally — attaches a photo using a **`+` button in the bottom-left of the text box**. They do **not** type barcode numbers, pick from dropdowns, or fill out nutrition forms. The AI figures it out from the text and/or image. Any barcode work happens invisibly behind the scenes (see the cascade in §5) — the user never sees or enters a barcode. Structured confirmation (calories/macros to approve before save) appears *inside the chat flow* as a card the user can correct, not as a separate data-entry screen.
+**The interface is a chat.** This is the defining UX decision and everything else serves it.
+The app should feel like Claude chat or Google Health: the user starts a new chat, types what
+they ate in plain language ("two eggs and a slice of toast", "I had 2 of these") and —
+optionally — attaches a photo using a **`+` button in the bottom-left of the text box**. They
+do **not** type barcode numbers, pick from dropdowns, or fill out nutrition forms. The AI
+figures it out from the text and/or image. Any barcode work happens invisibly behind the
+scenes (see the cascade in §5) — the user never sees or enters a barcode. Structured
+confirmation (calories/macros to approve before save) appears *inside the chat flow* as a card
+the user can correct, not as a separate data-entry screen.
 
-**But the chat is not the whole app — it's paired with an always-visible stats view.** The user needs a clear, glanceable picture of their nutrition, not just a place to log it. One tap from the chat there must be:
+**But the chat is not the whole app — it's paired with an always-visible stats view.** The
+user needs a clear, glanceable picture of their nutrition, not just a place to log it. One tap
+from the chat there must be:
 
-- **Today so far — REQUIRED, core.** A running total of the current day's nutrition: calories and full macro/micro breakdown (see §7a), updating as entries are logged and confirmed. This is a necessary part of the basic app, not a polish item.
-- **Week / month stats — REQUIRED (basic form).** Rolling summaries and simple trends over the past week and month (daily averages, totals, basic charts). "Basic" is fine — it doesn't need to be elaborate analytics, but it must exist.
-- **Goals — LATER milestone.** Ability to set targets (calorie goal, macro targets, specific nutrient goals) and see progress against them. This is explicitly a *late* feature — build the stats views first; goals layer on top of them once the numbers exist.
+- **Today so far — REQUIRED, core.** A running total of the current day: calories and the full
+  nutrient breakdown, updating as entries are confirmed. Basic app, not polish.
+- **Week / month stats — REQUIRED (basic form).** Rolling summaries and simple trends. "Basic"
+  is fine — it needn't be elaborate analytics, but it must exist.
+- **Goals — LATER milestone.** Targets and progress against them. Explicitly *late*: build the
+  stats views first; goals layer on top once the numbers exist.
 
-Layout intent: the chat is the *input* surface and the stats view is the *output* surface, both first-class. On the phone they are two tabs in the app's `Shell`. Don't bury the day's totals behind a menu — logging a meal and immediately seeing the day update is the core loop.
+Layout intent: the chat is the *input* surface and the stats view is the *output* surface, both
+first-class, two tabs in the app's `Shell`. Don't bury the day's totals behind a menu — logging
+a meal and immediately seeing the day update is the core loop.
 
-**Design mobile-first and mean it.** One-handed reach, thumb-sized targets, the text box within reach of the bottom of the screen. Do not port a desktop layout onto a phone; the phone *is* the layout.
+**Design mobile-first and mean it.** One-handed reach, thumb-sized targets, the text box within
+reach of the bottom of the screen. Do not port a desktop layout onto a phone; the phone *is*
+the layout.
 
-Core idea: the user logs meals by typing a short description and/or attaching one or more images in the chat. The system:
-
-1. Tries to **decode a barcode** from each uploaded image locally.
-2. On a successful barcode decode, looks the product up in the **Open Food Facts public API** to get structured nutrition data.
-3. Sends the user's text plus **either** the Open Food Facts structured data (if a barcode matched) **or** the raw image (if no barcode / no match) to a **local LLM served by Ollama** for interpretation (including serving-count math like "I ate 2 of these").
-4. Saves the resulting structured entry to a **Postgres** database and grows a personal food **catalog** over time.
-
-There is **no pre-loaded food/ingredient database**. The catalog is built up gradually from Open Food Facts hits and AI reads as the user logs meals.
+There is **no pre-loaded food/ingredient database**. The catalog is built up gradually from
+Open Food Facts hits and AI reads as the user logs meals. The full flow is §5.
 
 ---
 
 ## 2. Guiding principles
 
-- **Privacy first.** Images are decoded for barcodes locally and, when needed, sent only to the *local* Ollama container. The only thing that ever leaves the server is a barcode *number* string sent to Open Food Facts. Raw images never go to any third party.
-- **Cascade, not competition.** Barcode → Open Food Facts → local AI fallback → manual entry. Each stage only runs if the previous one didn't resolve the item.
-- **Cheap by default.** Prefer the barcode+OFF path (a tiny number lookup) over sending images to the model. Only fall back to the model when necessary.
-- **Confirm before save.** The system must show the user what it parsed (calories, macros, servings) and let them correct it *before* writing to the database. Silent wrong numbers are the main failure mode to avoid.
-- **Swappable stages.** Barcode decode, OFF lookup, and the AI parse step must each sit behind a clean interface so any one can be swapped (e.g. local Ollama model ↔ a cloud API fallback; SQLite ↔ Postgres) without touching the rest.
-- **Maintainable by the user.** The user wants to maintain this themselves in C#. Favor clear, conventional ASP.NET Core / Blazor patterns over clever abstractions.
+- **Privacy first.** Images are decoded for barcodes locally and, when needed, sent only to
+  the *local* Ollama container. The only thing that ever leaves the server is a barcode
+  *number* string sent to Open Food Facts. Raw images never go to any third party.
+- **Cascade, not competition.** Barcode → Open Food Facts → local AI fallback → manual entry.
+  Each stage only runs if the previous one didn't resolve the item.
+- **Cheap by default.** Prefer the barcode+OFF path (a tiny number lookup) over sending images
+  to the model. Only fall back to the model when necessary.
+- **Confirm before save.** The system must show the user what it parsed (calories, macros,
+  servings) and let them correct it *before* writing to the database. Silent wrong numbers are
+  the main failure mode to avoid.
+- **Swappable stages.** Barcode decode, OFF lookup, and the AI parse step must each sit behind
+  a clean interface so any one can be swapped (local Ollama ↔ a cloud API fallback; SQLite ↔
+  Postgres) without touching the rest.
+- **Maintainable by the user.** The user wants to maintain this themselves in C#. Favor clear,
+  conventional ASP.NET Core / Blazor patterns over clever abstractions.
 
 ---
 
 ## 3. Tech stack (locked in)
 
-- **Mobile (the product):** **.NET MAUI** targeting **Android**, UI in **XAML**, MVVM via **`CommunityToolkit.Mvvm`**. This is where meals get logged and stats get read.
-  - *MAUI is an alternative to WPF/WinUI, not a companion to them* — one project, native controls, its own XAML dialect. `MauiApp.CreateBuilder()` is the same `Microsoft.Extensions.Hosting` generic-host pattern used elsewhere, so DI and `IOptions` work as expected.
-  - Split into two projects: **`Trackr.Mobile.Core`** (plain `net10.0` — view models, API client, platform abstractions) and **`Trackr.Mobile`** (the MAUI app and its Android implementations). Core exists so view models are unit-testable with plain xUnit, without the Android SDK or an emulator. **Keep logic in Core**; `Trackr.Mobile` should be XAML, `Shell` wiring and platform glue.
-  - *Packages:* `CommunityToolkit.Mvvm` (MVVM, source-generated), `CommunityToolkit.Maui` (converters, behaviors, toast/snackbar, popups), `Microsoft.Extensions.Http` (`IHttpClientFactory` — chiefly for `AddHttpMessageHandler` to attach and refresh the bearer token), `Microsoft.Extensions.Http.Resilience` (retry/timeout, because a phone roams between wifi, cellular and VPN in a way a desktop never does).
-  - *Already built into MAUI — do not add packages for these:* dependency injection (`builder.Services` on `MauiAppBuilder`), logging (`builder.Logging`) and configuration (`builder.Configuration`).
-  - *Deliberately NOT `Microsoft.Extensions.Hosting`.* `MauiAppBuilder` is modelled on `HostApplicationBuilder` but is not an `IHostBuilder`, and MAUI never runs `IHostedService` — adding it bolts on a host nothing drives. Likewise no `appsettings.json`: the only real configuration is the server URL, which the user types and which belongs in `SecureStorage`.
-  - *Cleartext HTTP is blocked, except for the emulator in Debug.* Android has forbidden cleartext by default since API 28 and the app targets 36, so a plain-HTTP server is simply unreachable — which the dev compose stack is, by design. `Platforms/Android/Resources/xml/network_security_config.xml` (Release) forbids it everywhere; `network_security_config.debug.xml` opens it for `10.0.2.2`, `localhost` and `127.0.0.1` only — addresses that can never be a real server. `Trackr.Mobile.csproj` decides which file supplies the resource, so the exception cannot reach a release build by being forgotten. **Verify this by dumping the manifest out of a built APK** (`aapt2 dump xmltree <apk> --file res/xml/network_security_config.xml`), not by reading the source.
-  - *Not MAUI Blazor Hybrid.* It would reuse the Razor components, but renders them in a WebView — the thing this design moved away from. See [03-android-pivot.md](docs/decisions/03-android-pivot.md).
+Versions and package lists live in `Directory.Packages.props`, commented with the reasoning
+for each. Toolchain setup is in [Development-Environment](wiki/Development-Environment.md).
+
+- **Mobile (the product):** **.NET MAUI** targeting **Android**, UI in **XAML**, MVVM via
+  `CommunityToolkit.Mvvm`. Not Blazor Hybrid — it would reuse the Razor components but render
+  them in a WebView, the thing this design moved away from
+  ([03-android-pivot.md](docs/decisions/03-android-pivot.md)). MAUI replaces WPF/WinUI rather
+  than complementing them: one project, native controls, its own XAML dialect.
+  - **Two projects, and the split is load-bearing.** `Trackr.Mobile.Core` (plain `net10.0` —
+    view models, API client, platform abstractions) and `Trackr.Mobile` (the MAUI app and its
+    Android implementations). Core exists so view models are testable with plain xUnit, with no
+    Android SDK and no emulator. **Keep logic in Core**; `Trackr.Mobile` is XAML, `Shell`
+    wiring and platform glue.
+  - **Do not add packages for DI, logging or configuration** — `MauiAppBuilder` already has
+    all three. And deliberately **not** `Microsoft.Extensions.Hosting`: `MauiAppBuilder` is
+    modelled on `HostApplicationBuilder` but is not an `IHostBuilder`, and MAUI never runs
+    `IHostedService`, so it would bolt on a host nothing drives. Likewise no `appsettings.json`
+    — the only real configuration is the server URL, which the user types and which belongs in
+    `SecureStorage`.
+  - **Cleartext HTTP is blocked, except for the emulator in Debug.** Android has forbidden it
+    by default since API 28 and the app targets 36. The Release network security config forbids
+    it everywhere; the Debug one opens it for `10.0.2.2`, `localhost` and `127.0.0.1` only —
+    addresses that can never be a real server. The csproj chooses which file supplies the
+    resource, so the exception cannot reach a release build by being forgotten. **Verify by
+    dumping the manifest out of a built APK, not by reading the source** —
+    [Building](wiki/Building.md).
   - iOS is out of scope. Nothing should *prevent* it later, but do not spend effort on it.
-- **Web:** Blazor WebAssembly (`Trackr.Web`), served by nginx. Scope is **account self-service and administration only** — login, password change, 2FA enrolment, invites, and an admin page later. Any user may log in. It is deliberately **not** a food-logging surface; do not build the chat or stats views here.
-  - *Onboarding is the one exception, and it goes both ways.* **Registration exists on the phone as well as the web**, because the case the invite system serves is a household member who may own nothing but a phone — telling them to find a desktop browser to redeem an invite is not reasonable. Everything else on this list stays web-only.
-  - *Note:* the user initially thought of "Razor Pages." That is server-rendered HTML; Blazor WASM was chosen instead and the choice still stands now that the scope has narrowed.
-- **Backend:** ASP.NET Core **Web API** (REST). Serves both front ends.
-- **ORM:** Entity Framework Core.
-- **Database:** PostgreSQL (containerized).
-- **Shared contracts:** `Trackr.Shared` — request/response DTOs referenced by the API, the web app and the mobile app alike. Sharing types by **project reference** rather than generating a client from the OpenAPI document is the main reason everything lives in one repository. Keep it dependency-free: it is trimmed into the browser bundle and linked into the APK.
-- **Auth:** ASP.NET Core **Identity** (do NOT hand-roll auth). Password hashing, login, session handling, **2FA (TOTP authenticator apps)**, and account **lockout** all come from Identity. See §8 for the full auth-hardening list. **Two schemes, by client:**
-  - *Web → HttpOnly cookie.* Same origin (nginx serves the app and proxies `/api/`), so the browser handles the session itself and JavaScript cannot read it — an XSS bug cannot steal the session. Every hardening decision in [02-auth.md](docs/decisions/02-auth.md) stands unchanged.
-  - *Android → Identity bearer token.* The app is a native cross-origin client and cannot hold a cookie usefully, so it gets `IdentityConstants.BearerScheme` with a refresh token, stored in Android `SecureStorage`. This is **additive** — it changes nothing about the cookie path.
-  - *Historical note:* §3 previously read "cookies, not JWTs" on the reasoning that tokens only matter for "cross-origin / multi-service / native-mobile setups, none of which apply." The Android app made that premise false. The conclusion still holds for the browser, which is why both schemes coexist rather than one replacing the other.
-  - *No CORS.* MAUI uses a native `HttpClient`, and CORS is a browser-only mechanism. Do not add CORS configuration for the app — it would be pure attack surface.
-- **Local AI:** **Ollama** container serving a small multimodal (vision) model, callable over the Docker network via its HTTP API (default port 11434).
-- **Barcode decode:** happens **invisibly** — the user never types a barcode number and never sees one. It's an internal optimization on any attached photo, not a user-facing feature. A barcode library attempts to decode the image; if it succeeds, the cascade uses it, and if it doesn't, the image just goes to the AI as normal. Two acceptable approaches — pick during implementation and note the choice:
-  - *Server-side* (simpler; good default for the chat-first design): a .NET barcode library decodes the uploaded image in the backend. Since the user is attaching stills in a chat rather than live-scanning, this fits cleanly. It also keeps the decode in one place rather than one per client.
-  - *On-device* (optional): Android exposes real barcode scanning to a native app, so this is available whenever it's wanted — but it is an optimisation, not a requirement, and it duplicates logic the backend needs anyway for images that arrive without a decode. Prefer server-side first; revisit if the round trip proves slow.
-  - *Note:* the vision model can often read a barcode (or just recognize the product) straight from the image anyway, so a decode failure is not a dead end — it's simply the AI-fallback path.
-- **Nutrition data:** Open Food Facts **public API** over the internet (`https://world.openfoodfacts.org/...`). We do **not** self-host the Open Food Facts database — a lookup is just a small HTTP GET by barcode number. OFF returns a rich `nutriments` object (per-serving and per-100g), so **map through the full nutrient set from §7a**, not just macros — fiber, sugars, sodium, saturated fat, vitamins and minerals when present — into the extensible nutrient store.
-- **Orchestration:** Docker Compose. The user deploys via **Portainer** and Docker Compose, and already runs a **reverse proxy** (TLS termination) in front of their services. Write `docker/docker-compose.yml` to be Portainer-stack-friendly (clean named services, env vars for config/secrets, named volumes, an external network for the reverse proxy to attach to). TLS is handled by the existing reverse proxy, not inside these containers.
+- **Web:** Blazor WebAssembly (`Trackr.Web`), served by nginx — not Razor Pages, which the user
+  first suggested and which is server-rendered HTML. Scope is **account self-service and
+  administration only**: login, password change, 2FA enrolment, invites, an admin page later.
+  Any user may log in. Deliberately **not** a food-logging surface — do not build the chat or
+  stats views here.
+  - *Onboarding is the one exception, and it goes both ways.* **Registration exists on the
+    phone as well as the web**, because the case the invite system serves is a household member
+    who may own nothing but a phone. Everything else stays web-only.
+- **Backend:** ASP.NET Core **Web API** (REST), serving both front ends. **EF Core** over
+  **PostgreSQL** (containerized).
+- **Shared contracts:** `Trackr.Shared` — DTOs referenced by the API, the web app and the
+  mobile app alike. Sharing types by **project reference** rather than generating a client from
+  the OpenAPI document is the main reason everything lives in one repository. Keep it
+  dependency-free: it is trimmed into the browser bundle and linked into the APK.
+- **Auth:** ASP.NET Core **Identity** (do NOT hand-roll auth) — hashing, login, session
+  handling, TOTP 2FA and lockout all come from it. §8 has the hardening list.
+  **Two schemes, by client:**
+  - *Web → HttpOnly cookie.* Same origin (nginx serves the app and proxies `/api/`), so the
+    browser handles the session and JavaScript cannot read it — an XSS bug cannot steal it.
+    Hardening decisions in [02-auth.md](docs/decisions/02-auth.md) stand unchanged.
+  - *Android → Identity bearer token.* A native cross-origin client cannot hold a cookie
+    usefully, so it gets `IdentityConstants.BearerScheme` with a refresh token in
+    `SecureStorage`. **Additive** — it changes nothing about the cookie path. (This file once
+    read "cookies, not JWTs" because tokens only matter for native/cross-origin clients, "none
+    of which apply". The app made that premise false; the conclusion still holds for the
+    browser, which is why both coexist.)
+  - *No CORS.* MAUI uses a native `HttpClient` and CORS is browser-only. Adding it for the app
+    would be pure attack surface.
+- **Local AI:** **Ollama** container serving a small multimodal (vision) model over its HTTP
+  API on the Docker network. See [Ollama-Setup](wiki/Ollama-Setup.md).
+- **Barcode decode:** **invisible** — an internal optimization on any attached photo, never a
+  user-facing feature. **Prefer server-side** (a .NET library decoding in the backend): the
+  user attaches stills rather than live-scanning, and it keeps the decode in one place.
+  On-device decoding is available if wanted but is an optimisation that duplicates logic the
+  backend needs anyway for images arriving without a decode. Record the choice when made. A
+  decode failure is not a dead end — the vision model can often read the barcode, or just
+  recognise the product, from the image.
+- **Nutrition data:** the Open Food Facts **public API**, not a self-hosted copy — a lookup is a
+  small HTTP GET by barcode number. OFF returns a rich `nutriments` object (per-serving and
+  per-100g), so **map through the full nutrient set**, not just macros —
+  [Nutrient-Reference](wiki/Nutrient-Reference.md).
+- **Orchestration:** Docker Compose, deployed via **Portainer** behind the user's existing
+  **reverse proxy**, which terminates TLS. Keep `docker/docker-compose.yml` stack-friendly:
+  named services, env vars for config and secrets, named volumes, an external network for the
+  proxy to attach to.
 
 ---
 
 ## 4. Container / service layout
 
-Services on a shared Docker network, orchestrated by `docker/docker-compose.yml`:
+Four services on a shared Docker network, orchestrated by `docker/docker-compose.yml`:
+**frontend** (nginx serving `Trackr.Web` and proxying `/api/` to the backend — also the address
+the Android app points at), **backend** (the Web API: auth, cascade orchestration, DB access,
+OFF and Ollama calls), **ollama**, and **db** (Postgres with a persistent volume). Detail is in
+[Self-Hosting](wiki/Self-Hosting.md).
 
-1. **frontend** — nginx serving the built `Trackr.Web` static assets, and reverse-proxying `/api/` to `backend`. This is also the address the Android app points at.
-2. **backend** — the ASP.NET Core Web API (auth, cascade orchestration, DB access, OFF calls, Ollama calls). Barcode decode lives here if the server-side approach is chosen.
-3. **ollama** — Ollama serving the local vision model. Always running, but configured so the *model* unloads from RAM when idle (see §6).
-4. **db** — PostgreSQL, with a persistent volume.
+Open Food Facts is **not** a container — it's an external public API the backend calls. The
+Android app is **not** a container either; it ships as an APK and talks to `frontend` over the
+network like any other client.
 
-Open Food Facts is **not** a container — it's an external public API the backend calls.
-
-The database may be Postgres from day one (recommended, since we want a real user/catalog store). Keep the data layer behind EF Core so the concrete provider is swappable.
-
-The Android app is **not** a container. It ships as an APK installed on the phone and talks
-to `frontend` over the network like any other client.
+Keep the data layer behind EF Core so the concrete provider stays swappable.
 
 ### Decisions made so far
 
@@ -174,6 +208,10 @@ lives — read the relevant one before changing anything it covers.
 - [03-android-pivot.md](docs/decisions/03-android-pivot.md) — why the phone became the
   product, why MAUI XAML over Blazor Hybrid, why one repository, and why the API now issues
   bearer tokens as well as cookies.
+- [04-branding.md](docs/decisions/04-branding.md) — the icon and brand palette, dark-first
+  with a derived light theme, and why each brand colour ships as a light/dark triple.
+- [05-documentation.md](docs/decisions/05-documentation.md) — the three homes, publishing the
+  wiki from this repository, and generating/testing the reference material that drifts.
 
 ---
 
@@ -205,267 +243,295 @@ Assemble the AI request:
 
 Send to the local Ollama vision model with a prompt that:
     - Returns STRICT JSON only (no prose, no markdown fences).
-    - Computes serving math (e.g. "2 of these" = 2 × serving size × per-serving macros).
-    - Produces calories + the full nutrient set from §7a per item and a total —
-      protein/carbs/fat always, plus fiber, sugars, saturated/trans fat, sodium,
-      cholesterol, vitamins and minerals **whenever they can be determined**
-      (from a visible label, or reasonable estimate from a described food).
-      Each nutrient reported with its unit. Omit (or null) nutrients it can't
-      determine rather than inventing them — a missing micro is fine, a
-      hallucinated one is not.
+    - Computes serving math ("2 of these" = 2 × serving × per-serving macros).
+    - Produces calories + the full nutrient set per item AND a total. Macros
+      always; fibre, sugars, saturated/trans fat, sodium, cholesterol,
+      vitamins and minerals whenever determinable from a label or a
+      reasonable estimate. Every nutrient carries its unit. Omit or null what
+      it cannot determine — a missing micro is fine, a hallucinated one is not.
 
-Validate the model's JSON before trusting it (this is REQUIRED — small local
-models will sometimes emit broken JSON or numbers that don't add up):
-    - Parse defensively. If it's not valid JSON, or required fields are missing,
-      do NOT save — show an error in the chat and let the user retry or enter
-      values manually.
-    - Sanity-check the numbers: calories should roughly reconcile with the macros
-      (~4 kcal/g protein, ~4 kcal/g carbs, ~9 kcal/g fat). If they're wildly off,
-      flag it on the confirmation card as low-confidence rather than presenting it
-      as fact.
-    - The validator is the main thing standing between the model and a wrong number
-      in the database. It's cheap to write and worth it.
+Validate the JSON before trusting it. REQUIRED: small local models do emit
+broken JSON and numbers that don't add up, and this validator is the main thing
+standing between the model and a wrong number in the database.
+    - Parse defensively. Invalid JSON or missing required fields → do NOT save;
+      show an error and let the user retry or enter values manually.
+    - Reconcile calories against the macros (~4 kcal/g protein, ~4 carbs,
+      ~9 fat). Wildly off → flag low-confidence on the card, don't present as fact.
 
-Show the parsed result to the user for confirmation / correction.
-
-On confirm:
-    - Write the log entry to Postgres.
-    - Upsert any new item into the personal food catalog so it's reusable later.
+Show the parsed result for confirmation / correction. On confirm: write the log
+entry to Postgres, and upsert any new item into the personal catalog.
 ```
 
-Key point to preserve in code: **fully-matched barcode items must NOT send their image to the model** — they send the OFF structured data instead. This is the token/cost/accuracy win. (Partial matches still send the image, alongside whatever data OFF returned.)
+Key point to preserve in code: **fully-matched barcode items must NOT send their image to the
+model** — they send the OFF structured data instead. This is the token/cost/accuracy win.
+(Partial matches still send the image, alongside whatever data OFF returned.)
 
 ### Error / exception handling (surface problems, never fail silently)
 
-Every stage can fail — OFF can rate-limit or time out, barcode decode can throw, Ollama can be unreachable. These must never silently disappear or produce a wrong number.
+Every stage can fail — OFF can rate-limit or time out, barcode decode can throw, Ollama can be
+unreachable. These must never silently disappear or produce a wrong number.
 
-- **Pass errors along to the AI.** When assembling the AI request, include a short description of any exception from an earlier stage (e.g. "Open Food Facts returned HTTP 429 rate limit"). The prompt should let the AI relay this to the user in plain language when relevant ("I couldn't reach the food database, so I estimated from your photo instead").
-- **Also surface a plain warning/error in the chat UI** regardless of what the AI says — e.g. a small "⚠ Open Food Facts rate-limited; used photo estimate" banner on the confirmation card. The user should always know when a fallback happened and why, so they can judge how much to trust the numbers.
-- If the AI stage itself fails (Ollama down, unparseable output), show a clear error in the chat and let the user retry or enter values manually — never save a guessed or empty entry.
+- **Pass errors along to the AI.** When assembling the AI request, include a short description
+  of any exception from an earlier stage (e.g. "Open Food Facts returned HTTP 429 rate limit").
+  The prompt should let the AI relay this in plain language when relevant ("I couldn't reach
+  the food database, so I estimated from your photo instead").
+- **Also surface a plain warning/error in the chat UI** regardless of what the AI says — e.g. a
+  small "⚠ Open Food Facts rate-limited; used photo estimate" banner on the confirmation card.
+  The user should always know when a fallback happened and why, so they can judge how much to
+  trust the numbers.
+- If the AI stage itself fails (Ollama down, unparseable output), show a clear error in the
+  chat and let the user retry or enter values manually — never save a guessed or empty entry.
 
 ---
 
 ## 6. Ollama / RAM behavior
 
-The user was concerned about the model holding several GB of RAM permanently.
+The user was concerned about the model holding several GB of RAM permanently. The resolution:
 
-- The **Ollama container stays running** (it is lightweight when idle).
-- The **model** is what consumes RAM. Ollama unloads it after an idle period. Configure `keep_alive` (via the API request field or `OLLAMA_KEEP_ALIVE` env var) to a short value so the model drops out of RAM between uses and reloads (a few seconds on CPU) on the next request.
-- Do **not** try to stop/start the whole container per request — that adds complexity for little benefit.
-- The server has ample RAM (~94 GiB, ECC), so a **mid-size vision model** (a 7–12B-class VLM) is viable for production for better label reading. CPU-only inference is fine here because meal logging is not latency-sensitive — a few seconds per image is acceptable. (*VLM = Vision-Language Model — a model that takes images + text together, i.e. the thing that reads the food photo.*)
-- **For initial development, start with a tiny model (~1–2 GB) even if its answers are bad.** The goal early on is to get the whole pipeline working end to end — image in, JSON out, validated, confirmed, saved. Answer quality doesn't matter yet. Swap up to a larger/better model once the plumbing works. This is why the model name lives in config, not code.
-- **Test the model before committing to it for real use.** Label OCR is exactly where small VLMs struggle most, and CPU inference on a high-res image can be slower than "a few seconds." Before settling on the production model, try it against a handful of real nutrition-label photos and check it actually reads them acceptably. Treat model selection as a quick experiment, not an afterthought. Fine-tuning is a possible *later* step if no off-the-shelf model is good enough — not needed now.
-- Pick the concrete model during implementation and record it here. Keep the model name in config, not hardcoded, so it's swappable. AI's discretion on the specific choice until there's a reason to fine-tune.
+- The **Ollama container stays running** (it is lightweight when idle). The **model** is what
+  consumes RAM, and Ollama unloads it after an idle period. Configure `keep_alive` (request
+  field or `OLLAMA_KEEP_ALIVE`) to a short value so the model drops out of RAM between uses.
+- Do **not** stop/start the whole container per request — complexity for little benefit.
+- **Keep the model name in config, not code**, so it stays swappable. Start with a tiny model
+  to get the pipeline working end to end, then swap up.
+
+Sizing, model selection and how to test a candidate against real label photos:
+[Ollama-Setup](wiki/Ollama-Setup.md).
 
 ---
 
 ## 7. Data model (initial sketch — refine in code)
 
-- **User** — via ASP.NET Core Identity (Id, credentials, etc.).
-- **FoodItem (catalog)** — id, name, brand (nullable), barcode (nullable), serving size + unit, source (`off` | `ai` | `manual`), created/updated timestamps, owning user, **plus a full set of per-serving nutrients** (see below).
+- **User** — via ASP.NET Core Identity.
+- **FoodItem (catalog)** — id, name, brand (nullable), barcode (nullable), serving size + unit,
+  source (`off` | `ai` | `manual`), timestamps, owning user, **plus a full set of per-serving
+  nutrients**.
 - **LogEntry** — id, user, timestamp/date, free-text note (nullable).
-- **LogItem** — id, log entry id, food item id (nullable if ad-hoc), quantity (number of servings), **full computed nutrient snapshot** at time of logging.
+- **LogItem** — id, log entry id, food item id (nullable if ad-hoc), quantity (number of
+  servings), **full computed nutrient snapshot** at time of logging.
 
 ### Nutrient storage — design for many nutrients, not just macros
 
-The user wants to track **everything worth tracking that appears on a nutrition label** — not only calories and the carb/fat/protein split, but fiber, sugars, saturated/trans fat, sodium, cholesterol, and vitamins/minerals. That's dozens of possible fields, and the set will grow.
+Track **everything worth tracking that appears on a nutrition label**, not just calories and
+the carb/fat/protein split. That's dozens of fields and the set will grow; the concrete target
+set is in [Nutrient-Reference](wiki/Nutrient-Reference.md).
 
-**Do NOT model this as one fixed column per nutrient** — that turns every new nutrient into a schema migration and leaves most rows full of nulls. Instead use an extensible shape:
+**Do NOT model this as one fixed column per nutrient** — that makes every new nutrient a schema
+migration and leaves most rows full of nulls. Instead:
 
-- Preferred: a **`Nutrient` reference table** (id, key e.g. `vitamin_c`, display name, unit e.g. `mg`/`µg`/`g`, canonical sort order for label-style display) + a **per-item `NutrientAmount`** join (item/snapshot id, nutrient id, amount). Adding a nutrient = inserting a row, not altering the schema.
-- Acceptable alternative: a **JSONB column** on FoodItem / LogItem holding a nutrient→amount map, with a small code-side registry defining each nutrient's unit and display order. Simpler to start, still schema-stable; trade-off is weaker query ergonomics for aggregation.
-- Either way, **keep calories and the big three macros (protein / carbs / fat) as first-class, always-present fields** too, since they drive the main dashboard and goals math and you don't want to join/parse for the common case. The extensible store covers everything beyond those.
-- Every nutrient carries an explicit **unit**; never assume grams. Vitamins are often mg or µg.
-- Nutrients are frequently **unknown/missing** (a photo estimate won't have vitamin C). Store null/absent, distinguish "known to be zero" from "not measured," and have the dashboard show missing micros gracefully rather than as 0.
+- Preferred: a **`Nutrient` reference table** (key e.g. `vitamin_c`, display name, unit,
+  canonical sort order) + a **per-item `NutrientAmount`** join. Adding a nutrient = a row.
+- Acceptable: a **JSONB column** holding a nutrient→amount map with a code-side registry for
+  units and display order. Simpler to start, still schema-stable; weaker query ergonomics.
+- Either way, **keep calories and protein/carbs/fat as first-class always-present fields** too
+  — they drive the dashboard and goals math, and shouldn't need a join or a parse.
+- Every nutrient carries an explicit **unit**; never assume grams (vitamins are often mg or µg).
+- Nutrients are frequently **unknown**. Store null/absent, distinguish "known to be zero" from
+  "not measured," and show missing micros gracefully rather than as 0.
+- Keep the set **data-driven**, so adding "selenium" later is a data change, not a code change.
 
-Store the **full nutrient snapshot** on the LogItem (via `NutrientAmount` rows or the JSON map), not just macros, so historical logs never change if a catalog item is later edited.
-
-### 7a. What to track (target nutrient set)
-
-Aim to capture, per item and per serving, as available from OFF or the AI read. Full presence is not required — capture what the source provides:
-
-- **Energy:** calories (kcal). (kJ optional.)
-- **Macros:** protein, total carbohydrate, total fat. (Always present / first-class.)
-- **Fat breakdown:** saturated fat, trans fat, (mono/polyunsaturated if available).
-- **Carb breakdown:** dietary fiber, total sugars, added sugars.
-- **Sterols/electrolytes:** cholesterol, sodium, potassium.
-- **Vitamins:** A, C, D, E, K, and B-complex (B1/thiamin, B2/riboflavin, B3/niacin, B6, B9/folate, B12) as available.
-- **Minerals:** calcium, iron, magnesium, zinc, and others when present.
-
-Keep the set **config-/data-driven** (that's the point of the `Nutrient` table / registry) so adding "selenium" later is a data change, not a code change. The confirmation card and dashboard should render whatever nutrients are present in label order, and not clutter the view with ones the source didn't provide.
+Store the **full nutrient snapshot** on the LogItem, so historical logs never change if a
+catalog item is later edited.
 
 ---
 
 ## 8. Security posture
 
-Treat the data as sensitive personal health information in terms of *care*, without claiming formal regulatory compliance (this is a personal self-hosted tool for the user's own data; formal HIPAA compliance is a heavy legal regime that does not meaningfully apply here).
+Treat the data as sensitive personal health information in terms of *care*, without claiming
+formal regulatory compliance (this is a personal self-hosted tool for the user's own data;
+formal HIPAA compliance is a heavy legal regime that does not meaningfully apply here).
 
 Concretely:
-- All access is behind login (ASP.NET Core Identity). No unauthenticated endpoints except login (and registration, if enabled at all).
-- Enforce **HTTPS** in transit. TLS is terminated at the user's existing **reverse proxy** in front of the app.
+- All access is behind login (ASP.NET Core Identity). No unauthenticated endpoints except
+  login (and registration, if enabled at all).
+- Enforce **HTTPS** in transit. TLS is terminated at the user's existing **reverse proxy**.
 - Passwords hashed by Identity (never store plaintext).
-- Use secure, HttpOnly cookies or properly-scoped JWTs for the session.
-- Data stays on the user's server; images are not sent to third parties; only barcode numbers go to Open Food Facts.
-- Keep secrets (DB creds, any API keys for an optional cloud fallback) in environment variables / a secrets file, never committed.
+- Use secure, HttpOnly cookies or properly-scoped tokens for the session.
+- Data stays on the user's server; images are not sent to third parties; only barcode numbers
+  go to Open Food Facts.
+- Keep secrets (DB creds, any API keys for an optional cloud fallback) in environment variables
+  / a secrets file, never committed.
 
 ### Auth hardening (wanted features)
 
-The user explicitly wants a properly secured account system. Implement, roughly in order of value:
+The user explicitly wants a properly secured account system. Implement, roughly in order of
+value:
 
-1. **Two-factor authentication (2FA) — REQUIRED.** Use Identity's built-in TOTP support (authenticator apps like Google Authenticator / Authy). Flow: the user enables 2FA in settings → the app displays a **QR code** → they scan it with their authenticator app → the app then generates a rolling 6-digit code every ~30 seconds, and the user enters the current code at login. Confirm enrollment by having the user type one valid code before turning 2FA on, and issue **recovery codes** (shown once) so they can still get in if they lose their phone. SMS 2FA is possible but not needed; authenticator-app TOTP is the target. All of this is built into Identity — render the QR and verify codes, don't build the TOTP algorithm yourself.
-2. **Account lockout — REQUIRED.** Enable Identity's lockout so N failed login attempts locks the account for a cooldown. This is the primary defense against brute-force / password guessing.
-3. **Rate limiting — REQUIRED.** Apply ASP.NET Core's built-in rate-limiting middleware to the auth endpoints (login, register, 2FA) to blunt automated attempts.
-4. **Registration lockdown.** Since this is a private tool for the user (and maybe household), do NOT offer open public sign-up. Either disable registration after the first account(s) are created, or make it invite-only.
-5. **Network-level protection (strongest, simplest).** The single most effective protection for a personal tool is to not expose the login to the public internet at all — reach it via VPN / LAN only, or gate it at the reverse proxy. Note this to the user as the recommended posture; it makes bot/brute-force concerns nearly moot on its own.
+1. **Two-factor authentication (2FA) — REQUIRED.** Identity's built-in TOTP support
+   (authenticator apps). Flow: enable in settings → app displays a **QR code** → scan with the
+   authenticator → enter the current rolling 6-digit code at login. Confirm enrollment by
+   having the user type one valid code before turning 2FA on, and issue **recovery codes**
+   (shown once) so they can still get in if they lose their phone. SMS 2FA is possible but not
+   needed. All of this is built into Identity — render the QR and verify codes, don't build the
+   TOTP algorithm yourself.
+2. **Account lockout — REQUIRED.** Identity's lockout so N failed logins locks the account for
+   a cooldown. The primary defense against brute-force / password guessing.
+3. **Rate limiting — REQUIRED.** ASP.NET Core's built-in rate-limiting middleware on the auth
+   endpoints (login, register, 2FA) to blunt automated attempts.
+4. **Registration lockdown.** No open public sign-up. Either disable registration after the
+   first account(s), or make it invite-only.
+5. **Network-level protection (strongest, simplest).** The single most effective protection for
+   a personal tool is to not expose the login to the public internet at all — VPN / LAN only,
+   or gated at the reverse proxy. Note this to the user as the recommended posture; it makes
+   bot/brute-force concerns nearly moot on its own.
 
-*(reCAPTCHA was considered and deliberately dropped: on a VPN/LAN-only personal tool the login isn't public, so it would add a Google dependency and login friction for essentially no benefit. Lockout + rate limiting + network-level protection already cover brute-force. If the login is ever exposed publicly, revisit this.)*
+*(reCAPTCHA was considered and deliberately dropped: on a VPN/LAN-only personal tool the login
+isn't public, so it would add a Google dependency and login friction for essentially no
+benefit. Lockout + rate limiting + network-level protection already cover brute-force. If the
+login is ever exposed publicly, revisit this.)*
 
 ---
 
-## 9. Build order (suggested milestones)
+## 9. Build order (milestones)
 
-1. ~~**Scaffold**~~ — ✅ **DONE.** Solution with a Blazor WASM frontend, ASP.NET Core Web API backend, EF Core + Postgres, Docker Compose bringing up db + backend + frontend. Health-check endpoint, verified end to end in the browser. Decisions in [01-scaffold.md](docs/decisions/01-scaffold.md); how to run it is in `README.md`.
-2. ~~**Auth**~~ — ✅ **DONE.** ASP.NET Core Identity behind an HttpOnly cookie: bootstrap-then-invite-only registration, login, TOTP 2FA with QR enrolment and recovery codes, account lockout, rate limiting, password change and log-delivered reset, and a fully authed web app (auth state, protected routes, login/settings pages). First EF migration and first test project. Decisions in [02-auth.md](docs/decisions/02-auth.md); account handling is in `README.md`.
-3. **Mobile foundation** — the thin end-to-end slice, deliberately **before** the backend milestones because the Android toolchain and the token auth were the two unknowns in the pivot. Bearer-token scheme on the API alongside the cookie (`/api/auth/token`, refresh, optional 2FA code in one request); `Trackr.Mobile.Core` + `Trackr.Mobile`; a first-run **server-URL** screen, login, 2FA, and one placeholder page. Done when a signed APK installs on a real phone, points at the server and logs in through 2FA. No food logging.
-4. **Documentation migration** — no feature code. Move reference and how-to material out of `CLAUDE.md` and `README.md` into the wiki, per §0. `CLAUDE.md` is ~41KB and loaded in full every session; §3 and §11 together are nearly a third of it and are now mostly reference rather than decisions. Target ~22-25KB by moving:
-    - §11 (dev environment, building, Android testing) → `Development-Environment.md`, `Building.md`, `Testing-the-Android-App.md`.
-    - The §7a nutrient list → `Nutrient-Reference.md`. Keep the *principle* (config-driven, units always explicit, missing ≠ zero) here.
-    - §6's model-selection and RAM advice → `Ollama-Setup.md`. Keep the `keep_alive` decision here.
-    - §3's package lists, versions and toolchain specifics → wiki. Keep the choices and the reasons.
-    - §4's container detail → `Self-Hosting.md`. Keep the service list.
-    Write the self-hoster pages that exist nowhere today: `Home.md`, `_Sidebar.md`, `Self-Hosting.md`, `Configuration.md` (every `TRACKR_*` variable), `Accounts-and-2FA.md`, `Backup-and-Restore.md`, `Troubleshooting.md`. **Backup and restore is the notable gap** — the data-protection keys and the Postgres volume both matter and neither is documented anywhere.
-    Then cut `README.md` back to an entry point: what Trackr is, the layout, a short getting-started with `just dev` / `just stop` / `just nuke` and the `http://10.0.2.2:8000` dev-server address, and links out. It should not be as technical as it currently is.
-    Add the drift checks from §0: a test asserting every `TRACKR_*` variable in `docker/docker-compose.yml` appears in `Configuration.md` and every `just` recipe the README names exists, plus a generated `API-Reference.md` built from the OpenAPI document.
-    Leave every constraint in `CLAUDE.md` — see the exception in §0. `Home.md`, `_Sidebar.md` and the `just docs::*` recipes already exist; `just docs::lint` lists exactly which pages are still missing.
-5. **Mobile UX & architecture planning** — a *planning* milestone, no feature code. The thin slice in milestone 3 makes the minimum viable choices to get a screen on a phone; this is where they get made properly, before the chat UI is built on top of them. Cover at least:
-    - **Navigation** — `Shell` versus plain navigation, how the chat and stats tabs are laid out, and where server-setup and login sit relative to the signed-in shell.
-    - **Styling and theming** — resource dictionaries, light/dark handling, and whether to lean on default Material styling or build a custom theme.
-    - **Local storage** — what the app persists beyond the token: cached stats, an offline log queue, and whether that needs SQLite now or waits for §9.14.
-   Record the outcome in `docs/decisions/` and revise milestone 3's provisional choices to match.
-6. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the extensible nutrient store** (`Nutrient` + `NutrientAmount`, or JSONB map) from §7, seeding the §7a nutrient set. Basic CRUD API for catalog and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
-7. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive **User-Agent** on OFF requests (app name + version + contact) — OFF asks for this and may throttle callers without it. Handle full-match, partial-match, and no-match cases per §5, and surface rate-limit/timeout errors rather than swallowing them.
-8. **Ollama integration** — add the ollama service, wire the backend to call it, define the strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the JSON. Configure `keep_alive`.
-9. **Chat UI + cascade + confirm** — build the chat interface **in the Android app** (new-chat flow, message list, text box with a `+` button in the bottom-left to attach images) and wire the full cascade from §5 into it. The parsed result appears as an in-chat **confirmation card** (calories/macros/servings, editable) with any fallback warnings (e.g. rate-limited), and only writes to the DB on confirm. Include the serving-count math. This is also where the camera and photo-picker permissions land.
-10. **Catalog growth** — upsert items from OFF/AI into the catalog; let the user pick from previously logged items for fast re-logging.
-11. **Stats views (REQUIRED)** — the output surface from §1, a tab in the app. "Today so far" running totals (calories + full nutrient breakdown, updating as entries are confirmed), then week/month summaries with basic trend charts. Aggregations read from the nutrient snapshots on LogItems. This is core, not polish — build it before goals.
-12. **Goals (LATE)** — let the user set calorie / macro / specific-nutrient targets and show progress against them, layered on top of the stats views. Explicitly a late milestone.
-13. **User profile (LATE, potential)** — per-account settings beyond credentials: display name, **time zone**, unit preferences (metric/imperial, kcal vs kJ), and optional body metrics (height, weight, age, sex, activity level). Also the natural home for the account self-service milestone 2 deliberately left out — changing the account email, exporting the account's data, deleting the account. Two parts are load-bearing rather than cosmetic, so respect them earlier even though the milestone itself is late:
-    - **Time zone decides what "today" means.** The stats views (§9.11) total a *local* day while the server stores UTC. Until a per-user zone exists, keep the day boundary in exactly one helper (defaulting to UTC or a single configured server zone) so making it per-user later is one change rather than a rewrite of every aggregate. Note the phone knows its own zone, which is a tempting shortcut — but the *server* does the aggregation, so the zone still has to be stored per user rather than sent per request.
-    - **Body metrics feed the goal maths.** Goals (§9.12) can suggest a calorie target from BMR/TDEE instead of asking the user to invent a number. Goals must still accept a hand-typed target, so it never hard-depends on this milestone.
-14. **Polish** — offline/queued logging when the phone has no connection to the server, edit/delete entries, richer charts, per-nutrient detail views, export, an admin page on the web app.
+Do each milestone as a working, testable slice before moving on. Keep the three cascade stages
+(barcode, OFF, AI) behind interfaces from the start so they stay swappable.
 
-Do each milestone as a working, testable slice before moving on. Keep the three cascade stages (barcode, OFF, AI) behind interfaces from the start so they stay swappable.
+1. ~~**Scaffold**~~ ✅ — [01-scaffold.md](docs/decisions/01-scaffold.md)
+2. ~~**Auth**~~ ✅ — [02-auth.md](docs/decisions/02-auth.md)
+3. ~~**Mobile foundation**~~ ✅ — the thin end-to-end slice, deliberately *before* the backend
+   milestones because the Android toolchain and token auth were the two unknowns in the pivot.
+   [03-android-pivot.md](docs/decisions/03-android-pivot.md)
+4. ~~**Documentation migration**~~ ✅ — [05-documentation.md](docs/decisions/05-documentation.md)
+5. **Mobile UX & architecture planning** — a *planning* milestone, no feature code. Milestone 3
+   made the minimum viable choices to get a screen on a phone; this is where they get made
+   properly, before the chat UI is built on top of them. Record the outcome in
+   `docs/decisions/` and revise milestone 3's provisional choices to match. Cover at least:
+    - **Navigation** — `Shell` versus plain navigation, the chat/stats tab layout, and where
+      server-setup and login sit relative to the signed-in shell. Today: auth routing is a
+      post-launch correction rather than a shell swap, `AuthSession.Changed` exists for that
+      swap with no subscribers, and route names are duplicated between `AppShell.xaml` and
+      `ShellNavigationService`.
+    - **Styling and theming** — default Material styling or a custom theme. `Styles.xaml` is
+      still the untouched MAUI template; [04-branding.md](docs/decisions/04-branding.md)
+      settled the palette and light/dark and explicitly left this open.
+    - **Local storage** — what the app persists beyond the token: cached stats, an offline log
+      queue, and whether that needs SQLite now or waits for §9.14.
+6. **Data layer** — EF Core entities + migrations for FoodItem, LogEntry, LogItem, **and the
+   extensible nutrient store** from §7, seeding the nutrient set. Basic CRUD API for catalog
+   and log. Confirm you can store and read back a full multi-nutrient item, not just macros.
+7. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the
+   choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive
+   **User-Agent** (app name + version + contact) — OFF asks for this and may throttle callers
+   without it. Handle full-match, partial-match and no-match per §5, and surface
+   rate-limit/timeout errors rather than swallowing them.
+8. **Ollama integration** — add the service, wire the backend to call it, define the
+   strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the
+   JSON. Configure `keep_alive`.
+9. **Chat UI + cascade + confirm** — build the chat interface **in the Android app** (new-chat
+   flow, message list, text box with a `+` button bottom-left to attach images) and wire the
+   full cascade from §5 into it. The parsed result appears as an in-chat **confirmation card**
+   (calories/macros/servings, editable) with any fallback warnings, and only writes to the DB
+   on confirm. Include the serving-count math. Camera and photo-picker permissions land here.
+10. **Catalog growth** — upsert items from OFF/AI into the catalog; let the user pick from
+    previously logged items for fast re-logging.
+11. **Stats views (REQUIRED)** — the output surface from §1, a tab in the app. "Today so far"
+    running totals (calories + full nutrient breakdown, updating as entries are confirmed),
+    then week/month summaries with basic trend charts. Aggregations read from the nutrient
+    snapshots on LogItems. Core, not polish — build it before goals.
+12. **Goals (LATE)** — calorie / macro / specific-nutrient targets and progress against them,
+    layered on top of the stats views.
+13. **User profile (LATE, potential)** — per-account settings beyond credentials: display name,
+    **time zone**, unit preferences (metric/imperial, kcal vs kJ), and optional body metrics.
+    Also the natural home for the account self-service milestone 2 left out — changing the
+    account email, exporting the account's data, deleting the account. Two parts are
+    load-bearing rather than cosmetic, so respect them earlier even though the milestone is late:
+    - **Time zone decides what "today" means.** The stats views total a *local* day while the
+      server stores UTC. Until a per-user zone exists, keep the day boundary in exactly one
+      helper (defaulting to UTC or a single configured server zone) so making it per-user later
+      is one change rather than a rewrite of every aggregate. The phone knows its own zone,
+      which is a tempting shortcut — but the *server* aggregates, so the zone must be stored per
+      user rather than sent per request.
+    - **Body metrics feed the goal maths.** Goals can suggest a calorie target from BMR/TDEE
+      instead of asking the user to invent a number. Goals must still accept a hand-typed
+      target, so this is never a hard dependency.
+14. **Polish** — offline/queued logging when the phone has no connection, edit/delete entries,
+    richer charts, per-nutrient detail views, export, an admin page on the web app.
 
 ---
 
 ## 10. Explicit non-goals / cautions
 
-- **Trackr is AGPL-3.0-or-later** — free software, and the same licence Immich, Nextcloud and Mastodon use for the same reasons. Anyone may run, modify and self-host it, including commercially; anyone who modifies it and offers it to others *over a network* owes those users their source. That is a strong deterrent against a hosted commercial fork, **not a prohibition** — do not describe it as one.
-  - **Dependencies must be AGPL-compatible.** Permissive (MIT, Apache-2.0, BSD) and GPLv3-family licences are fine. **`GPL-2.0-only` is not** — it is incompatible with v3; `GPL-2.0-or-later` is. Proprietary and source-available licences are out. Check before adding a package; a conflict found after it is woven in is expensive to undo.
-  - **Copyright is the user's alone, and worth keeping that way.** As sole holder he can relicense or sell a commercial exception; accepting outside patches without a DCO or CLA would end that. Raise it if contributions ever start arriving.
+- **Trackr is AGPL-3.0-or-later** — the same licence Immich, Nextcloud and Mastodon use, for
+  the same reasons. Anyone may run, modify and self-host it, including commercially; anyone who
+  modifies it and offers it to others *over a network* owes those users their source. A strong
+  deterrent against a hosted commercial fork, **not a prohibition** — do not describe it as one.
+  - **Dependencies must be AGPL-compatible.** Permissive (MIT, Apache-2.0, BSD) and
+    GPLv3-family licences are fine. **`GPL-2.0-only` is not** — incompatible with v3;
+    `GPL-2.0-or-later` is. Proprietary and source-available are out. Check *before* adding a
+    package; a conflict found after it is woven in is expensive to undo.
+  - **Copyright is the user's alone, and worth keeping that way.** As sole holder they can
+    relicense or sell a commercial exception; accepting outside patches without a DCO or CLA
+    would end that. Raise it if contributions ever start arriving.
 - No pre-loaded global food database; catalog is user-built over time.
 - No public/multi-tenant SaaS concerns; this is private and self-hosted.
 - Don't hand-roll authentication or password hashing — use Identity.
 - Don't send raw images to any third party. Only barcode numbers go to Open Food Facts.
 - Don't hardcode the model name or DB provider — keep them swappable via config.
 - Don't let the AI write to the DB directly or silently — always confirm-before-save.
-- **The interface is a chat, not a form.** Don't build dropdowns, barcode-entry fields, or nutrition data-entry screens as the primary flow. The user describes food in natural language and optionally attaches a photo (via the `+` button); the AI does the rest. Barcode decoding is invisible plumbing the user never sees.
-- Don't let errors vanish. Rate limits, timeouts, and parse failures must reach the user as a plain warning and/or via the AI's reply — never a silent wrong or empty entry.
-- **Don't rebuild the food-logging UI on the web.** The website is accounts and administration. If a feature needs a screen, it belongs in the Android app unless it is specifically about managing an account or the server.
-  - *Historical note:* this rule once implied the app had no sign-up screen, and the wiki said so outright. Onboarding was moved onto the phone because the premise did not hold for it — an invited household member may have no browser to be sent to, and redeeming an invite is the one account task that must work before the account exists. Password change, 2FA enrolment, invite minting and administration are unaffected and remain web-only; the rule stands for all of them.
-- **Don't put logic in `Trackr.Mobile` that could live in `Trackr.Mobile.Core`.** Anything in the MAUI project needs the Android SDK to compile and a device to exercise; anything in Core is testable with plain `dotnet test`. Keep the MAUI project to XAML, `Shell` wiring and platform glue.
-- Don't duplicate the cascade on the phone. The app sends text and images to the API and renders what comes back; barcode decode, OFF lookup and the AI call all stay server-side where they can be changed without shipping a new APK.
-- A small, kind note for the humans maintaining this: tracking is a tool. If the app ever starts to feel like it's driving anxiety around numbers rather than helping, that's a reason to step back from it, not to add more tracking.
+- **The interface is a chat, not a form.** Don't build dropdowns, barcode-entry fields, or
+  nutrition data-entry screens as the primary flow. The user describes food in natural language
+  and optionally attaches a photo; the AI does the rest. Barcode decoding is invisible plumbing.
+- Don't let errors vanish. Rate limits, timeouts and parse failures must reach the user as a
+  plain warning and/or via the AI's reply — never a silent wrong or empty entry.
+- **Don't rebuild the food-logging UI on the web.** The website is accounts and administration.
+  If a feature needs a screen, it belongs in the Android app unless it is specifically about
+  managing an account or the server.
+  - *Historical note:* this rule once implied the app had no sign-up screen. Onboarding was
+    moved onto the phone because the premise did not hold for it — an invited household member
+    may have no browser to be sent to, and redeeming an invite is the one account task that
+    must work before the account exists. Password change, 2FA enrolment, invite minting and
+    administration are unaffected and remain web-only; the rule stands for all of them.
+- **Don't put logic in `Trackr.Mobile` that could live in `Trackr.Mobile.Core`.** Anything in
+  the MAUI project needs the Android SDK to compile and a device to exercise; anything in Core
+  is testable with plain `dotnet test`. Keep the MAUI project to XAML, `Shell` wiring and glue.
+- Don't duplicate the cascade on the phone. The app sends text and images to the API and
+  renders what comes back; barcode decode, OFF lookup and the AI call all stay server-side
+  where they can be changed without shipping a new APK.
+- A small, kind note for the humans maintaining this: tracking is a tool. If the app ever starts
+  to feel like it's driving anxiety around numbers rather than helping, that's a reason to step
+  back from it, not to add more tracking.
 
 ---
 
-## 11. Development environment & self-testing (for Claude Code)
+## 11. Working in this repository (for Claude Code)
 
-Claude Code runs in **WSL** and should **test the stack by actually running it** — building images, bringing up the compose stack, hitting endpoints, and tearing it down as part of completing each milestone.
+Claude Code runs in **WSL**. How to build, run the stack, drive the emulator and connect a
+phone is in the wiki — [Development-Environment](wiki/Development-Environment.md),
+[Building](wiki/Building.md), [Testing-the-Android-App](wiki/Testing-the-Android-App.md).
+**Prefer the `just` recipes**; they carry environment and flags that are easy to forget.
 
-- The WSL Docker engine here is an **empty, disposable sandbox** — the user has no other containers or images on it, and their real infrastructure (Portainer, reverse proxy, production stacks) lives elsewhere. So no special daemon isolation is needed; Claude Code may use this Docker engine directly and freely create/run/destroy this project's containers to test.
-- **One precaution:** the environment is intentionally **logged out of Docker Hub** (`docker logout`) so nothing can be pushed to the user's registry account. Do NOT attempt to `docker login` or `docker push` anywhere. Pulling public base images still works fine while logged out, so builds are unaffected.
-- Prefer ephemeral test data; never point dev runs at any real/production volume.
-- Keep dev config (ports, test DB creds) separate from anything deployment-related, via env files.
+What is a constraint rather than a how-to:
 
-### Building
-
-A bare `dotnet build` at the repository root needs the `maui-android` workload, because
-`Trackr.Mobile` is in the solution. For backend-only work, name the projects:
-
-```
-dotnet build src/Trackr.Api src/Trackr.Web src/Trackr.Shared
-dotnet test  tests/Trackr.Api.Tests          # needs Docker (Testcontainers)
-```
-
-The Dockerfiles already restore and publish specific `.csproj` files, so images are unaffected.
-
-**Prefer the `just` recipes** — they carry the environment and flags that are easy to forget:
-`just server::up`, `just server::watch`, `just mobile::run`, `just mobile::doctor`, `just test`.
-Recipes live in `just/server.just` and `just/mobile.just`, dispatched from the root `Justfile`.
-Two gotchas if you edit them: a module runs from **its own file's directory**, hence
-`set working-directory := '..'`; and `just` uses the **last** comment line above a recipe as
-its `--list` description, so longer notes belong inside the recipe body.
-
-Debug APKs set `EmbedAssembliesIntoApk=true`. Without it, Fast Deployment leaves the managed
-assemblies outside the APK, and any APK installed by `adb install` rather than `dotnet run`
-aborts on launch with `No assemblies found in .../.__override__/x86_64`. Do not remove it.
-
-### Testing the Android app
-
-Three tiers. Only the first two are automatable — **say which one a claim of "it works" rests
-on**, because "the APK builds" and "the app runs" are very different statements.
-
-1. **View models** — `tests/Trackr.Mobile.Tests`, plain xUnit against `Trackr.Mobile.Core`. No
-   device, no emulator, no workload. Most logic should be coverable here; if it isn't, that's
-   a sign logic has leaked into the MAUI project.
-2. **Emulator** — the `trackr-test` AVD, driven through `scripts/emulator.sh`. Headless for
-   automated checks, or `start --window` to put a real window on the Windows desktop via
-   WSLg. What can be done from the command line here is more than it first appears:
-   - `adb exec-out screencap -p > shot.png` — a PNG that can actually be looked at.
-   - `adb shell uiautomator dump` — the whole view hierarchy as XML. Prefer this to
-     screenshots for assertions: it can confirm a specific label's *text*, and it gives real
-     coordinates instead of guessing where to tap.
-   - `adb shell input text ... / input tap X Y / input keyevent` — drive the UI.
-   - `./scripts/emulator.sh logcat` — the app's own `ILogger` output.
-3. **Physical phone** — over wireless debugging (`adb pair`, then `adb connect <ip>:5555`).
-   WSL's NAT handles outbound fine, so `usbipd-win` is **not** needed unless you specifically
-   want USB. Required for camera work, and the only real check of the reverse-proxy path.
-
-**Reaching the dev stack from an emulator:** use `http://10.0.2.2:8000` — `10.0.2.2` is the
-emulator's fixed alias for the host's loopback. This works only because Debug builds ship a
-narrow cleartext exception; see the network-security-config note in §3. A **physical phone**
-cannot use that address at all, and should point at the real HTTPS server instead.
-
-Toolchain, if it needs rebuilding: `dotnet workload install maui-android`, the Android SDK
-command-line tools, and **JDK 17** specifically — .NET for Android does not accept newer JDKs,
-so a machine with only JDK 21/25 installed will fail with a confusing error.
-
-On this machine both are installed under `$HOME`, no root involved, and every mobile build
-needs them exported:
-
-```
-export JAVA_HOME=$HOME/.jdks/microsoft-17
-export ANDROID_HOME=$HOME/Android/Sdk
-export PATH=$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH
-```
-
-`platform-tools` must come **before** `/usr/bin`. Debian ships its own `adb` (34.x) while the
-SDK has 37.x, and adb refuses to work across a client/server version mismatch — whichever
-starts the server first wins and kills the other. The symptom is a device that never appears,
-which looks nothing like a PATH problem. `scripts/emulator.sh` sets this itself.
-
-The **emulator** additionally needs the invoking user in the `kvm` group
-(`sudo usermod -aG kvm $USER`, then restart WSL) — that step needs the user's own shell.
-Building and signing an APK does not, so a build can always be verified even when a run
-cannot. Say which of the two a claim rests on.
+- **Test by actually running it.** Build the images, bring up the compose stack, hit the
+  endpoints, tear it down — as part of completing each milestone, not as an afterthought.
+- **The WSL Docker engine is an empty, disposable sandbox.** The user's real infrastructure
+  lives elsewhere, so containers here may be created and destroyed freely. **One precaution:
+  it is intentionally logged out of Docker Hub.** Do NOT attempt to `docker login` or
+  `docker push` anywhere. Pulling public base images still works, so builds are unaffected.
+- Prefer ephemeral test data; never point dev runs at any real/production volume. Keep dev
+  config (ports, test DB creds) separate from anything deployment-related, via env files.
+- **Say which testing tier a claim of "it works" rests on.** There are three — view-model tests
+  (no device), emulator, and a physical phone — and "the APK builds" and "the app runs" are
+  very different statements. The emulator additionally needs the invoking user in the `kvm`
+  group, which needs the user's own shell; building and signing an APK does not. So a build can
+  always be verified even when a run cannot. Say which of the two a claim rests on.
+- If logic cannot be covered by a view-model test, that is a sign it has leaked out of
+  `Trackr.Mobile.Core` and into the MAUI project.
 
 ---
 
 ## 12. Optional future extensions (not required)
 
-- A cloud API fallback (e.g. a hosted model) for images the local model struggles with — slot it in behind the same AI-parse interface as a lower-confidence backstop.
-- **Android share target** — "share" a photo from the gallery or camera straight into Trackr, landing in a new chat. A natural fit for the core loop and cheap once the app exists.
-- **iOS.** MAUI can target it, but it needs a Mac to build and an Apple developer account to install on a device. Out of scope; nothing should actively prevent it.
-- Deeper analytics on top of the core stats (long-range trends, nutrient-adequacy views, correlations), richer export formats. (Detailed micronutrient tracking and week/month summaries are now **core** — see §7a and §9 — not future work.)
-- Making the website a full second client. Deliberately not the plan (§10), but the API is client-agnostic and `Trackr.Shared` is already referenced by both, so nothing blocks it if the appetite appears.
+- A cloud API fallback (e.g. a hosted model) for images the local model struggles with — slot
+  it in behind the same AI-parse interface as a lower-confidence backstop.
+- **Android share target** — "share" a photo from the gallery or camera straight into Trackr,
+  landing in a new chat. A natural fit for the core loop and cheap once the app exists.
+- **iOS.** MAUI can target it, but it needs a Mac to build and an Apple developer account to
+  install on a device. Out of scope; nothing should actively prevent it.
+- Deeper analytics on top of the core stats (long-range trends, nutrient-adequacy views,
+  correlations), richer export formats. (Detailed micronutrient tracking and week/month
+  summaries are **core** — see §7 and §9 — not future work.)
+- Making the website a full second client. Deliberately not the plan (§10), but the API is
+  client-agnostic and `Trackr.Shared` is already referenced by both, so nothing blocks it if
+  the appetite appears.

@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Trackr.Api.Tests/Trackr.Api.Tests.csproj" />
+    <Project Path="tests/Trackr.Docs.Tests/Trackr.Docs.Tests.csproj" />
     <Project Path="tests/Trackr.Mobile.Tests/Trackr.Mobile.Tests.csproj" />
   </Folder>
 </Solution>

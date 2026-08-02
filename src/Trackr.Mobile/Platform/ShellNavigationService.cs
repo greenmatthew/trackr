@@ -6,11 +6,11 @@ namespace Trackr.Mobile.Platform;
 /// Implements Core's navigation contract over Shell routing.
 /// </summary>
 /// <remarks>
-/// Provisional along with <see cref="INavigationService"/> itself - milestone 4 settles how
+/// Provisional along with <see cref="INavigationService"/> itself - milestone 5 settles how
 /// navigation actually works once there are chat and stats tabs to move between.
 /// <para>
 /// Every route is absolute ("//name"), which resets the navigation stack rather than pushing
-/// onto it. That is what these three transitions want: after signing in there must be no
+/// onto it. That is what these transitions want: after signing in there must be no
 /// back gesture that returns to the login screen, and after signing out none that returns to
 /// the signed-in one.
 /// </para>

@@ -11,4 +11,6 @@
 - [Development Environment](Development-Environment)
 - [Building](Building)
 - [Testing the Android App](Testing-the-Android-App)
+- [API Reference](API-Reference)
 - [Nutrient Reference](Nutrient-Reference)
+- [Ollama Setup](Ollama-Setup)

@@ -29,7 +29,9 @@ The only thing that ever leaves the machine is a barcode number, looked up again
 | [Development Environment](Development-Environment) | Toolchain, the `just` recipes, the dev stack |
 | [Building](Building) | Backend, web app, and the Android APK |
 | [Testing the Android App](Testing-the-Android-App) | Emulator and physical device |
+| [API Reference](API-Reference) | Every route, generated from the API itself |
 | [Nutrient Reference](Nutrient-Reference) | The tracked nutrient set, keys and units |
+| [Ollama Setup](Ollama-Setup) | Choosing the vision model, and keeping it out of RAM when idle |
 
 ---
 

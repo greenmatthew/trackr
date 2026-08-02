@@ -27,6 +27,20 @@ REMOTE := "all"
 _default:
     @just --list docs
 
+# Needs neither Docker nor the Android SDK - it only reads tracked files.
+
+# Check the wiki against the code: env vars, just recipes, and the API reference.
+test:
+    dotnet test tests/Trackr.Docs.Tests
+
+# Regenerate wiki/API-Reference.md from the API's own OpenAPI document.
+#
+# Needs Docker: the generator boots the real application through WebApplicationFactory, and
+# startup applies migrations against a throwaway Postgres. Without the variable the same test
+# asserts instead of writing, which is what makes a stale page fail `just test`.
+api:
+    TRACKR_UPDATE_DOCS=1 dotnet test tests/Trackr.Api.Tests --filter FullyQualifiedName~ApiReference
+
 # Show which pages would change on each wiki, without touching them.
 check:
     @TRACKR_WIKI_DRY=1 just docs::_sync

@@ -72,10 +72,14 @@ nuke:
 build:
     dotnet build Trackr.slnx
 
-# Every test suite. The API tests need Docker; the mobile tests need nothing.
+# Docs first: it is the fastest suite and needs nothing, so a stale wiki page is reported in
+# seconds rather than after Docker has pulled and started Postgres.
+
+# Every test suite. The API tests need Docker; the docs and mobile tests need nothing.
 test:
-    just server::test
+    just docs::test
     just mobile::test
+    just server::test
 
 # Not `dotnet clean`, which only removes what the last build produced and leaves most of obj/
 # behind - here that is the difference between reclaiming a few hundred MB and reclaiming all
