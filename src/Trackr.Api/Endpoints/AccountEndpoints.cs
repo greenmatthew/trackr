@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
+using Trackr.Api.Data;
 using Trackr.Api.Identity;
 using Trackr.Api.Security;
 using Trackr.Shared.Auth;
@@ -58,6 +61,18 @@ public static class AccountEndpoints
             .RequireRateLimiting(RateLimitPolicies.Sensitive)
             .WithName("TwoFactorRecoveryCodes")
             .WithSummary("Replace the recovery codes. Returns the new set once.");
+
+        app.MapGet("/api/account/avatar", GetAvatarAsync)
+            .WithName("GetAvatar")
+            .WithSummary("The profile picture. Supports If-None-Match; 404 when there is none.");
+
+        app.MapPut("/api/account/avatar", SetAvatarAsync)
+            .WithName("SetAvatar")
+            .WithSummary("Replace the profile picture. Body is the raw image bytes.");
+
+        app.MapDelete("/api/account/avatar", DeleteAvatarAsync)
+            .WithName("DeleteAvatar")
+            .WithSummary("Remove the profile picture, falling back to initials.");
 
         return app;
     }
@@ -245,5 +260,205 @@ public static class AccountEndpoints
         var recoveryCodes = await userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, RecoveryCodeCount);
 
         return Results.Ok(new RecoveryCodesResponse(recoveryCodes?.ToArray() ?? []));
+    }
+
+    private static async Task<IResult> GetAvatarAsync(
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        TrackrDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var avatar = await db.UserAvatars
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserId == user.Id, cancellationToken);
+
+        if (avatar is null)
+        {
+            // Not an error. Having no picture is the default, and the client draws initials.
+            return Results.NotFound();
+        }
+
+        // Results.Bytes handles If-None-Match itself and answers 304 when it matches, which
+        // is the whole point of sending the tag: the phone re-checks on every launch and
+        // almost always gets a few bytes of headers back instead of the image.
+        return Results.Bytes(
+            avatar.Content,
+            avatar.ContentType,
+            entityTag: ETagFor(avatar.UpdatedUtc));
+    }
+
+    private static async Task<IResult> SetAvatarAsync(
+        HttpRequest request,
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        TrackrDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        // Strip any "; charset=" - a client that sends one is not wrong, and rejecting the
+        // upload over it would be a baffling failure.
+        var contentType = request.ContentType?.Split(';')[0].Trim();
+
+        if (!AvatarRules.IsAllowedContentType(contentType))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["contentType"] =
+                [
+                    "That image format is not supported. Use "
+                        + string.Join(", ", AvatarRules.AllowedContentTypes) + "."
+                ]
+            });
+        }
+
+        // Content-Length is a claim, not a fact, so it is only a fast rejection - the read
+        // below is what actually enforces the cap.
+        if (request.ContentLength > AvatarRules.MaxBytes)
+        {
+            return TooLarge();
+        }
+
+        var content = await ReadCappedAsync(request.Body, AvatarRules.MaxBytes, cancellationToken);
+        if (content is null)
+        {
+            return TooLarge();
+        }
+
+        if (content.Length == 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["content"] = ["The image was empty."]
+            });
+        }
+
+        var now = ToStorablePrecision(DateTimeOffset.UtcNow);
+
+        var avatar = await db.UserAvatars
+            .FirstOrDefaultAsync(a => a.UserId == user.Id, cancellationToken);
+
+        if (avatar is null)
+        {
+            avatar = new UserAvatar { UserId = user.Id };
+            db.UserAvatars.Add(avatar);
+        }
+
+        avatar.Content = content;
+        avatar.ContentType = contentType!;
+        avatar.UpdatedUtc = now;
+
+        // The marker on the user row is what /me reports and what every client caches
+        // against, so the two must move together or a stale picture is never re-fetched.
+        user.AvatarUpdatedUtc = now;
+        db.Update(user);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new AvatarResponse(now));
+    }
+
+    private static async Task<IResult> DeleteAvatarAsync(
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        TrackrDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var avatar = await db.UserAvatars
+            .FirstOrDefaultAsync(a => a.UserId == user.Id, cancellationToken);
+
+        if (avatar is not null)
+        {
+            db.UserAvatars.Remove(avatar);
+        }
+
+        user.AvatarUpdatedUtc = null;
+        db.Update(user);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        // Idempotent: deleting a picture that was not there is a success, not a 404. The
+        // caller wanted no picture and there is no picture.
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Rounds down to the precision Postgres will actually keep.
+    /// </summary>
+    /// <remarks>
+    /// A .NET tick is 100ns and a Postgres <c>timestamptz</c> holds microseconds, so a value
+    /// written straight from <c>UtcNow</c> comes back one digit shorter than it went in.
+    /// That matters because this timestamp is a cache marker: the client stores what the
+    /// upload returned and compares it against what <c>/me</c> reports afterwards. Without
+    /// this the two never match, every check looks like a change, and the phone re-downloads
+    /// the picture forever - the exact opposite of what the ETag is for.
+    /// <para>
+    /// Truncating rather than rounding, so the stored value is never ahead of the real one.
+    /// </para>
+    /// </remarks>
+    private static DateTimeOffset ToStorablePrecision(DateTimeOffset value) =>
+        new(value.Ticks - (value.Ticks % TicksPerMicrosecond), value.Offset);
+
+    private const long TicksPerMicrosecond = 10;
+
+    private static EntityTagHeaderValue ETagFor(DateTimeOffset updatedUtc) =>
+        // Ticks rather than a hash of the bytes: it is already unique per write, needs no
+        // second pass over the content, and re-uploading the same image still counts as a
+        // change - which is what the user just asked for.
+        new($"\"{updatedUtc.UtcTicks}\"");
+
+    private static IResult TooLarge() =>
+        Results.Problem(
+            title: "Image too large",
+            detail: $"Profile pictures must be under {AvatarRules.MaxBytes / 1024} KB.",
+            statusCode: StatusCodes.Status413PayloadTooLarge);
+
+    /// <summary>
+    /// Reads the body, giving up as soon as it exceeds <paramref name="maxBytes"/>.
+    /// </summary>
+    /// <returns>The bytes, or null if the body was longer than the cap.</returns>
+    /// <remarks>
+    /// Reading into a capped buffer rather than calling ToArrayAsync on the stream, because
+    /// the latter allocates whatever the caller sends. The endpoint is authenticated, so this
+    /// is not much of an attack surface, but "an authenticated user can make the server
+    /// allocate arbitrary memory" is still not a sentence worth being true.
+    /// </remarks>
+    private static async Task<byte[]?> ReadCappedAsync(
+        Stream body,
+        int maxBytes,
+        CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream();
+
+        var chunk = new byte[8192];
+        int read;
+
+        while ((read = await body.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            if (buffer.Length + read > maxBytes)
+            {
+                return null;
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
     }
 }

@@ -44,6 +44,24 @@ Replace the recovery codes. Returns the new set once.
 
 **Responses:** `200`
 
+### `GET /api/account/avatar`
+
+The profile picture. Supports If-None-Match; 404 when there is none.
+
+**Responses:** `200`
+
+### `PUT /api/account/avatar`
+
+Replace the profile picture. Body is the raw image bytes.
+
+**Responses:** `200`
+
+### `DELETE /api/account/avatar`
+
+Remove the profile picture, falling back to initials.
+
+**Responses:** `200`
+
 ### `POST /api/account/password`
 
 Change the password, re-checking the current one first.

@@ -27,4 +27,15 @@ public class TrackrUser : IdentityUser<Guid>
 
     /// <summary>When the account was created. Identity itself does not track this.</summary>
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// When the profile picture last changed, or null if there is none.
+    /// </summary>
+    /// <remarks>
+    /// On the user row rather than only on <see cref="Data.UserAvatar"/> so that "is there an
+    /// avatar, and is the client's copy stale" is answered by the row every request already
+    /// loads, instead of a join that would carry the image bytes along with it. The avatar
+    /// endpoints keep the two in step.
+    /// </remarks>
+    public DateTimeOffset? AvatarUpdatedUtc { get; set; }
 }

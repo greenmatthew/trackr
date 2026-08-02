@@ -95,7 +95,14 @@ public sealed record LoginResponse(
 /// <param name="UserId">The account's identifier.</param>
 /// <param name="Email">The account's email address, which is also its user name.</param>
 /// <param name="TwoFactorEnabled">Whether the account has an authenticator app enrolled.</param>
+/// <param name="AvatarUpdatedUtc">
+/// When the profile picture last changed, or null if the account has none. Not the picture
+/// itself: this is the marker a client compares against its cached copy to decide whether to
+/// re-fetch <c>GET /api/account/avatar</c>. Optional so that adding it did not break every
+/// existing positional construction of this record.
+/// </param>
 public sealed record MeResponse(
     Guid UserId,
     string Email,
-    bool TwoFactorEnabled);
+    bool TwoFactorEnabled,
+    DateTimeOffset? AvatarUpdatedUtc = null);

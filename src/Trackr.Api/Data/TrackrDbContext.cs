@@ -24,6 +24,8 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
 {
     public DbSet<Invite> Invites => Set<Invite>();
 
+    public DbSet<UserAvatar> UserAvatars => Set<UserAvatar>();
+
     /// <summary>
     /// The data-protection key ring, which is what encrypts the session cookie and every
     /// Identity token. It lives in Postgres rather than on disk - see Program.cs.
@@ -42,6 +44,24 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
             // substitutes its own value.
             .Property(u => u.Id)
             .ValueGeneratedNever();
+
+        builder.Entity<UserAvatar>(avatar =>
+        {
+            // The foreign key is the primary key, which is what makes it one-per-account
+            // without a unique index on top.
+            avatar.HasKey(a => a.UserId);
+
+            avatar.Property(a => a.ContentType).HasMaxLength(64).IsRequired();
+            avatar.Property(a => a.Content).IsRequired();
+
+            // Cascade, unlike Invite's Restrict: an avatar is the account's own data with no
+            // record-keeping value once the account is gone, whereas an invite records who
+            // vouched for whom.
+            avatar.HasOne(a => a.User)
+                .WithOne()
+                .HasForeignKey<UserAvatar>(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
         builder.Entity<Invite>(invite =>
         {

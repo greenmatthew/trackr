@@ -489,7 +489,13 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         }
 
-        return Results.Ok(new MeResponse(user.Id, user.Email!, user.TwoFactorEnabled));
+        // AvatarUpdatedUtc comes off the user row that was loaded anyway - no join, and no
+        // image bytes. It is the marker a client caches its copy of the picture against.
+        return Results.Ok(new MeResponse(
+            user.Id,
+            user.Email!,
+            user.TwoFactorEnabled,
+            user.AvatarUpdatedUtc));
     }
 
     private static async Task<IResult> ForgotPasswordAsync(
