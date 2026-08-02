@@ -9,7 +9,7 @@ namespace Trackr.Api.Identity;
 /// </summary>
 /// <remarks>
 /// The key is a <see cref="Guid"/> rather than Identity's default string because every
-/// table from milestone 3 onwards (food catalog, log entries, nutrient snapshots) gets
+/// table from milestone 6 onwards (food catalog, log entries, nutrient snapshots) gets
 /// an owner foreign key, and Postgres stores a uuid in 16 bytes against 37 for the text
 /// form. This choice is effectively permanent once the first migration is applied.
 /// </remarks>

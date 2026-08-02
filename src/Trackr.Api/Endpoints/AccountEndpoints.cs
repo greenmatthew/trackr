@@ -5,6 +5,7 @@ using Microsoft.Net.Http.Headers;
 using Trackr.Api.Data;
 using Trackr.Api.Identity;
 using Trackr.Api.Security;
+using Trackr.Api.Time;
 using Trackr.Shared.Auth;
 
 namespace Trackr.Api.Endpoints;
@@ -343,7 +344,10 @@ public static class AccountEndpoints
             });
         }
 
-        var now = ToStorablePrecision(DateTimeOffset.UtcNow);
+        // Truncated to what Postgres keeps, because this timestamp is a cache marker: the client
+        // stores what the upload returned and compares it against what /me reports afterwards.
+        // Timestamps has the full reasoning, and the log entities need the identical treatment.
+        var now = Timestamps.UtcNow();
 
         var avatar = await db.UserAvatars
             .FirstOrDefaultAsync(a => a.UserId == user.Id, cancellationToken);
@@ -397,25 +401,6 @@ public static class AccountEndpoints
         // caller wanted no picture and there is no picture.
         return Results.NoContent();
     }
-
-    /// <summary>
-    /// Rounds down to the precision Postgres will actually keep.
-    /// </summary>
-    /// <remarks>
-    /// A .NET tick is 100ns and a Postgres <c>timestamptz</c> holds microseconds, so a value
-    /// written straight from <c>UtcNow</c> comes back one digit shorter than it went in.
-    /// That matters because this timestamp is a cache marker: the client stores what the
-    /// upload returned and compares it against what <c>/me</c> reports afterwards. Without
-    /// this the two never match, every check looks like a change, and the phone re-downloads
-    /// the picture forever - the exact opposite of what the ETag is for.
-    /// <para>
-    /// Truncating rather than rounding, so the stored value is never ahead of the real one.
-    /// </para>
-    /// </remarks>
-    private static DateTimeOffset ToStorablePrecision(DateTimeOffset value) =>
-        new(value.Ticks - (value.Ticks % TicksPerMicrosecond), value.Offset);
-
-    private const long TicksPerMicrosecond = 10;
 
     private static EntityTagHeaderValue ETagFor(DateTimeOffset updatedUtc) =>
         // Ticks rather than a hash of the bytes: it is already unique per write, needs no

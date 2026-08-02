@@ -47,7 +47,7 @@ public sealed class ApiReferenceTests(PostgresFixture postgres) : IAsyncLifetime
     {
         var document = await GetDocumentAsync();
         var rendered = OpenApiMarkdown.Render(document);
-        var path = System.IO.Path.Combine(RepositoryRoot(), Page);
+        var path = RepositoryPath.Of(Page);
 
         if (Environment.GetEnvironmentVariable(UpdateVariable) == "1")
         {
@@ -76,28 +76,6 @@ public sealed class ApiReferenceTests(PostgresFixture postgres) : IAsyncLifetime
             ?? services.GetRequiredService<IOpenApiDocumentProvider>();
 
         return await provider.GetOpenApiDocumentAsync();
-    }
-
-    /// <summary>
-    /// Walks up to the directory holding Trackr.slnx, rather than counting levels out of bin/,
-    /// whose depth depends on the target framework and configuration.
-    /// </summary>
-    private static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (File.Exists(System.IO.Path.Combine(directory.FullName, "Trackr.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException(
-            $"No Trackr.slnx found above {AppContext.BaseDirectory}.");
     }
 
     /// <summary>Line-ending and trailing-whitespace agnostic, so a checkout on Windows passes.</summary>

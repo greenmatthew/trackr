@@ -154,6 +154,69 @@ Exchange a refresh token for a new access token.
 
 **Responses:** `200`
 
+## Foods
+
+### `GET /api/foods`
+
+Catalog items visible to the caller: their own, plus everything shared.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `search` | query | no | string |
+| `visibility` | query | no | [`FoodVisibility`](#foodvisibility) |
+
+**Responses:** `200`
+
+### `POST /api/foods`
+
+Add an item to the catalog. Personal unless the request says otherwise.
+
+**Request body:** `application/json` → [`SaveFoodItemRequest`](#savefooditemrequest)
+
+**Responses:** `200`
+
+### `GET /api/foods/{id}`
+
+One catalog item, with its full nutrient map.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Responses:** `200`
+
+### `PUT /api/foods/{id}`
+
+Replace an item, including its whole nutrient map.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Request body:** `application/json` → [`SaveFoodItemRequest`](#savefooditemrequest)
+
+**Responses:** `200`
+
+### `DELETE /api/foods/{id}`
+
+Delete a personal item. Already-logged entries keep their snapshots.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Responses:** `200`
+
+### `POST /api/foods/{id}/share`
+
+Promote a personal item to the shared catalog. One-way.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Responses:** `200`
+
 ## Health
 
 ### `GET /api/health`
@@ -165,6 +228,34 @@ Full health report, including database connectivity.
 ### `GET /api/health/live`
 
 Liveness probe. Always 200 while the process is running.
+
+**Responses:** `200`
+
+## Images
+
+### `POST /api/images`
+
+Upload a meal photo. Body is the raw image bytes; it starts unattached.
+
+**Responses:** `200`
+
+### `GET /api/images/{id}`
+
+The photo's bytes. Supports If-None-Match.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Responses:** `200`
+
+### `DELETE /api/images/{id}`
+
+Remove a photo.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
 
 **Responses:** `200`
 
@@ -194,6 +285,67 @@ Revoke an unused invite.
 
 **Responses:** `200`
 
+## Log
+
+### `GET /api/log`
+
+Log entries for a range of local days. Defaults to today.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `from` | query | no | string (date) |
+| `to` | query | no | string (date) |
+
+**Responses:** `200`
+
+### `POST /api/log`
+
+Record a meal: the entry, its items and any photos, in one request.
+
+**Request body:** `application/json` → [`SaveLogEntryRequest`](#savelogentryrequest)
+
+**Responses:** `200`
+
+### `GET /api/log/{id}`
+
+One log entry, with its items and photo metadata.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Responses:** `200`
+
+### `PUT /api/log/{id}`
+
+Replace an entry, its items and its photo set.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Request body:** `application/json` → [`SaveLogEntryRequest`](#savelogentryrequest)
+
+**Responses:** `200`
+
+### `DELETE /api/log/{id}`
+
+Delete an entry, its items and its photos.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Responses:** `200`
+
+## Nutrients
+
+### `GET /api/nutrients`
+
+Every nutrient the server can record, in nutrition-label order.
+
+**Responses:** `200`
+
 ## Schemas
 
 The request and response shapes above. These are the DTOs in `Trackr.Shared`, which the web app and the Android app reference directly rather than generating a client from this document.
@@ -217,6 +369,14 @@ The request and response shapes above. These are the DTOs in `Trackr.Shared`, wh
 | Property | Type | Required |
 | --- | --- | --- |
 | `password` | string | yes |
+
+### `FoodSource`
+
+No properties.
+
+### `FoodVisibility`
+
+No properties.
 
 ### `ForgotPasswordRequest`
 
@@ -259,6 +419,48 @@ The request and response shapes above. These are the DTOs in `Trackr.Shared`, wh
 | `email` | string | yes |
 | `code` | string | yes |
 | `newPassword` | string | yes |
+
+### `SaveFoodItemRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `name` | string | yes |
+| `brand` | string, nullable | no |
+| `barcode` | string, nullable | no |
+| `servingSize` | number or string (double) | no |
+| `servingUnit` | string | yes |
+| `source` | [`FoodSource`](#foodsource) | no |
+| `visibility` | [`FoodVisibility`](#foodvisibility) | no |
+| `energyKcal` | number or string (double) | no |
+| `fatG` | number or string (double) | no |
+| `carbohydrateG` | number or string (double) | no |
+| `proteinG` | number or string (double) | no |
+| `nutrients` | object | no |
+
+### `SaveLogEntryRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `loggedUtc` | string (date-time), nullable | no |
+| `note` | string, nullable | no |
+| `items` | array of [`SaveLogItemRequest`](#savelogitemrequest) | no |
+| `imageIds` | array of string (uuid) | no |
+
+### `SaveLogItemRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `foodItemId` | string (uuid), nullable | no |
+| `name` | string | yes |
+| `brand` | string, nullable | no |
+| `quantity` | number or string (double) | no |
+| `servingSize` | number or string (double), nullable | no |
+| `servingUnit` | string, nullable | no |
+| `energyKcal` | number or string (double) | no |
+| `fatG` | number or string (double) | no |
+| `carbohydrateG` | number or string (double) | no |
+| `proteinG` | number or string (double) | no |
+| `nutrients` | object | no |
 
 ### `TokenRequest`
 

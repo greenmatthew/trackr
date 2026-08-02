@@ -55,10 +55,17 @@ public sealed class TrackrApiFactory(string connectionString, IDictionary<string
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<TrackrDbContext>();
 
+        // Children first, though CASCADE would reach them anyway - the explicit list is what makes
+        // a global food item (which has no owner to cascade from) go too.
+        //
         // Not DataProtectionKeys: clearing the key ring mid-run would churn the keys that
         // encrypt cookies issued by other tests.
+        //
+        // Not Nutrients either, and for a different reason: that table is seeded once when the
+        // factory boots the host, so truncating it would leave every test after the first looking
+        // at an empty catalog and every nutrient key failing validation.
         await db.Database.ExecuteSqlRawAsync(
-            """TRUNCATE "Invites", "AspNetUserTokens", "AspNetUserLogins", "AspNetUserClaims", "AspNetUserRoles", "AspNetUsers" RESTART IDENTITY CASCADE;""");
+            """TRUNCATE "MealImages", "LogItemNutrients", "LogItems", "LogEntries", "FoodItemNutrients", "FoodItems", "Invites", "AspNetUserTokens", "AspNetUserLogins", "AspNetUserClaims", "AspNetUserRoles", "AspNetUsers" RESTART IDENTITY CASCADE;""");
     }
 
     /// <summary>

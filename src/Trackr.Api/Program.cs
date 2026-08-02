@@ -8,6 +8,7 @@ using Trackr.Api.Data;
 using Trackr.Api.Endpoints;
 using Trackr.Api.Identity;
 using Trackr.Api.Security;
+using Trackr.Api.Time;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -195,6 +196,14 @@ builder.Services.AddAuthorizationBuilder()
         .RequireAuthenticatedUser()
         .Build());
 
+// The nutrient set in memory, for the write endpoints that validate a key on every amount.
+// Safe as a singleton because no endpoint ever writes the Nutrients table - see NutrientCatalog.
+builder.Services.AddSingleton<NutrientCatalog>();
+
+// What "today" means. One helper, so CLAUDE.md section 9.13's per-user time zone is one change
+// rather than a rewrite of every aggregate - see DayBoundary.
+builder.Services.AddSingleton<DayBoundary>();
+
 builder.Services.AddTrackrRateLimiting(builder.Configuration);
 
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
@@ -219,6 +228,10 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 
 await app.MigrateDatabaseAsync();
+
+// Straight after the migration, and before anything serves: every write endpoint validates
+// nutrient keys against this set, and a request cannot be answered correctly without it.
+await app.SeedNutrientsAsync();
 
 app.UseForwardedHeaders();
 
@@ -259,6 +272,10 @@ app.MapHealthChecks("/api/health/ready").AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapInviteEndpoints();
+app.MapNutrientEndpoints();
+app.MapFoodEndpoints();
+app.MapImageEndpoints();
+app.MapLogEndpoints();
 
 #if DEBUG
 if (app.Environment.IsDevelopment())

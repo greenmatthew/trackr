@@ -175,18 +175,7 @@ public sealed class AvatarTests(PostgresFixture postgres) : AuthTestBase(postgre
         using var owner = await RegisterOwnerAsync();
         await UploadAsync(owner, TinyPng, "image/png");
 
-        var invite = await CreateInviteAsync(owner);
-
-        using var member = Factory.NewClient();
-        using var registered = await member.PostAsJsonAsync(
-            "/api/auth/register",
-            new RegisterRequest
-            {
-                Email = "member@example.test",
-                Password = OwnerPassword,
-                InviteToken = invite,
-            });
-        registered.EnsureSuccessStatusCode();
+        using var member = await RegisterMemberAsync(owner, "member@example.test");
 
         using var response = await member.GetAsync("/api/account/avatar");
 

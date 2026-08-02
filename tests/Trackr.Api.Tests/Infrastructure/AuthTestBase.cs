@@ -90,6 +90,32 @@ public abstract class AuthTestBase : IAsyncLifetime
         return codes!.RecoveryCodes;
     }
 
+    /// <summary>
+    /// Mints an invite from an existing account and redeems it, returning a client holding the new
+    /// account's session.
+    /// </summary>
+    /// <remarks>
+    /// Nearly every test of the shared catalog needs a second account, because "shared" and
+    /// "invisible to somebody else" are both statements about two of them.
+    /// </remarks>
+    protected async Task<HttpClient> RegisterMemberAsync(
+        HttpClient ownerClient,
+        string email,
+        string password = OwnerPassword)
+    {
+        var invite = await CreateInviteAsync(ownerClient);
+
+        var client = Factory.NewClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/auth/register",
+            new RegisterRequest { Email = email, Password = password, InviteToken = invite });
+
+        response.EnsureSuccessStatusCode();
+
+        return client;
+    }
+
     /// <summary>Mints an invite using an already signed-in client, returning the raw token.</summary>
     protected static async Task<string> CreateInviteAsync(HttpClient ownerClient)
     {

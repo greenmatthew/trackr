@@ -21,72 +21,113 @@ These matter more than the list itself, because the list will grow.
 - **Log entries store a snapshot.** The nutrients recorded against a logged item are frozen
   at the time of logging, so correcting a catalog item later never rewrites your history.
 
-## Always present
+## The nutrients
 
-Calories and the three macros are first-class columns rather than rows in the extensible
-store — they drive every dashboard and all goal maths, and should not need a join.
+Listed in **nutrition-label order**, which is the order everything renders in. `Order` values are
+spaced by 10 so that adding a nutrient later slots between two numbers instead of renumbering the
+set — and because the label interleaves the always-present four with their own breakdowns, the
+sections below are deliberately not contiguous in that ordering.
 
-| Nutrient | Unit |
-| --- | --- |
-| Energy | kcal (kJ optional) |
-| Protein | g |
-| Total carbohydrate | g |
-| Total fat | g |
+`Key` is what the API uses: it is the key in every nutrient map a request or a response carries.
 
-## Captured when available
+### Always present
+
+Energy and the three macros are first-class columns rather than rows in the extensible store —
+they drive every dashboard and all goal maths, and should not need a join.
+
+| Key | Nutrient | Unit | Order |
+| --- | --- | --- | --- |
+| `energy_kcal` | Energy | kcal | 10 |
+| `fat` | Total fat | g | 20 |
+| `carbohydrate` | Total carbohydrate | g | 90 |
+| `protein` | Protein | g | 130 |
+
+Energy is stored in kilocalories only. Showing kJ instead is a display conversion (×4.184), not a
+second stored value.
 
 ### Fat breakdown
 
-| Nutrient | Unit |
-| --- | --- |
-| Saturated fat | g |
-| Trans fat | g |
-| Monounsaturated fat | g |
-| Polyunsaturated fat | g |
-
-### Carbohydrate breakdown
-
-| Nutrient | Unit |
-| --- | --- |
-| Dietary fibre | g |
-| Total sugars | g |
-| Added sugars | g |
+| Key | Nutrient | Unit | Order |
+| --- | --- | --- | --- |
+| `saturated_fat` | Saturated fat | g | 30 |
+| `trans_fat` | Trans fat | g | 40 |
+| `monounsaturated_fat` | Monounsaturated fat | g | 50 |
+| `polyunsaturated_fat` | Polyunsaturated fat | g | 60 |
 
 ### Sterols and electrolytes
 
-| Nutrient | Unit |
-| --- | --- |
-| Cholesterol | mg |
-| Sodium | mg |
-| Potassium | mg |
+| Key | Nutrient | Unit | Order |
+| --- | --- | --- | --- |
+| `cholesterol` | Cholesterol | mg | 70 |
+| `sodium` | Sodium | mg | 80 |
+
+### Carbohydrate breakdown
+
+| Key | Nutrient | Unit | Order |
+| --- | --- | --- | --- |
+| `fibre` | Dietary fibre | g | 100 |
+| `sugars` | Total sugars | g | 110 |
+| `added_sugars` | Added sugars | g | 120 |
+
+Note the British spelling in `fibre`. Open Food Facts uses `fiber` and `vitamin-pp`; those are
+OFF's keys, and translating them into these is the barcode milestone's job.
 
 ### Vitamins
 
-| Nutrient | Unit |
-| --- | --- |
-| Vitamin A | µg |
-| Vitamin C | mg |
-| Vitamin D | µg |
-| Vitamin E | mg |
-| Vitamin K | µg |
-| B1 (thiamin) | mg |
-| B2 (riboflavin) | mg |
-| B3 (niacin) | mg |
-| B6 | mg |
-| B9 (folate) | µg |
-| B12 | µg |
+| Key | Nutrient | Unit | Order |
+| --- | --- | --- | --- |
+| `vitamin_d` | Vitamin D | µg | 140 |
+| `vitamin_c` | Vitamin C | mg | 150 |
+| `vitamin_a` | Vitamin A | µg | 160 |
+| `vitamin_e` | Vitamin E | mg | 170 |
+| `vitamin_k` | Vitamin K | µg | 180 |
+| `vitamin_b1` | B1 (thiamin) | mg | 190 |
+| `vitamin_b2` | B2 (riboflavin) | mg | 200 |
+| `vitamin_b3` | B3 (niacin) | mg | 210 |
+| `vitamin_b6` | B6 | mg | 220 |
+| `vitamin_b9` | B9 (folate) | µg | 230 |
+| `vitamin_b12` | B12 | µg | 240 |
+
+The B vitamins are keyed by number rather than by name so that they sort and read together.
 
 ### Minerals
 
-| Nutrient | Unit |
-| --- | --- |
-| Calcium | mg |
-| Iron | mg |
-| Magnesium | mg |
-| Zinc | mg |
+| Key | Nutrient | Unit | Order |
+| --- | --- | --- | --- |
+| `calcium` | Calcium | mg | 250 |
+| `iron` | Iron | mg | 260 |
+| `potassium` | Potassium | mg | 270 |
+| `magnesium` | Magnesium | mg | 280 |
+| `zinc` | Zinc | mg | 290 |
 
 Others are added as sources turn out to provide them — that is the point of keeping the set
 data-driven.
+
+## How this maps to the database
+
+The tables above are the `Nutrients` reference table, one row each:
+`Nutrients(Key, DisplayName, Unit, Group, SortOrder, IsCore)`. Each section heading is the `Group`;
+the `Order` column is `SortOrder`. Rows are inserted and updated when the server starts and are
+never deleted, so amounts recorded against a nutrient stay readable even if a later version stops
+listing it.
+
+Amounts live in two join tables — `FoodItemNutrients` for catalog items and `LogItemNutrients` for
+logged ones — each holding a key and an amount. **Amounts are always in the unit shown above**, and
+the unit is a property of the nutrient rather than of the measurement: two sodium values recorded
+in different units would make a total silently wrong.
+
+The four always-present nutrients are the exception in one specific way. They are catalog rows
+here *and* columns on the food item and the log item, but **never rows in the amount tables** — a
+database check constraint forbids it. So the nutrient map in an API response contains exactly the
+other 25: a client that summed the map and then added the four typed fields would otherwise count
+them twice.
+
+One more difference between the two amount tables: a catalog item's values are **per serving**,
+while a logged item's are **totals for the quantity eaten**. The multiplication happens once, when
+the entry is saved.
+
+`GET /api/nutrients` returns this whole set, ordered, and is what a client caches to render display
+names and units — see [API Reference](API-Reference).
 
 ## How the display should behave
 
