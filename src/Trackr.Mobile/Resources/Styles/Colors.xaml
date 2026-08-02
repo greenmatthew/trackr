@@ -1,31 +1,64 @@
-﻿<?xml version="1.0" encoding="UTF-8" ?>
-<ResourceDictionary 
+<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
-    <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
+    <!-- Trackr palette. Source artwork: media/branding/trackr-palette.png.
+         Note: For Android please see also Platforms\Android\Resources\values\colors.xml
 
-    <Color x:Key="Primary">#512BD4</Color>
-    <Color x:Key="PrimaryDark">#ac99ea</Color>
-    <Color x:Key="PrimaryDarkText">#242424</Color>
-    <Color x:Key="Secondary">#DFD8F7</Color>
-    <Color x:Key="SecondaryDarkText">#9880e5</Color>
-    <Color x:Key="Tertiary">#2B0B98</Color>
+         The brand palette was authored as a DARK theme - one background (#122E42) and one
+         text colour (#F2FBFD). The light theme is derived: background and text swap, and
+         each accent is darkened until it clears 4.5:1 on the light background.
+
+         Two rules this file exists to enforce:
+
+         1. Primary, Secondary, Tertiary, Success and Warning are all 1.8-2.4:1 against
+            #F2FBFD. Use them as FILLS behind PrimaryDarkText, never as light text and
+            never as text on white.
+         2. A <Color> resource cannot be theme-aware - only an AppThemeBinding on a
+            property can. So each brand colour ships as a triple: the fill, an *OnLight
+            variant for marks and text on light surfaces, and an *OnDark / PrimaryDark
+            variant for dark ones. Bind the pair; do not reach for the fill directly. -->
+
+    <!-- Brand -->
+    <Color x:Key="Primary">#1DD2E3</Color>          <!-- fill; pair with PrimaryDarkText -->
+    <Color x:Key="PrimaryOnLight">#0E7A88</Color>   <!-- 4.8:1 on #F2FBFD, 5.1:1 on white -->
+    <Color x:Key="PrimaryDark">#7CEEF5</Color>      <!-- 10.3:1 on #122E42 -->
+    <Color x:Key="PrimaryDarkText">#122E42</Color>  <!-- text/icons ON a brand fill -->
+
+    <Color x:Key="Secondary">#17B8A0</Color>
+    <Color x:Key="SecondaryOnLight">#0D7A6A</Color>  <!-- 5.0:1 on #F2FBFD -->
+    <Color x:Key="SecondaryDarkText">#F2FBFD</Color> <!-- Shell foreground in dark theme -->
+
+    <Color x:Key="Tertiary">#FF7A59</Color>          <!-- palette "Accent" -->
+    <Color x:Key="TertiaryOnLight">#C2410C</Color>   <!-- 4.9:1 on #F2FBFD -->
+    <Color x:Key="Highlight">#7CEEF5</Color>
+
+    <!-- Semantic. The *OnLight / *OnDark variants are the contrast-corrected text
+         siblings; the bare key stays the palette value for fills and borders. -->
+    <Color x:Key="Success">#22C55E</Color>
+    <Color x:Key="SuccessOnLight">#15803D</Color>
+    <Color x:Key="Warning">#F5A524</Color>
+    <Color x:Key="WarningOnLight">#A16207</Color>
+    <Color x:Key="Error">#E5484D</Color>
+    <Color x:Key="ErrorOnLight">#CC2F35</Color>     <!-- 5.0:1 on #F2FBFD -->
+    <Color x:Key="ErrorOnDark">#F26E72</Color>      <!-- 4.9:1 on #122E42; the bare
+                                                         #E5484D is only 3.6:1 there -->
 
     <Color x:Key="White">White</Color>
     <Color x:Key="Black">Black</Color>
-    <Color x:Key="Magenta">#D600AA</Color>
-    <Color x:Key="MidnightBlue">#190649</Color>
-    <Color x:Key="OffBlack">#1f1f1f</Color>
 
-    <Color x:Key="Gray100">#E1E1E1</Color>
-    <Color x:Key="Gray200">#C8C8C8</Color>
-    <Color x:Key="Gray300">#ACACAC</Color>
-    <Color x:Key="Gray400">#919191</Color>
-    <Color x:Key="Gray500">#6E6E6E</Color>
-    <Color x:Key="Gray600">#404040</Color>
-    <Color x:Key="Gray900">#212121</Color>
-    <Color x:Key="Gray950">#141414</Color>
+    <!-- Neutrals, tinted toward the brand navy so surfaces cohere rather than reading
+         as grey pasted onto blue. Gray600 is the palette's Muted; Gray950 its
+         Background; Gray900 the raised surface that sits on top of it. -->
+    <Color x:Key="Gray100">#E4EEF2</Color>
+    <Color x:Key="Gray200">#DCE9EE</Color>
+    <Color x:Key="Gray300">#C3D6DE</Color>
+    <Color x:Key="Gray400">#9FBAC6</Color>
+    <Color x:Key="Gray500">#7E9CAE</Color>
+    <Color x:Key="Gray600">#5B7D91</Color>
+    <Color x:Key="Gray900">#1B3D52</Color>
+    <Color x:Key="Gray950">#122E42</Color>
 
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>

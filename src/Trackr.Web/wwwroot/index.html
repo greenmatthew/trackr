@@ -5,15 +5,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trackr</title>
-    <meta name="theme-color" content="#03173d" />
+    <!-- Matches --bg in css/app.css for each scheme, so the browser chrome does
+         not flash the wrong colour before the app paints. -->
+    <meta name="theme-color" content="#F2FBFD" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#122E42" media="(prefers-color-scheme: dark)" />
     <base href="/" />
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
     <!-- If you add any scoped CSS files, uncomment the following to load them
     <link href="Trackr.Web.styles.css" rel="stylesheet" /> -->
     <link href="manifest.webmanifest" rel="manifest" />
-    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png" />
-    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
     <script type="importmap"></script>
 </head>
 

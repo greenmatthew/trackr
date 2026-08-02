@@ -67,7 +67,7 @@
             <Label
                 Text="{Binding Error}"
                 IsVisible="{Binding Error, Converter={StaticResource IsStringNotNullOrEmptyConverter}}"
-                TextColor="{StaticResource Error}" />
+                TextColor="{AppThemeBinding Light={StaticResource ErrorOnLight}, Dark={StaticResource ErrorOnDark}}" />
 
             <Button
                 Text="Sign in"
@@ -87,14 +87,14 @@
                 Text="No account yet? Create one"
                 Command="{Binding GoToRegisterCommand}"
                 BackgroundColor="Transparent"
-                TextColor="{StaticResource Primary}"
+                TextColor="{AppThemeBinding Light={StaticResource PrimaryOnLight}, Dark={StaticResource PrimaryDark}}"
                 FontSize="13" />
 
             <Button
                 Text="Use a different server"
                 Command="{Binding ChangeServerCommand}"
                 BackgroundColor="Transparent"
-                TextColor="{StaticResource Primary}"
+                TextColor="{AppThemeBinding Light={StaticResource PrimaryOnLight}, Dark={StaticResource PrimaryDark}}"
                 FontSize="13" />
 
         </VerticalStackLayout>

@@ -1,18 +1,96 @@
+/* ---------------------------------------------------------------------------
+   Trackr design tokens.
+
+   The brand palette (media/branding/trackr-palette.png) was authored as a DARK
+   theme: one background (#122E42) and one text colour (#F2FBFD). The light
+   theme below is derived from it - background and text swap, and every accent
+   is darkened until it clears 4.5:1 against the light background, because the
+   brand cyan/teal/coral are all far too light to sit on white as text.
+
+   Two rules worth knowing before editing:
+
+   1. Primary, Secondary, Accent, Success and Warning are all 1.8-2.4:1 against
+      #F2FBFD. Anything FILLED with them takes dark text (--on-brand), never
+      white. That is what the "vs text" ratios on the palette image warn about.
+   2. Muted (#5B7D91) and Error (#E5484D) are only ~3.2:1 and ~3.6:1 on the dark
+      background, so they fail AA for body text. They stay as fill/border values;
+      the --*-text tokens carry lightened siblings for actual text.
+   --------------------------------------------------------------------------- */
+
+:root {
+    /* Lets the browser theme form controls, scrollbars and the like to match. */
+    color-scheme: light dark;
+
+    /* Brand marks - identical in both themes; these are fills, not text. */
+    --brand-primary: #1DD2E3;
+    --brand-secondary: #17B8A0;
+    --brand-highlight: #7CEEF5;
+    --brand-accent: #FF7A59;
+    /* Foreground for anything filled with a brand or semantic colour. */
+    --on-brand: #122E42;
+
+    /* Surfaces and text - light theme. */
+    --bg: #F2FBFD;
+    --surface: #FFFFFF;
+    --surface-raised: #F2FBFD;
+    --text: #122E42;
+    --text-muted: #547385;
+    --border-subtle: #DCE9EE;
+    --border: #C3D6DE;
+    --border-strong: #9FBAC6;
+
+    /* Semantic fills and borders - the palette values, unmodified. */
+    --success: #22C55E;
+    --warning: #F5A524;
+    --error: #E5484D;
+
+    /* Semantic text - contrast-corrected per theme. */
+    --link: #0E7A88;
+    --success-text: #15803D;
+    --warning-text: #A16207;
+    --error-text: #CC2F35;
+    --accent-text: #C2410C;
+
+    /* Fixed dark red for white-on-red error surfaces. Deliberately NOT themed:
+       white text needs a dark fill in both modes, so this one does not flip. */
+    --error-solid: #CC2F35;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #122E42;
+        --surface: #1B3D52;
+        --surface-raised: #24485E;
+        --text: #F2FBFD;
+        --text-muted: #7E9CAE;
+        --border-subtle: #1F4358;
+        --border: #2C5268;
+        --border-strong: #416B80;
+
+        --link: #1DD2E3;
+        --success-text: #22C55E;
+        --warning-text: #F5A524;
+        --error-text: #F26E72;
+        --accent-text: #FF7A59;
+    }
+}
+
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+    outline: 1px solid var(--success);
 }
 
 .invalid {
-    outline: 1px solid red;
+    outline: 1px solid var(--error);
 }
 
 .validation-message {
-    color: red;
+    color: var(--error-text);
 }
 
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;
+    color: #14181f;
     bottom: 0;
     box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
     box-sizing: border-box;
@@ -32,9 +110,9 @@
     }
 
 .blazor-error-boundary {
-    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, var(--error-solid);
     padding: 1rem 1rem 1rem 3.7rem;
-    color: white;
+    color: #fff;
 }
 
     .blazor-error-boundary::after {
@@ -52,14 +130,14 @@
 
     .loading-progress circle {
         fill: none;
-        stroke: #e0e0e0;
+        stroke: var(--border-subtle);
         stroke-width: 0.6rem;
         transform-origin: 50% 50%;
         transform: rotate(-90deg);
     }
 
         .loading-progress circle:last-child {
-            stroke: #1b6ec2;
+            stroke: var(--brand-primary);
             stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
             transition: stroke-dasharray 0.05s ease-in-out;
         }
@@ -76,7 +154,7 @@
     }
 
 code {
-    color: #c02d76;
+    color: var(--accent-text);
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
@@ -93,8 +171,12 @@ body {
     margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     line-height: 1.5;
-    color: #14181f;
-    background: #f6f7f9;
+    color: var(--text);
+    background: var(--bg);
+}
+
+a {
+    color: var(--link);
 }
 
 .probe {
@@ -110,20 +192,20 @@ body {
 
 .probe .subtitle {
     margin: 0.25rem 0 1.5rem;
-    color: #5b6472;
+    color: var(--text-muted);
 }
 
 .probe .card {
-    border: 1px solid #d8dde5;
+    border: 1px solid var(--border);
     border-left-width: 4px;
     border-radius: 6px;
-    background: #fff;
+    background: var(--surface);
     padding: 1rem 1.25rem;
     margin-bottom: 1.25rem;
 }
 
-.probe .card--good { border-left-color: #2e7d4f; }
-.probe .card--bad  { border-left-color: #b32121; }
+.probe .card--good { border-left-color: var(--success-text); }
+.probe .card--bad  { border-left-color: var(--error-text); }
 
 .probe .card h2 {
     margin: 0 0 0.75rem;
@@ -137,7 +219,7 @@ body {
     margin: 0;
 }
 
-.probe dt { color: #5b6472; }
+.probe dt { color: var(--text-muted); }
 .probe dd { margin: 0; }
 
 .probe .detail,
@@ -145,7 +227,7 @@ body {
     margin-top: 0.4rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.8rem;
-    color: #b32121;
+    color: var(--error-text);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
@@ -153,22 +235,15 @@ body {
 .probe button {
     font: inherit;
     padding: 0.45rem 1rem;
-    border: 1px solid #c3cad4;
+    border: 1px solid var(--border);
     border-radius: 6px;
-    background: #fff;
+    background: var(--surface);
     cursor: pointer;
 }
 
 .probe button:disabled {
     opacity: 0.55;
     cursor: default;
-}
-
-@media (prefers-color-scheme: dark) {
-    body { color: #e6e9ee; background: #14181f; }
-    .probe .subtitle, .probe dt { color: #98a2b3; }
-    .probe .card { background: #1c212b; border-color: #2c3340; }
-    .probe button { background: #1c212b; color: inherit; border-color: #3a4250; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -183,18 +258,18 @@ body {
     align-items: center;
     gap: 1rem;
     padding: 0.6rem 1.25rem;
-    border-bottom: 1px solid #e3e7ec;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .app-bar__brand {
     font-weight: 600;
     text-decoration: none;
-    color: inherit;
+    color: var(--link);
     margin-right: auto;
 }
 
 .app-bar__user {
-    color: #5b6472;
+    color: var(--text-muted);
     font-size: 0.85rem;
     max-width: 16rem;
     overflow: hidden;
@@ -219,7 +294,7 @@ body {
 
 .auth-checking {
     padding: 2rem 1.25rem;
-    color: #5b6472;
+    color: var(--text-muted);
 }
 
 .auth-card,
@@ -240,7 +315,7 @@ body {
 }
 
 .settings-section {
-    border: 1px solid #e3e7ec;
+    border: 1px solid var(--border-subtle);
     border-radius: 10px;
     padding: 1rem 1.25rem;
     margin-bottom: 1.5rem;
@@ -271,31 +346,63 @@ input[type="number"] {
     width: 100%;
     box-sizing: border-box;
     padding: 0.45rem 0.6rem;
-    border: 1px solid #c3cad4;
+    border: 1px solid var(--border);
     border-radius: 6px;
-    background: #fff;
+    background: var(--surface);
     color: inherit;
+}
+
+input[type="text"]:focus-visible,
+input[type="email"]:focus-visible,
+input[type="password"]:focus-visible,
+input[type="number"]:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 1px;
 }
 
 .field-hint {
     margin: 0.3rem 0 0;
     font-size: 0.8rem;
-    color: #5b6472;
+    color: var(--text-muted);
 }
 
 button {
     font: inherit;
     margin-top: 1rem;
     padding: 0.45rem 1rem;
-    border: 1px solid #c3cad4;
+    border: 1px solid var(--border);
     border-radius: 6px;
-    background: #fff;
+    background: var(--surface);
     color: inherit;
     cursor: pointer;
 }
 
+/* The primary action on every form is its submit button, so brand it off the
+   element rather than inventing a class no markup carries. Brand cyan is only
+   ~1.8:1 against the light text colour, so the label must be dark - see
+   --on-brand at the top. */
+button[type="submit"] {
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+    color: var(--on-brand);
+    font-weight: 500;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+}
+
 button:disabled { opacity: 0.55; cursor: default; }
-button.danger { border-color: #d99; color: #b32121; }
+
+/* Must follow the submit rule - equal specificity, so order decides. Destructive
+   actions stay outlined rather than filled, even when they are the submit. */
+button.danger {
+    background: var(--surface);
+    border-color: var(--error);
+    color: var(--error-text);
+    font-weight: 400;
+}
 
 button.linklike {
     border: 0;
@@ -304,21 +411,24 @@ button.linklike {
     margin-left: 0.75rem;
     text-decoration: underline;
     cursor: pointer;
+    color: var(--link);
 }
 
 .notice {
     margin: 1rem 0;
     padding: 0.75rem 1rem;
-    border: 1px solid #e3e7ec;
+    border: 1px solid var(--border-subtle);
     border-left-width: 4px;
     border-radius: 6px;
 }
 
 .notice p { margin: 0.25rem 0; }
-.notice--good { border-left-color: #2f8a4c; }
-.notice--warn { border-left-color: #c98a17; }
-.notice--bad  { border-left-color: #b32121; }
+.notice--good { border-left-color: var(--success-text); }
+.notice--warn { border-left-color: var(--warning-text); }
+.notice--bad  { border-left-color: var(--error-text); }
 
+/* Stays literally white in both themes: a QR code rendered on a dark surface
+   will not scan, and this is the 2FA enrolment code. */
 .qr {
     display: block;
     margin: 1rem 0;
@@ -349,7 +459,7 @@ button.linklike {
 .invites td {
     text-align: left;
     padding: 0.4rem 0.5rem;
-    border-bottom: 1px solid #e3e7ec;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .visually-hidden {
@@ -359,23 +469,4 @@ button.linklike {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
-}
-
-@media (prefers-color-scheme: dark) {
-    .app-bar { border-bottom-color: #2c3340; }
-    .app-bar__user, .field-hint, .auth-checking { color: #98a2b3; }
-    .settings-section, .notice { border-color: #2c3340; }
-    .invites th, .invites td { border-bottom-color: #2c3340; }
-
-    input[type="text"],
-    input[type="email"],
-    input[type="password"],
-    input[type="number"],
-    button {
-        background: #1c212b;
-        color: inherit;
-        border-color: #3a4250;
-    }
-
-    button.linklike { background: none; }
 }

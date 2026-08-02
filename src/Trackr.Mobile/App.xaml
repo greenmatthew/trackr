@@ -17,11 +17,6 @@
             <toolkit:InvertedBoolConverter x:Key="InvertedBoolConverter" />
             <toolkit:IsStringNotNullOrEmptyConverter x:Key="IsStringNotNullOrEmptyConverter" />
 
-            <!-- The template's palette has no error colour. Milestone 4 settles theming
-                 properly (CLAUDE.md section 9); until then this is the one addition needed
-                 to show a validation message. -->
-            <Color x:Key="Error">#B3261E</Color>
-
         </ResourceDictionary>
     </Application.Resources>
 </Application>

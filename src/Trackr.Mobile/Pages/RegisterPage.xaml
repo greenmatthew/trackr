@@ -67,7 +67,7 @@
             <Label
                 Text="{Binding Error}"
                 IsVisible="{Binding Error, Converter={StaticResource IsStringNotNullOrEmptyConverter}}"
-                TextColor="{StaticResource Error}" />
+                TextColor="{AppThemeBinding Light={StaticResource ErrorOnLight}, Dark={StaticResource ErrorOnDark}}" />
 
             <Button
                 Text="Create account"
@@ -84,7 +84,7 @@
                 Text="Already have an account? Sign in"
                 Command="{Binding BackToLoginCommand}"
                 BackgroundColor="Transparent"
-                TextColor="{StaticResource Primary}"
+                TextColor="{AppThemeBinding Light={StaticResource PrimaryOnLight}, Dark={StaticResource PrimaryDark}}"
                 FontSize="13" />
 
         </VerticalStackLayout>
