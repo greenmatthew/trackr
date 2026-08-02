@@ -1,5 +1,6 @@
 using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Platform;
+using Trackr.Mobile.Core.Storage;
 using Trackr.Shared.Auth;
 
 namespace Trackr.Mobile.Core.Auth;
@@ -16,7 +17,8 @@ namespace Trackr.Mobile.Core.Auth;
 public sealed class AuthSession(
     ITrackrApiClient api,
     ITokenStore tokenStore,
-    IServerSettings serverSettings)
+    IServerSettings serverSettings,
+    AccountCache cache)
 {
     /// <summary>The signed-in account, or null. Populated by <see cref="RestoreAsync"/>.</summary>
     public MeResponse? CurrentUser { get; private set; }
@@ -35,6 +37,19 @@ public sealed class AuthSession(
     /// been revoked by a password change on another device, and a locally valid expiry date
     /// would say nothing about that.
     /// </summary>
+    /// <remarks>
+    /// When the server cannot be reached at all, the last account it told us about is used
+    /// instead, so a phone with no signal opens on the app rather than on the login screen.
+    /// That is a weaker answer than asking, and it is scoped to exactly the case where asking
+    /// is impossible: a server that answers and says no still signs the user out.
+    /// <para>
+    /// Safe because of one invariant - the cached account is only ever written by a
+    /// successful <c>/me</c>, and sign-out clears it - so the cache always describes the
+    /// owner of the stored token rather than some previous user of this device. Nothing else
+    /// may write it, which is why <see cref="SignInAsync"/> deliberately does not fall back
+    /// the same way.
+    /// </para>
+    /// </remarks>
     public async Task<bool> RestoreAsync()
     {
         if (!HasServer || await tokenStore.ReadAsync() is null)
@@ -42,7 +57,15 @@ public sealed class AuthSession(
             return false;
         }
 
-        CurrentUser = await api.GetMeAsync();
+        var result = await api.GetMeAsync();
+
+        CurrentUser = result switch
+        {
+            { Status: MeStatus.Succeeded, User: { } user } => await RememberAsync(user),
+            { Status: MeStatus.Unreachable } => await cache.ReadAccountAsync(),
+            _ => null,
+        };
+
         Changed?.Invoke();
 
         return IsSignedIn;
@@ -68,11 +91,31 @@ public sealed class AuthSession(
                 tokens.RefreshToken,
                 DateTimeOffset.UtcNow.AddSeconds(tokens.ExpiresIn)));
 
-            CurrentUser = await api.GetMeAsync(cancellationToken);
+            // No offline fallback here, unlike RestoreAsync: these tokens are brand new and
+            // may belong to a different account than the one cached, so falling back would
+            // risk showing the previous user's details to this one.
+            var me = await api.GetMeAsync(cancellationToken);
+
+            CurrentUser = me is { Status: MeStatus.Succeeded, User: { } user }
+                ? await RememberAsync(user, cancellationToken)
+                : null;
+
             Changed?.Invoke();
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Keeps the account for the next launch, and hands it back so the caller can assign it.
+    /// </summary>
+    private async Task<MeResponse> RememberAsync(
+        MeResponse user,
+        CancellationToken cancellationToken = default)
+    {
+        await cache.WriteAccountAsync(user, cancellationToken);
+
+        return user;
     }
 
     /// <summary>
@@ -100,6 +143,11 @@ public sealed class AuthSession(
         // is what actually ends the session, and rotating the data-protection keys is the
         // blunt instrument if a device is lost - see docs/decisions/03-android-pivot.md.
         await tokenStore.ClearAsync();
+
+        // The cached account and picture go with it. Leaving them would hand the next person
+        // to sign in on this device the previous one's email and photograph, and would break
+        // the invariant RestoreAsync leans on.
+        await cache.ClearAsync();
 
         CurrentUser = null;
         Changed?.Invoke();

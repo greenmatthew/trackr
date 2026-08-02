@@ -112,7 +112,8 @@ public sealed class RegisterViewModelTests
         api.SignInAsync(null!).ReturnsForAnyArgs(new SignInResult(
             LoginStatus.Succeeded,
             new TokenResponse("Bearer", "access", 3600, "refresh")));
-        api.GetMeAsync().ReturnsForAnyArgs(new MeResponse(Guid.NewGuid(), "owner@example.test", false));
+        api.GetMeAsync().ReturnsForAnyArgs(
+            MeResult.Ok(new MeResponse(Guid.NewGuid(), "owner@example.test", false)));
 
         await viewModel.LoadCommand.ExecuteAsync(null);
         viewModel.Email = "owner@example.test";
@@ -259,7 +260,7 @@ public sealed class RegisterViewModelTests
 
         // A real AuthSession, matching LoginViewModelTests: persisting the token on success is
         // part of the behaviour under test, and a substitute would stub exactly that out.
-        var session = new AuthSession(api, tokenStore, settings);
+        var session = new AuthSession(api, tokenStore, settings, LocalStore.InMemory());
 
         return (new RegisterViewModel(api, session, navigation), api, tokenStore, navigation);
     }

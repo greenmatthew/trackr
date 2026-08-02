@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Auth;
+using Trackr.Mobile.Core.Storage;
 using Trackr.Mobile.Core.ViewModels;
 
 namespace Trackr.Mobile.Core;
@@ -18,6 +19,11 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddTrackrCore(this IServiceCollection services)
     {
+        // Singletons because the database holds one connection open for the process and
+        // serialises callers through it - see LocalDatabase.
+        services.AddSingleton<LocalDatabase>();
+        services.AddSingleton<AccountCache>();
+
         services.AddSingleton<AuthSession>();
 
         // Singleton because two screens draw the same picture and must agree the moment it

@@ -40,7 +40,7 @@ public interface ITrackrApiClient
     Task<TokenResponse?> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default);
 
     /// <summary>Who the stored token belongs to. Also the app's "am I still signed in" probe.</summary>
-    Task<MeResponse?> GetMeAsync(CancellationToken cancellationToken = default);
+    Task<MeResult> GetMeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The account's profile picture.
@@ -106,6 +106,33 @@ public sealed record SignInResult(
     TokenResponse? Tokens = null,
     DateTimeOffset? LockoutEndUtc = null,
     string? Problem = null);
+
+/// <summary>Why an identity lookup did not produce an account.</summary>
+/// <remarks>
+/// The distinction is the whole point: "the server says this session is over" ends it, while
+/// "the server could not be reached" must not - otherwise a phone in a tunnel signs itself
+/// out. The two used to arrive as the same null.
+/// </remarks>
+public enum MeStatus
+{
+    Succeeded,
+
+    /// <summary>The server answered, and the answer was that this token is no good.</summary>
+    SignedOut,
+
+    /// <summary>No usable answer: offline, timed out, or the server itself is unwell.</summary>
+    Unreachable,
+}
+
+/// <param name="User">The account, set only when <paramref name="Status"/> is Succeeded.</param>
+public sealed record MeResult(MeStatus Status, MeResponse? User = null)
+{
+    public static MeResult SignedOut { get; } = new(MeStatus.SignedOut);
+
+    public static MeResult Unreachable { get; } = new(MeStatus.Unreachable);
+
+    public static MeResult Ok(MeResponse user) => new(MeStatus.Succeeded, user);
+}
 
 /// <summary>What asking for the profile picture produced.</summary>
 public enum AvatarFetchStatus

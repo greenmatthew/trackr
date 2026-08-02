@@ -252,22 +252,38 @@ public sealed class TrackrApiClient(
         }
     }
 
-    public async Task<MeResponse?> GetMeAsync(CancellationToken cancellationToken = default)
+    public async Task<MeResult> GetMeAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            // The bearer token is attached by BearerTokenHandler, not here.
+            // The bearer token is attached by BearerTokenHandler, not here. That handler has
+            // already spent one refresh attempt on a 401 before this sees it, so a 401 here
+            // really does mean the session is over.
             using var response = await http.GetAsync(Endpoint("api/auth/me"), cancellationToken);
 
-            return response.IsSuccessStatusCode
-                ? await response.Content.ReadFromJsonAsync<MeResponse>(cancellationToken)
-                : null;
+            if (response.StatusCode is HttpStatusCode.Unauthorized)
+            {
+                return MeResult.SignedOut;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                // A 500 or a 502 says nothing about whether this account is still valid, so
+                // it is treated as "could not ask" rather than as a rejection.
+                logger.LogWarning("Identity lookup answered with {StatusCode}", (int)response.StatusCode);
+
+                return MeResult.Unreachable;
+            }
+
+            var user = await response.Content.ReadFromJsonAsync<MeResponse>(cancellationToken);
+
+            return user is null ? MeResult.Unreachable : MeResult.Ok(user);
         }
         catch (Exception ex) when (IsTransportFailure(ex))
         {
             logger.LogWarning(ex, "Identity lookup failed");
 
-            return null;
+            return MeResult.Unreachable;
         }
     }
 

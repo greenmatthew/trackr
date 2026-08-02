@@ -177,13 +177,15 @@ public sealed class ProfileViewModelTests
 
         serverSettings.BaseUrl.Returns(new Uri("https://trackr.example.test/"));
         tokenStore.ReadAsync().Returns(new StoredTokens("access", "refresh", DateTimeOffset.MaxValue));
-        api.GetMeAsync(Arg.Any<CancellationToken>()).Returns(new MeResponse(
+        api.GetMeAsync(Arg.Any<CancellationToken>()).Returns(MeResult.Ok(new MeResponse(
             Guid.NewGuid(),
             "owner@example.test",
-            TwoFactorEnabled: false));
+            TwoFactorEnabled: false)));
 
-        var session = new AuthSession(api, tokenStore, serverSettings);
-        var avatars = new AvatarStore(api, session);
+        var cache = LocalStore.InMemory();
+
+        var session = new AuthSession(api, tokenStore, serverSettings, cache);
+        var avatars = new AvatarStore(api, session, cache);
 
         session.RestoreAsync().GetAwaiter().GetResult();
 

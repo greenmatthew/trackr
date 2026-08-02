@@ -1,4 +1,5 @@
 using Trackr.Mobile.Core.Api;
+using Trackr.Mobile.Core.Storage;
 
 namespace Trackr.Mobile.Core.Auth;
 
@@ -20,14 +21,22 @@ public sealed class AvatarStore
 {
     private readonly ITrackrApiClient _api;
     private readonly AuthSession _session;
+    private readonly AccountCache _cache;
 
     /// <summary>The marker the held bytes correspond to, so a stale copy can be spotted.</summary>
     private DateTimeOffset? _heldMarker;
 
-    public AvatarStore(ITrackrApiClient api, AuthSession session)
+    /// <summary>Kept only so the row can be rewritten when the marker moves.</summary>
+    private string? _contentType;
+
+    /// <summary>Whether the on-disk copy has been consulted yet this run.</summary>
+    private bool _readCache;
+
+    public AvatarStore(ITrackrApiClient api, AuthSession session, AccountCache cache)
     {
         _api = api;
         _session = session;
+        _cache = cache;
 
         // Signing out has to drop the bytes, not merely stop drawing them. The next account
         // on this device gets a fresh shell either way, but a previous user's photograph
@@ -61,11 +70,19 @@ public sealed class AvatarStore
     /// </remarks>
     public async Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
     {
-        var marker = _session.CurrentUser?.AvatarUpdatedUtc;
+        if (_session.CurrentUser is not { } user)
+        {
+            return;
+        }
+
+        await ReadCacheOnceAsync(user.UserId, cancellationToken);
+
+        var marker = user.AvatarUpdatedUtc;
 
         if (marker is null)
         {
             Forget();
+            await _cache.ClearAvatarAsync(cancellationToken);
 
             return;
         }
@@ -82,19 +99,25 @@ public sealed class AvatarStore
             case AvatarFetchStatus.Fetched:
                 Content = result.Content;
                 ETag = result.ETag;
+                _contentType = result.ContentType;
                 _heldMarker = marker;
                 Changed?.Invoke();
+                await PersistAsync(user.UserId, cancellationToken);
                 break;
 
             case AvatarFetchStatus.Unchanged:
                 // Nothing to redraw; only the record of what the held bytes are current
-                // against needs moving forward, so the next check does not ask again.
+                // against needs moving forward, so the next check does not ask again. Worth
+                // writing back too - otherwise every launch spends a 304 relearning that the
+                // picture on disk was fine all along.
                 _heldMarker = marker;
+                await PersistAsync(user.UserId, cancellationToken);
                 break;
 
             case AvatarFetchStatus.None:
                 // The picture was removed from another device.
                 Forget();
+                await _cache.ClearAvatarAsync(cancellationToken);
                 break;
 
             case AvatarFetchStatus.Failed:
@@ -102,6 +125,45 @@ public sealed class AvatarStore
                 break;
         }
     }
+
+    /// <summary>
+    /// Brings up the picture stored at the last launch, before anything is asked of the
+    /// network.
+    /// </summary>
+    /// <remarks>
+    /// This is what makes the ETag worth sending: without somewhere to keep the bytes between
+    /// runs, every launch re-downloaded the picture in full and the conditional request had
+    /// nothing to be conditional about.
+    /// </remarks>
+    private async Task ReadCacheOnceAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (_readCache)
+        {
+            return;
+        }
+
+        _readCache = true;
+
+        if (await _cache.ReadAvatarAsync(userId, cancellationToken) is not { } cached)
+        {
+            return;
+        }
+
+        Content = cached.Content;
+        ETag = cached.ETag;
+        _contentType = cached.ContentType;
+        _heldMarker = cached.Marker;
+
+        Changed?.Invoke();
+    }
+
+    private Task PersistAsync(Guid userId, CancellationToken cancellationToken) =>
+        Content is { } content && _heldMarker is { } marker
+            ? _cache.WriteAvatarAsync(
+                userId,
+                new CachedAvatar(content, _contentType ?? "image/jpeg", ETag, marker),
+                cancellationToken)
+            : Task.CompletedTask;
 
     /// <summary>Uploads a new picture and, on success, shows it immediately.</summary>
     public async Task<AvatarChangeResult> ReplaceAsync(
@@ -122,6 +184,7 @@ public sealed class AvatarStore
         // have sent, and deriving one from the marker would mean encoding the server's tag
         // format here. Null simply means the next conditional request is unconditional.
         ETag = null;
+        _contentType = contentType;
         _heldMarker = result.UpdatedUtc;
 
         // The session's copy of the marker is now stale, and EnsureLoadedAsync compares
@@ -130,6 +193,11 @@ public sealed class AvatarStore
         _session.NoteAvatarChanged(result.UpdatedUtc);
 
         Changed?.Invoke();
+
+        if (_session.CurrentUser is { } user)
+        {
+            await PersistAsync(user.UserId, cancellationToken);
+        }
 
         return result;
     }
@@ -147,6 +215,8 @@ public sealed class AvatarStore
         _session.NoteAvatarChanged(null);
         Forget();
 
+        await _cache.ClearAvatarAsync(cancellationToken);
+
         return result;
     }
 
@@ -158,9 +228,16 @@ public sealed class AvatarStore
         }
     }
 
+    /// <summary>
+    /// Drops the held bytes. Memory only - the on-disk copy is cleared by whichever caller
+    /// knows why, because this also runs from a synchronous event handler with nowhere to
+    /// await. Sign-out is handled by <see cref="AuthSession.SignOutAsync"/> clearing the
+    /// whole cache.
+    /// </summary>
     private void Forget()
     {
         _heldMarker = null;
+        _contentType = null;
 
         if (Content is null && ETag is null)
         {

@@ -53,6 +53,13 @@
     <!-- builder.Logging.AddDebug(). MAUI ships the logging abstractions but not the Debug
          provider, which is the one that reaches `adb logcat`. Debug builds only. -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
+    <!-- The phone's local store. Referenced by Trackr.Mobile.Core, not the MAUI project, so
+         it can be tested against `Data Source=:memory:` by plain `dotnet test`. Deliberately
+         NOT EF Core on this side: the schema is a handful of tables written by hand, and a
+         reflection-driven ORM is a fight with the Android linker for nothing. MIT, and the
+         SQLitePCLRaw bundle it pulls for the native library is Apache-2.0 - both fine under
+         the AGPL (CLAUDE.md section 10). -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.10" />
   </ItemGroup>
 
   <ItemGroup Label="Data">
@@ -68,6 +75,16 @@
          are not exposed, but 2.7.5 is the first patched release. Drop this pin
          once Microsoft.AspNetCore.OpenApi ships with a patched version itself. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.6" />
+    <!-- Microsoft.Data.Sqlite 10.0.10 pulls SQLitePCLRaw 2.1.11, whose native library is
+         SQLite 3.49.1 - before the 3.50.2 that fixes CVE-2025-6965 / GHSA-2m69-gcr7-jv3q, a
+         memory-corruption bug reachable through a crafted query. 2.1.12 carries SQLite
+         3.53.3 and is otherwise the same 2.1.x line Microsoft.Data.Sqlite expects; the 3.0.x
+         releases restructure the packages around a separate `SQLite` package and are not a
+         drop-in. Pinning the bundle lifts the lib, provider and core packages with it.
+         Verified by reading the version string out of the .so in each package, because the
+         advisory itself lists no fixed version. Drop this pin once Microsoft.Data.Sqlite
+         ships against a patched SQLitePCLRaw itself. -->
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
   </ItemGroup>
 
   <ItemGroup Label="Diagnostics">

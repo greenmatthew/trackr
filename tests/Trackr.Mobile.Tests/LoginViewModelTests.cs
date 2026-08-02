@@ -26,7 +26,7 @@ public sealed class LoginViewModelTests
         api.SignInAsync(Arg.Any<TokenRequest>(), Arg.Any<CancellationToken>())
             .Returns(new SignInResult(LoginStatus.Succeeded, AnyTokens));
         api.GetMeAsync(Arg.Any<CancellationToken>())
-            .Returns(new MeResponse(Guid.NewGuid(), "owner@example.test", TwoFactorEnabled: false));
+            .Returns(MeResult.Ok(new MeResponse(Guid.NewGuid(), "owner@example.test", TwoFactorEnabled: false)));
 
         viewModel.Email = "owner@example.test";
         viewModel.Password = "correct horse battery staple";
@@ -224,7 +224,7 @@ public sealed class LoginViewModelTests
         // AuthSession is a real instance rather than a substitute: the behaviour under test
         // includes it deciding to persist tokens, which is exactly what a substitute would
         // stub out.
-        var session = new AuthSession(api, tokenStore, settings);
+        var session = new AuthSession(api, tokenStore, settings, LocalStore.InMemory());
 
         return (new LoginViewModel(session, settings, navigation), api, tokenStore, navigation);
     }

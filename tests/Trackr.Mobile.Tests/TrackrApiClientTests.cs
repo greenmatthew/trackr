@@ -108,7 +108,10 @@ public sealed class TrackrApiClientTests
     {
         var client = ClientThatThrows(new TimeoutRejectedException(TimeSpan.FromSeconds(30)));
 
-        Assert.Null(await client.GetMeAsync());
+        // Unreachable rather than SignedOut: a timeout says nothing about whether the
+        // session is still good, and treating it as a rejection would sign people out of a
+        // perfectly valid account for going through a tunnel.
+        Assert.Equal(MeStatus.Unreachable, (await client.GetMeAsync()).Status);
     }
 
     [Fact]
