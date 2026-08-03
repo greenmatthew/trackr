@@ -23,7 +23,7 @@ unaffected either way.
 
 ```bash
 just mobile::build            # Debug APK
-just mobile::build-release    # Release APK
+just mobile::build release    # Release APK
 ```
 
 Or by hand, with the environment from
@@ -105,7 +105,7 @@ an entirely separate mechanism — an ordered list of statements in `LocalDataba
 to that list, not a `dotnet ef` command.
 
 ```bash
-just server::migration AddFoodItems
+./scripts/server.sh migration add AddFoodItems
 ```
 
 By hand, the environment prefix is load-bearing — `dotnet ef` ignores `launchSettings.json`,

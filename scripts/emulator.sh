@@ -3,11 +3,14 @@
 #
 #   ./scripts/emulator.sh start            headless - for automated checks and CI
 #   ./scripts/emulator.sh start --window   visible on the Windows desktop via WSLg
-#   ./scripts/emulator.sh install          build the Debug APK and install it
-#   ./scripts/emulator.sh screenshot [f]   capture the screen to a PNG
-#   ./scripts/emulator.sh logcat           follow the app's own log output
 #   ./scripts/emulator.sh stop
 #   ./scripts/emulator.sh status
+#   ./scripts/emulator.sh wipe             next boot starts from a factory-fresh system image
+#   ./scripts/emulator.sh create           create the AVD if it is not there yet
+#   ./scripts/emulator.sh delete           remove the AVD itself (~2GB)
+#
+# Installing, screenshotting and following the log are the same on the emulator as on a phone,
+# so they are recipes rather than subcommands here: just mobile::run, mobile::shot, mobile::logs.
 #
 # Requires membership of the `kvm` group. Without it the emulator falls back to interpreting
 # every guest instruction in software and is unusable:
@@ -15,19 +18,11 @@
 #   sudo usermod -aG kvm $USER      # then `wsl --shutdown` from Windows PowerShell
 set -euo pipefail
 
-AVD_NAME="${TRACKR_AVD:-trackr-test}"
-export JAVA_HOME="${JAVA_HOME:-$HOME/.jdks/microsoft-17}"
-export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
-export ANDROID_SDK_ROOT="$ANDROID_HOME"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# The SDK's platform-tools MUST come before /usr/bin. Debian ships its own adb (34.x) while
-# the SDK has 37.x, and adb refuses to talk across a version mismatch - whichever starts the
-# server first wins and kills the other, which surfaces as a device that will not appear.
-export PATH="$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$ANDROID_HOME/emulator:$PATH"
-
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APK="$REPO_ROOT/src/Trackr.Mobile/bin/Debug/net10.0-android/gg.matthewgreen.trackr-Signed.apk"
-PACKAGE="gg.matthewgreen.trackr"
+usage() {
+    awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
+}
 
 # The Pixel 6 device profile ships hw.keyboard=no, which silently drops every keystroke from
 # the host: typing goes nowhere and only the on-screen keyboard works. That is maddening in an
@@ -46,17 +41,21 @@ require_keyboard() {
 
 require_kvm() {
     if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
-        echo "error: /dev/kvm is not accessible by $(whoami)." >&2
-        echo "       Run: sudo usermod -aG kvm \$USER" >&2
-        echo "       Then restart WSL from Windows PowerShell: wsl --shutdown" >&2
-        exit 1
+        die "error: /dev/kvm is not accessible by $(whoami)." \
+            "       Run: sudo usermod -aG kvm \$USER" \
+            "       Then restart WSL from Windows PowerShell: wsl --shutdown"
     fi
+}
+
+running() {
+    adb_devices | grep -q '^emulator-'
 }
 
 cmd_start() {
     require_kvm
+    adb_server
 
-    if adb devices | grep -q emulator; then
+    if running; then
         echo "An emulator is already running."
         return 0
     fi
@@ -76,56 +75,88 @@ cmd_start() {
         echo "Starting $AVD_NAME headless..."
     fi
 
+    if [ "${1:-}" = "--wipe" ] || [ "${2:-}" = "--wipe" ]; then
+        args+=(-wipe-data)
+    fi
+
     emulator "${args[@]}" >/tmp/trackr-emulator.log 2>&1 &
 
     echo -n "Waiting for the device"
-    adb wait-for-device
+    "$ADB" wait-for-device
     # wait-for-device only waits for adb to answer; the system is still booting after that,
     # and installing too early fails with a confusing PackageManager error.
-    until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+    until [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
         echo -n "."
         sleep 2
     done
 
     echo " booted."
-    adb devices
-}
-
-cmd_install() {
-    (cd "$REPO_ROOT" && dotnet build src/Trackr.Mobile -c Debug -p:AndroidPackageFormat=apk)
-    adb install -r "$APK"
-    echo "Installed. Launch with: adb shell monkey -p $PACKAGE -c android.intent.category.LAUNCHER 1"
-}
-
-cmd_screenshot() {
-    local out="${1:-/tmp/trackr-screen.png}"
-    adb exec-out screencap -p > "$out"
-    echo "$out"
-}
-
-cmd_logcat() {
-    # DOTNET is where Microsoft.Extensions.Logging.Debug output lands on Android.
-    adb logcat -s DOTNET:V "$PACKAGE":V AndroidRuntime:E
+    "$ADB" devices
 }
 
 cmd_stop() {
-    adb emu kill 2>/dev/null || true
+    "$ADB" emu kill 2>/dev/null || true
     echo "Stopped."
 }
 
+# -wipe-data on the next boot rather than deleting anything now, so this is safe to run while
+# the emulator is up: it takes effect when it is next started.
+cmd_wipe() {
+    if running; then
+        cmd_stop
+        sleep 2
+    fi
+    cmd_start --wipe
+}
+
+# The image the AVD is built from. google_apis rather than google_apis_playstore: the Play
+# Store variant is locked down (no root adb, no writable system) for no benefit here, and
+# nothing in Trackr uses Play services.
+IMAGE="system-images;android-36;google_apis;x86_64"
+DEVICE="pixel_6"
+
+cmd_create() {
+    local avdmanager="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+    [ -x "$avdmanager" ] || die "error: $avdmanager is missing." \
+        "       Install the SDK command-line tools - see the Development-Environment wiki page."
+
+    if [ -d "$HOME/.android/avd/$AVD_NAME.avd" ]; then
+        echo "$AVD_NAME already exists."
+        return 0
+    fi
+
+    if [ ! -d "$ANDROID_HOME/${IMAGE//;//}" ]; then
+        echo "Fetching $IMAGE..."
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$IMAGE"
+    fi
+
+    "$avdmanager" create avd --name "$AVD_NAME" --package "$IMAGE" --device "$DEVICE" --force
+    require_keyboard
+    echo "Created $AVD_NAME. Start it with: just emulator::up"
+}
+
+cmd_delete() {
+    if running; then
+        cmd_stop
+        sleep 2
+    fi
+    "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" delete avd -n "$AVD_NAME"
+    echo "Deleted the $AVD_NAME AVD. Recreate it with: just emulator::create"
+}
+
 cmd_status() {
-    echo "AVD:      $AVD_NAME"
+    echo "AVD:      $AVD_NAME $([ -d "$HOME/.android/avd/$AVD_NAME.avd" ] || echo 'MISSING - see just setup')"
     echo "kvm:      $([ -w /dev/kvm ] && echo accessible || echo 'NOT accessible - see script header')"
-    echo "adb:      $(command -v adb) ($(adb version | head -1))"
-    adb devices
+    echo "adb:      $ADB ($("$ADB" version | sed -n 2p))"
+    "$ADB" devices
 }
 
 case "${1:-}" in
-    start)      shift; cmd_start "$@" ;;
-    install)    cmd_install ;;
-    screenshot) shift; cmd_screenshot "$@" ;;
-    logcat)     cmd_logcat ;;
-    stop)       cmd_stop ;;
-    status)     cmd_status ;;
-    *)          sed -n '2,14p' "${BASH_SOURCE[0]}"; exit 1 ;;
+    start)  shift; cmd_start "$@" ;;
+    stop)   cmd_stop ;;
+    wipe)   cmd_wipe ;;
+    create) cmd_create ;;
+    delete) cmd_delete ;;
+    status) cmd_status ;;
+    *)      usage; exit 1 ;;
 esac

@@ -123,7 +123,7 @@ virtualization it is unusably slow, so it refuses rather than crawling:
 sudo usermod -aG kvm $USER    # then `wsl --shutdown` from Windows PowerShell
 ```
 
-`just mobile::doctor` checks this along with the rest of the toolchain.
+`just doctor` checks this along with the rest of the toolchain.
 
 ### Typing on the emulator does nothing
 
@@ -131,8 +131,8 @@ The keyboard is not passed through: keystrokes go nowhere and only the on-screen
 works. The Pixel 6 device profile ships `hw.keyboard = no`, and it comes back every time the
 AVD is recreated.
 
-`scripts/emulator.sh` now fixes this at every start, so `just mobile::up` or `just
-mobile::show` is enough. To do it by hand, set `hw.keyboard = yes` in
+`scripts/emulator.sh` now fixes this at every start, so `just emulator::up` or `just
+emulator::show` is enough. To do it by hand, set `hw.keyboard = yes` in
 `~/.android/avd/<name>.avd/config.ini` and restart the emulator — it is read at launch.
 
 ### A phone plugged into the PC does not show up

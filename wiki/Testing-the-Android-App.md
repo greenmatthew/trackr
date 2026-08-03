@@ -20,11 +20,16 @@ This is the entire reason `Trackr.Mobile.Core` is a separate project from `Track
 Needs the `kvm` group — see [Development Environment](Development-Environment).
 
 ```bash
-just mobile::up        # headless, for automated checks
-just mobile::show      # with a window on the desktop, via WSLg
+just emulator::up      # headless, for automated checks
+just emulator::show    # with a window on the desktop, via WSLg
 just mobile::run       # build, install and launch
-just mobile::down
+just emulator::down
 ```
+
+`just mobile::run` works the same on the emulator and on a phone — it finds whatever is
+connected, and asks what to start if nothing is. `just emulator::clean` factory-resets the
+device; `just emulator::clean-all` deletes the AVD outright, and `./scripts/emulator.sh create`
+brings it back.
 
 Running it inside WSL rather than on Windows is deliberate: WSLg puts a real window on the
 Windows desktop anyway, so one emulator serves both interactive use and headless automation.
@@ -36,16 +41,16 @@ default NAT networking.
 More is possible than it first appears:
 
 ```bash
-just mobile::shot                  # screenshot to a PNG you can actually look at
-just mobile::ui                    # every text on screen, from the view hierarchy
-just mobile::logs                  # the app's own ILogger output, plus crashes
+./scripts/app.sh shot    # screenshot to a PNG you can actually look at
+./scripts/app.sh ui      # every text on screen, from the view hierarchy
+./scripts/app.sh logs    # the app's own ILogger output, plus crashes
 
 adb shell input tap 540 1254
 adb shell input text "owner@example.test"
 adb shell input keyevent KEYCODE_ESCAPE
 ```
 
-**Prefer `just mobile::ui` over screenshots for assertions.** It dumps the view hierarchy, so
+**Prefer `./scripts/app.sh ui` over screenshots for assertions.** It dumps the view hierarchy, so
 it can confirm a specific label's *text* and gives real element coordinates instead of
 guessing where to tap.
 
@@ -65,7 +70,7 @@ for exactly that address — see [Building](Building).
 
 Worth doing after any auth or navigation change:
 
-1. `just mobile::reset-app` — back to first-run setup.
+1. `./scripts/app.sh reset` — back to first-run setup.
 2. Enter `http://10.0.2.2:8000`, connect.
 3. Sign in. On an empty database, use *No account yet? Create one* and claim the server from
    the app itself; otherwise sign in with an existing account.
@@ -76,7 +81,7 @@ Worth doing after any auth or navigation change:
 6. *Change picture*, choose an image. The circle becomes the photo in **both** places — the
    profile and the title bar — without a relaunch. *Remove* puts the initials back, also in
    both.
-7. `just mobile::stop-app` then `just mobile::launch` — it must land on **Home, not login**,
+7. `./scripts/app.sh stop` then `./scripts/app.sh launch` — it must land on **Home, not login**,
    with the picture still there.
 8. Sign out; confirm it returns to login with the server address retained.
 
@@ -92,7 +97,7 @@ after anything touching `AuthSession` or the local store:
 
 ```bash
 docker stop trackr-dev-backend-1
-just mobile::stop-app && just mobile::launch
+./scripts/app.sh stop && ./scripts/app.sh launch
 ```
 
 It must open **signed in**, on Home, with the avatar drawn from disk — not on the login
@@ -123,14 +128,19 @@ usual reason this feels harder than it is:
 
 | Gap | Why | Fix |
 | --- | --- | --- |
-| WSL cannot see the phone | WSL2 passes no USB through to the VM, and the phone's adb port is not routable from here | `just mobile::usb`, or `pair` + `connect` |
-| The phone cannot see the dev stack | Its ports are published on the Windows loopback, not on the LAN, so there is no address the phone could type | `just mobile::reverse` |
+| WSL cannot see the phone | WSL2 passes no USB through to the VM, and the phone's adb port is not routable from here | `./scripts/device.sh usb`, or `pair` + `connect` |
+| The phone cannot see the dev stack | Its ports are published on the Windows loopback, not on the LAN, so there is no address the phone could type | `./scripts/device.sh reverse` |
 
-Once both are closed:
+Both are closed for you:
 
 ```bash
-just mobile::phone      # build, install, tunnel and launch, in one go
+just mobile::run        # build, install, tunnel and launch, in one go
 ```
+
+It asks what to connect to if nothing is attached, and which one if several are. The
+underlying steps are `./scripts/device.sh` subcommands — run it with no arguments for the
+list — and the ones worth reaching for by hand are wrapped as `./scripts/device.sh pair`,
+`connect` and `usb`.
 
 **If you last installed a build from before the package was renamed** to
 `gg.matthewgreen.trackr`, remove the old one first. Android treats a changed application ID as
@@ -150,26 +160,55 @@ for the old ID needs repointing as well.
 there is nothing to install in the distribution:
 
 ```bash
-just mobile::usb           # finds the ADB interface and attaches it
-just mobile::usb-detach    # hand it back to Windows; unplugging does the same
+./scripts/device.sh usb           # finds the ADB interface and attaches it
+./scripts/device.sh usb-detach    # hand it back to Windows; unplugging does the same
 ```
 
-Sharing a device is a one-off that needs an **admin PowerShell** on Windows — `just
-mobile::usb` prints the exact `usbipd bind` line if it is needed. Install usbipd itself with
+Sharing a device is a one-off that needs an **admin PowerShell** on Windows — the script
+prints the exact `usbipd bind` line if it is needed. Install usbipd itself with
 `winget install usbipd`.
 
 ### Connecting — wireless
 
-No Windows-side tooling at all. Enable *Developer options → Wireless debugging*:
+No Windows-side tooling at all. Enable *Developer options → Wireless debugging*. `just
+mobile::run` walks the whole thing and remembers the address for next time; the two steps it
+walks are also available on their own:
 
 ```bash
-just mobile::pair 192.168.1.50:37000   # port and code shown on the phone
-just mobile::connect 192.168.1.50
+./scripts/device.sh pair 192.168.1.50:41543      # "Pair device with pairing code" — port and code
+./scripts/device.sh connect 192.168.1.50:37000   # "IP address & Port" on the main screen
 ```
+
+**The two ports are different, and using the pairing port for `connect` is the usual failure —
+pairing succeeds and the phone still never shows up in `./scripts/device.sh list`.** The pairing
+port belongs to the pairing dialog and dies with it; the connect port is the one on the main
+Wireless debugging screen. Pairing survives reboots, the connection does not, so `connect` is
+what gets re-run — with a **new port each time** the phone reboots or wireless debugging is
+toggled. `adb mdns services` cannot discover it from WSL, since multicast does not cross the
+NAT; read it off the phone.
+
+Two failures worth telling apart:
+
+| Symptom | Cause |
+| --- | --- |
+| `failed to connect to <ip>:<port>` | Nothing is listening — stale port, or wireless debugging is off. Confirm with `ping <ip>`: if the phone answers, the network is fine and only the port is wrong. |
+| *Pairing unsuccessful: make sure the device is connected to the same network* | Usually not the network. The pairing port and code belong to the open dialog and change every time it is reopened, so a stale pair is the first thing to rule out. |
+
+**Only ever delete `~/.android/adbkey` as a last resort** — the phone trusts that key, so removing
+it revokes the pairing and forces a fresh one. The Windows copy under `%USERPROFILE%\.android`
+is a different machine's key and is irrelevant here: every `just mobile::*` recipe runs the
+Linux adb at `$ANDROID_HOME/platform-tools/adb`.
+
+Which is not necessarily the adb that is *serving* it. One adb server, on port 5037, serves
+every client on the machine, and it belongs to whichever binary started it — so a bare
+`adb start-server` can hand it to Debian's older `/usr/bin/adb` and leave the recipes talking
+to that instead. Pairing runs server-side, so this shows up as pairing that mysteriously stops
+working. `just doctor` prints the owning binary; `pair` and `connect` restart the
+server from the SDK when it is the wrong one.
 
 ### Reaching the dev stack
 
-`just mobile::reverse` tunnels port 8000 down the adb connection, so on the phone the dev
+`./scripts/device.sh reverse` tunnels port 8000 down the adb connection, so on the phone the dev
 stack is at:
 
 ```
@@ -187,9 +226,13 @@ exception does not cover your LAN.
 
 ### When both a phone and the emulator are connected
 
-adb needs telling which one. `just mobile::phone` and `reverse` resolve the phone
-themselves; for everything else, export the serial once and every recipe follows:
+adb needs telling which one. `just mobile::run` asks; for everything else, export the serial
+once and every recipe follows:
 
 ```bash
-export ANDROID_SERIAL=$(just mobile::serial)
+export ANDROID_SERIAL=$(./scripts/device.sh serial)     # the phone, not the emulator
+export ANDROID_SERIAL=$(./scripts/device.sh ensure)     # whichever, asking if ambiguous
 ```
+
+With `ANDROID_SERIAL` already set, `just mobile::run` skips the question entirely — which is
+also how to drive it from a script.

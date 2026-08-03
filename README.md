@@ -36,12 +36,12 @@ is here for the same reason — a flag and the page documenting it change togeth
 
 Requires the .NET 10 SDK and Docker. The Android app also needs the `maui-android` workload,
 the Android SDK, **JDK 17**, and membership of the `kvm` group to run the emulator —
-`just mobile::doctor` checks all of it.
+`just doctor` checks all of it.
 
 ```bash
-just dev      # dev stack + emulator + the app, built and launched
-just stop     # stop both, keeping data and build output
-just nuke     # also delete the dev database, images and build output
+just dev        # dev stack + emulator + the app, built and launched
+just stop       # stop both, keeping data and build output
+just clean-all  # also delete the dev database, images and build output
 ```
 
 `just dev` is safe to re-run, so it doubles as "make sure everything is up". Then:
@@ -54,7 +54,8 @@ just nuke     # also delete the dev database, images and build output
    emulator's alias for your machine; `localhost` there means the emulator itself.
 3. **Sign in.**
 
-`just` on its own lists every recipe.
+`just` on its own lists the top-level recipes and names the modules; `just mobile` lists one
+of them.
 
 ## Documentation
 

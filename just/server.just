@@ -1,77 +1,51 @@
-# Backend, web app and the Docker stacks.
+# Backend, web app and the dev stack.
 #
-# Note on comments: `just` shows the LAST comment line above a recipe as its `--list`
-# description, and ECHOES any comment left inside a recipe body when it runs. So longer
-# explanations sit above the recipe, separated from the one-line description by a blank line.
+# Verbs only, over scripts/server.sh - which also has `start`, `rebuild`, `ps`, `logs`,
+# `health`, `reset-link`, `db`, `images`, `check-prod` and `migration`. Run it with no
+# arguments for its own help:
+#
+#   ./scripts/server.sh logs backend
+#   ./scripts/server.sh migration add AddFoodItems
+#
+# `just` shows the LAST comment line above a recipe as its `--list` description, and ECHOES any
+# comment left inside a recipe body when it runs. So longer explanations sit above the recipe,
+# separated from the one-line description by a blank line.
 
 # Recipes in a module run from the module FILE's directory (just/), not the repository
 # root - so every relative path below would be wrong without this.
 set working-directory := '..'
 
-DEV := "docker/docker-compose.dev.yml"
-PROD := "docker/docker-compose.yml"
+SERVER := "./scripts/server.sh"
 
 _default:
     @just --list server
 
-# --- the dev stack ------------------------------------------------------------------------
+# --- the dev stack --------------------------------------------------------------------------
+
+# Rebuilds the images. `./scripts/server.sh up` on its own skips that, which is much faster
+# when only data changed.
 
 # Build images and start db + backend + frontend, on http://localhost:8000.
 up:
-    docker compose -f {{ DEV }} up -d --build
-
-# Start without rebuilding - much faster when only data changed.
-start:
-    docker compose -f {{ DEV }} up -d
+    {{ SERVER }} up --build
 
 # Stop the stack, keeping the database.
 down:
-    docker compose -f {{ DEV }} down
+    {{ SERVER }} down
 
 # The next `up` starts from an empty database, so registration reopens and the first
 # account claims the server again.
 
 # Stop the stack AND delete its database volume.
 reset:
-    docker compose -f {{ DEV }} down -v
+    {{ SERVER }} reset
 
-# Rebuild and restart one service, e.g. `just server::rebuild backend`.
-rebuild service:
-    docker compose -f {{ DEV }} up -d --build {{ service }}
+# In Debug the API also serves the Blazor app, so this is the whole thing on one origin.
 
-# Show container status.
-ps:
-    docker compose -f {{ DEV }} ps
-
-# Follow logs, optionally for one service: `just server::logs backend`.
-logs service="":
-    docker compose -f {{ DEV }} logs -f {{ service }}
-
-# Print the password-reset link the log-based email provider wrote.
-reset-link:
-    docker compose -f {{ DEV }} logs backend | grep -A3 "was not sent" | tail -20
-
-# Is it actually alive?
-health:
-    @curl -fsS http://localhost:8000/api/health | python3 -m json.tool
-
-# --- images -------------------------------------------------------------------------------
-
-# Deliberately not postgres or the dotnet base images: re-pulling those is a slow download
-# for no benefit.
-
-# Remove the images this project built, leaving base images alone.
-clean-images:
-    -docker image rm trackr-backend:dev trackr-frontend:dev
-    -docker image rm trackr-backend:latest trackr-frontend:latest
-
-# Stack, database and this project's images. The nuclear option.
-nuke: reset clean-images
-    @echo "Dev stack, its database and this project's images are gone."
-
-# Check the deployment compose file parses, without deploying it.
-check-prod:
-    @POSTGRES_PASSWORD=dummy docker compose -f {{ PROD }} config >/dev/null && echo "docker/docker-compose.yml is valid"
+# Hot-reload loop on http://localhost:5277, with Postgres in Docker.
+watch:
+    {{ SERVER }} db
+    dotnet watch --project src/Trackr.Api
 
 # --- .NET ---------------------------------------------------------------------------------
 
@@ -82,25 +56,10 @@ check-prod:
 # ("MSB1008: Only one project can be specified"). Trackr.Shared builds as a dependency of both,
 # so it needs no line of its own.
 
-# Build the backend and web app.
-build:
-    dotnet build src/Trackr.Api
-    dotnet build src/Trackr.Web
-
-# Build the backend and web app in Release.
-build-release:
-    dotnet build src/Trackr.Api -c Release
-    dotnet build src/Trackr.Web -c Release
-
-# In Debug the API also serves the Blazor app, so this is the whole thing on one origin.
-
-# Hot-reload loop on http://localhost:5277, with Postgres in Docker.
-watch: db
-    dotnet watch --project src/Trackr.Api
-
-# Start only Postgres, for the `watch` loop.
-db:
-    docker compose -f {{ DEV }} up -d db
+# Build the backend and web app. `just server::build Release` for a Release build.
+build configuration="Debug":
+    dotnet build src/Trackr.Api -c {{ configuration }}
+    dotnet build src/Trackr.Web -c {{ configuration }}
 
 # These start their own throwaway Postgres via Testcontainers, so they never touch the dev
 # stack's database.
@@ -109,22 +68,17 @@ db:
 test:
     dotnet test tests/Trackr.Api.Tests
 
-# --- migrations ---------------------------------------------------------------------------
+# Remove the last build's output. Keeps obj/ and touches nothing in Docker.
+clean:
+    dotnet clean src/Trackr.Api
+    dotnet clean src/Trackr.Web
 
-# The ASPNETCORE_ENVIRONMENT prefix is load-bearing: `dotnet ef` ignores
-# launchSettings.json, so without it the connection string is missing and startup throws.
+# The images are this project's own two, not postgres or the dotnet base images - re-pulling
+# those is a slow download for no benefit. The database volume survives too; that is `reset`.
 
-# Add an EF migration: `just server::migration AddFoodItems`.
-migration name:
-    ASPNETCORE_ENVIRONMENT=Development \
-      dotnet dotnet-ef migrations add {{ name }} --project src/Trackr.Api --output-dir Migrations
-
-# Undo the most recent migration, provided it has not been applied.
-migration-undo:
-    ASPNETCORE_ENVIRONMENT=Development \
-      dotnet dotnet-ef migrations remove --project src/Trackr.Api
-
-# List migrations and whether they have been applied.
-migrations-list:
-    ASPNETCORE_ENVIRONMENT=Development \
-      dotnet dotnet-ef migrations list --project src/Trackr.Api
+# Delete the backend and web build output, and the images this project built.
+clean-all:
+    @rm -rf src/Trackr.Api/bin src/Trackr.Api/obj \
+            src/Trackr.Web/bin src/Trackr.Web/obj \
+            tests/Trackr.Api.Tests/bin tests/Trackr.Api.Tests/obj
+    {{ SERVER }} images

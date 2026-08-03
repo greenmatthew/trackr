@@ -8,7 +8,7 @@
 | Android app | ...plus the `maui-android` workload, the Android SDK, and **JDK 17** |
 | Running the emulator | ...plus membership of the `kvm` group |
 
-`just mobile::doctor` checks all of it and says what is missing.
+`just doctor` checks all of it and says what is missing.
 
 ### JDK 17 specifically
 
@@ -49,25 +49,47 @@ The `just` recipes set this themselves, so this only matters when running tools 
 Everything is wrapped in [`just`](https://just.systems). Most sessions need three recipes:
 
 ```bash
-just dev      # dev stack + emulator with a window + app built, installed, launched
-just stop     # stop both, keeping data, images and build output
-just nuke     # also delete the dev database, this project's images and ~1.4GB of bin/obj
+just dev        # dev stack + emulator with a window + app built, installed, launched
+just stop       # stop both, keeping data, images and build output
+just clean-all  # also delete the dev database, this project's images and ~1.4GB of bin/obj
 ```
 
 `just dev` is safe to re-run — `docker compose up -d` is a no-op on a healthy stack and the
 emulator script exits early if one is already running.
 
-Everything else lives in modules: `just --list` shows all of them.
+Everything else lives in modules. Bare `just` lists the top level and names them; `just
+mobile` lists that one.
 
 ```bash
 just server::watch          # hot-reload loop on http://localhost:5277
-just server::logs backend
+./scripts/server.sh logs backend
 just server::reset          # drop the dev database only
-just server::migration AddFoodItems
-just mobile::doctor
+./scripts/server.sh migration add AddFoodItems
+just mobile::run            # build, install and launch, finding a device first
+just emulator::up
 just docs::publish          # push wiki/ to the wiki repository
 just test                   # every suite
 ```
+
+### Where the logic lives
+
+`just` holds verbs — build, run, test, clean, up, down. Every individual step behind them is a
+subcommand of a script in `scripts/`:
+
+| Script | Covers |
+| --- | --- |
+| `scripts/app.sh` | The app — build, install, launch, stop, reset, uninstall, logs, screenshots, the UI dump |
+| `scripts/device.sh` | adb and devices — pairing, connecting, USB forwarding, the port tunnel, `doctor`, and `ensure`, which is what makes `just mobile::run` work with nothing plugged in |
+| `scripts/emulator.sh` | AVD lifecycle — start, stop, status, wipe, create, delete |
+| `scripts/server.sh` | The dev stack — up, down, reset, logs, ps, health, images, and EF migrations |
+| `scripts/lib.sh` | Sourced by the others: toolchain paths, and the check that the adb *server* belongs to the SDK's adb rather than Debian's |
+
+Run any of them with no arguments for its own help. `just help` lists every recipe and names
+the scripts.
+
+The split is deliberate: `just` is for naming commands, and a shebang recipe is written to a
+temporary file before it runs — so `$1` inside one is not what the caller passed to `just`,
+which makes recipes a poor place for anything that branches or takes input.
 
 ## The development stack
 
@@ -103,7 +125,8 @@ Two things worth knowing before wondering where the space went:
 
 - **Most of it is not in Docker.** Host-side build output is around 1.4 GB — `Trackr.Mobile`
   alone is ~865 MB — against ~230 MB of images. Removing images does not touch it.
-  `just clean` does; `just nuke` does both.
+  `just clean-all` takes both, along with the dev database. (`just clean` is the cheap tier —
+  a plain `dotnet clean`, which leaves `obj/` and so reclaims almost none of this.)
 - **Empty `obj/` directories reappear seconds after a clean** if VS Code is open. The C# Dev
   Kit watches the workspace and re-runs a design-time restore. That is a few MB of
   `project.assets.json`, not build output, and nothing has gone wrong.

@@ -33,11 +33,11 @@ _default:
 test:
     dotnet test tests/Trackr.Docs.Tests
 
-# Regenerate wiki/API-Reference.md from the API's own OpenAPI document.
-#
 # Needs Docker: the generator boots the real application through WebApplicationFactory, and
 # startup applies migrations against a throwaway Postgres. Without the variable the same test
 # asserts instead of writing, which is what makes a stale page fail `just test`.
+
+# Regenerate wiki/API-Reference.md from the API's own OpenAPI document.
 api:
     TRACKR_UPDATE_DOCS=1 dotnet test tests/Trackr.Api.Tests --filter FullyQualifiedName~ApiReference
 

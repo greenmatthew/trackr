@@ -532,6 +532,19 @@ phone is in the wiki — [Development-Environment](wiki/Development-Environment.
 
 What is a constraint rather than a how-to:
 
+- **`just` holds verbs; `scripts/` holds steps.** The justfiles carry build / run / test /
+  clean / up / down and little else, deliberately — a task runner listing sixty recipes is one
+  nobody reads. Everything finer-grained is a subcommand of a script, each of which prints its
+  own help when run with no arguments: `app.sh` (build, install, launch, logs, `shot`, `ui`),
+  `device.sh` (pair, connect, usb, reverse, `doctor`, and `ensure`, which finds or sets up a
+  device), `emulator.sh` (the AVD), `server.sh` (the dev stack and EF migrations), `lib.sh`
+  (sourced by the rest). `just help` lists everything.
+  Two reasons this is a rule rather than a preference: recipe dependencies cannot be
+  conditional, so "get a device, whatever that takes" is not expressible; and a shebang recipe
+  is written to a temporary file before it runs, so `$1` inside one is **not** what the caller
+  passed to `just` — a trap that has already caused a real bug here. **A recipe whose body runs
+  past a few lines means the logic is in the wrong file**, and a new low-level operation is a
+  script subcommand, not a new recipe.
 - **Test by actually running it.** Build the images, bring up the compose stack, hit the
   endpoints, tear it down — as part of completing each milestone, not as an afterthought.
 - **The WSL Docker engine is an empty, disposable sandbox.** The user's real infrastructure
@@ -546,7 +559,7 @@ What is a constraint rather than a how-to:
   - **The emulator is runnable from Claude Code's own shell on this machine.** It needs the
     invoking user in the `kvm` group and that user is; this file previously implied otherwise.
     So "I could not run it" is not an available excuse for anything short of a physical phone.
-    `just mobile::ui` dumps the on-screen text, which beats a screenshot for asserting a label.
+    `./scripts/app.sh ui` dumps the on-screen text, which beats a screenshot for asserting a label.
 - If logic cannot be covered by a view-model test, that is a sign it has leaked out of
   `Trackr.Mobile.Core` and into the MAUI project.
 
