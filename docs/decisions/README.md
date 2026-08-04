@@ -20,6 +20,7 @@ the wiki at `wiki/` instead, where the self-hoster can read it too. See CLAUDE.m
 | 4 — Documentation migration | [05-documentation.md](05-documentation.md) |
 | 5 — Mobile UX & architecture | [06-mobile-ux.md](06-mobile-ux.md) |
 | 6 — Data layer | [07-data-layer.md](07-data-layer.md) |
+| 7 — Barcode and Open Food Facts | [08-barcode-off.md](08-barcode-off.md) |
 
 A decision that is later reversed stays in its original file, with a note pointing at the
 record that superseded it. Deleting it would hide the reasoning that made the reversal

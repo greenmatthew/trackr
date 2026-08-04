@@ -227,6 +227,11 @@ lives — read the relevant one before changing anything it covers.
   rather than per-serving values on `LogItem`, the **shared catalog** (which amends §7 below),
   wiki-style edits to global items, meal photos as `bytea`, the startup seeder over `HasData`,
   and the day-boundary helper.
+- [08-barcode-off.md](docs/decisions/08-barcode-off.md) — server-side decoding and why, the
+  ImageSharp licence trap, SkiaSharp's musl native asset, what Open Food Facts' data actually
+  looks like (grams not label units; `100ml` under a `_100g` key), one serving basis per product,
+  deliberately **no retry**, the megapixel guard that answers milestone 6's deferred question, and
+  the honest limits of testing a decoder on rendered barcodes.
 
 ---
 
@@ -353,6 +358,20 @@ migration and leaves most rows full of nulls. Instead:
 Store the **full nutrient snapshot** on the LogItem, so historical logs never change if a
 catalog item is later edited.
 
+### Ingredients — a nutrient set this is not
+
+Milestone 10a adds what a product is *made of*. Do **not** reach for the nutrient machinery above
+for it: nutrients are a fixed, server-owned vocabulary with units and sort orders, and ingredients
+are open-ended text belonging to one brand's formulation. Two rules, so the later slice does not
+have to be undone:
+
+- **Raw text on the `FoodItem` is the whole of the first version.** One nullable column. Open Food
+  Facts supplies it for barcode hits and the vision model reads it off the label otherwise.
+- **An ingredient list is only true of a specific product.** It attaches to an item with a brand or
+  a barcode; a generic item must not carry one, and a composite derives its own from its components.
+  This is also why it sits awkwardly with the shared catalog's wiki-style edits — §9.10a has the
+  reasoning and the parts worth building.
+
 ---
 
 ## 8. Security posture
@@ -432,11 +451,20 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    surface on the web; the chat is milestone 9). Two things it settled beyond the original scope:
    the **catalog is shared across accounts** (see §7) and meal photos are stored now, because
    milestone 9 needs somewhere to put them before a confirmation card exists.
-7. **Barcode + Open Food Facts** — invisible barcode decode (default to server-side; record the
-   choice), OFF lookup by number, map OFF response → FoodItem shape. Send a proper descriptive
-   **User-Agent** (app name + version + contact) — OFF asks for this and may throttle callers
-   without it. Handle full-match, partial-match and no-match per §5, and surface
-   rate-limit/timeout errors rather than swallowing them.
+7. ~~**Barcode + Open Food Facts**~~ ✅ — [08-barcode-off.md](docs/decisions/08-barcode-off.md).
+   Server-side decode (ZXing + SkiaSharp), OFF v2 lookup behind `IProductLookup`, and a pure mapper
+   onto the per-serving `FoodItem` shape across all 29 nutrients. All four §5 branches, with failure
+   reasons carried in `ProductLookupResult.Warnings` rather than swallowed. Two read-only routes,
+   `/api/lookup/barcode/{barcode}` and `/api/lookup/image/{id}` — **not** a barcode-entry surface,
+   and they write nothing.
+   **Verified at two tiers** (§11): unit tests plus a live run of the compose stack against the real
+   API, and then against real photographs in `media/examples` — which changed the design. **UPC-E is
+   excluded from the decoder because it manufactured checksum-valid false positives** out of
+   ingredients paragraphs and nutrition tables, and a false positive is the cascade's worst outcome:
+   it is reported as a full match, which is the one branch that never sends the photo to the model.
+   A second decode pass at 2× resolution earned its place on a curved can. 3 of 4 barcodes read, 0
+   invented. **Left open:** ingredients are not requested from OFF yet (milestone 10a), and no lookup
+   caching, deliberately — milestone 10 putting items in the catalog is the real fix.
    - **7a. Composite / recipe items** — a slice of its own, sequenced here because it wants a
      global catalog holding real OFF-sourced ingredients to compose. Barcode+OFF covers packaged
      food and fails completely on home cooking, which is the case the AI fallback handles worst.
@@ -454,6 +482,39 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    on confirm. Include the serving-count math. Camera and photo-picker permissions land here.
 10. **Catalog growth** — upsert items from OFF/AI into the catalog; let the user pick from
     previously logged items for fast re-logging.
+    - **10a. Ingredients** — capture what a product is *made of*, not just its nutrition. Lettered
+      rather than renumbered because §9.10 and §9.13 are referenced by name from code comments.
+      **Three parts, in this order, and the value drops off sharply after the second.**
+      1. **Raw ingredient text — cheap, do this first.** Open Food Facts already returns
+         `ingredients_text_en`, so for any barcode hit this is a field to map, not a feature to
+         build. Milestone 7 deliberately does not request it (see the `Fields` constant); adding it
+         is a small change. Where OFF has nothing, the **model reads it off the photo** in the same
+         vision call that reads the nutrition panel — no second pass, no OCR engine, and the image
+         never leaves the server. Store it as text on the item and show it; that alone answers "what
+         is in this?" and carries almost no design risk.
+      2. **Allergens and diet flags — the high-value structured subset.** OFF returns
+         `allergens_tags` (`en:milk`, `en:nuts`, `en:soybeans`) and `ingredients_analysis_tags`
+         (`en:palm-oil`, `en:non-vegan`). A closed, small vocabulary, unlike ingredients in general,
+         so it is queryable without solving the hard problem — and it is the part a household
+         actually needs, because "does this contain nuts" is a question with consequences.
+      3. **Per-ingredient rows and stats — the uncertain one.** *Deliberately last, and it may never
+         be worth building.* Two things make it more tractable than it looks, both worth knowing
+         before writing it off: OFF ships a **canonical ingredient taxonomy** (`en:sugar`), which is
+         the alias problem already solved by somebody else; and OFF's parsed `ingredients` array
+         **already nests sub-ingredients**, which is the "an ingredient made of ingredients" case
+         modelled for us, along with a `percent_estimate` per ingredient. So the aliases, the
+         synonyms and the parenthesised sub-lists are largely not ours to untangle *for packaged
+         products*. What stays genuinely hard is anything the model transcribed rather than OFF
+         supplying, because mapping free text onto that taxonomy is its own problem.
+      - **Ingredients belong to a specific product, and that constrains where they can live.** A
+        list is only true of one brand's formulation, so it attaches to an item carrying a brand or
+        a barcode. A generic item ("chicken breast") must **not** claim one, and a composite (7a)
+        derives its ingredients from its components instead of storing a list of its own. This is
+        the concern that makes ingredients a poor fit for the shared catalog's wiki-style editing —
+        settle it before writing the schema.
+      - Keep it to parts 1 and 2 unless a real question needs part 3. "Which of my regular foods
+        contain palm oil" is answerable from part 2; "how much sunflower lecithin did I eat in
+        March" is what part 3 buys, and is a question nobody has actually asked.
 11. **Stats views (REQUIRED)** — the output surface from §1, a tab in the app. "Today so far"
     running totals (calories + full nutrient breakdown, updating as entries are confirmed),
     then week/month summaries with basic trend charts. Aggregations read from the nutrient
