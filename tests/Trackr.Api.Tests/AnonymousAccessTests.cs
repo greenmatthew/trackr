@@ -40,6 +40,9 @@ public sealed class AnonymousAccessTests(PostgresFixture postgres) : AuthTestBas
     // By id, because there is no GET /api/images collection route - asking for one would be
     // answered 405 by routing before authentication ever ran, which would prove nothing.
     [InlineData("/api/images/0198c0de-0000-7000-8000-000000000000")]
+    // A lookup reaches out to Open Food Facts, so an anonymous caller who could reach it would
+    // be able to spend somebody else's bandwidth through this server.
+    [InlineData("/api/lookup/barcode/3017620422003")]
     public async Task Protected_endpoints_answer_a_bare_401(string route)
     {
         using var client = Factory.NewClient();

@@ -19,6 +19,18 @@ public static class RateLimitPolicies
 
     /// <summary>Register, password reset, password change, 2FA changes, invite creation.</summary>
     public const string Sensitive = "auth-sensitive";
+
+    /// <summary>
+    /// Barcode lookups, which each become an outbound request to Open Food Facts.
+    /// </summary>
+    /// <remarks>
+    /// A different concern from the two above, which protect this server's accounts. This one
+    /// protects <em>somebody else's</em>: Open Food Facts is a free volunteer-run service, and a
+    /// looping client here would spend their bandwidth and get this server's address throttled or
+    /// blocked. The limit is set well above what a person logging meals could reach, so it only ever
+    /// catches a bug.
+    /// </remarks>
+    public const string Lookup = "product-lookup";
 }
 
 /// <summary>Bound from the <c>Trackr:RateLimiting</c> configuration section.</summary>
@@ -31,6 +43,14 @@ public sealed class RateLimitSettings
 
     public int SensitivePermitLimit { get; set; } = 5;
     public int SensitiveWindowSeconds { get; set; } = 900;
+
+    /// <summary>
+    /// Barcode lookups per minute. Roughly Open Food Facts' own documented courtesy limit, so a
+    /// household stays a well-behaved caller without anybody having to think about it.
+    /// </summary>
+    public int LookupPermitLimit { get; set; } = 60;
+
+    public int LookupWindowSeconds { get; set; } = 60;
 }
 
 public static class RateLimitingExtensions
@@ -62,6 +82,15 @@ public static class RateLimitingExtensions
                     {
                         PermitLimit = settings.SensitivePermitLimit,
                         Window = TimeSpan.FromSeconds(settings.SensitiveWindowSeconds),
+                        QueueLimit = 0
+                    }));
+
+            options.AddPolicy(RateLimitPolicies.Lookup, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(PartitionKey(httpContext), _ =>
+                    new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = settings.LookupPermitLimit,
+                        Window = TimeSpan.FromSeconds(settings.LookupWindowSeconds),
                         QueueLimit = 0
                     }));
 

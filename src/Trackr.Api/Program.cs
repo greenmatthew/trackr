@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Trackr.Api.Cascade;
 using Trackr.Api.Data;
 using Trackr.Api.Endpoints;
 using Trackr.Api.Identity;
@@ -206,6 +207,10 @@ builder.Services.AddSingleton<DayBoundary>();
 
 builder.Services.AddTrackrRateLimiting(builder.Configuration);
 
+// Stages one and two of the logging cascade: barcode decoding, and Open Food Facts lookups. The
+// model (stage three) is milestone 8.
+builder.Services.AddTrackrCascade(builder.Configuration);
+
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
 var emailProvider = builder.Configuration
     .GetSection(EmailOptions.SectionName)
@@ -276,6 +281,7 @@ app.MapNutrientEndpoints();
 app.MapFoodEndpoints();
 app.MapImageEndpoints();
 app.MapLogEndpoints();
+app.MapLookupEndpoints();
 
 #if DEBUG
 if (app.Environment.IsDevelopment())

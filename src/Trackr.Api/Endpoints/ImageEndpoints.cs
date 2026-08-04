@@ -19,11 +19,15 @@ namespace Trackr.Api.Endpoints;
 /// confirmation should leave no entry behind. <c>POST /api/log</c> adopts images by id afterwards.
 /// <para>
 /// The bytes are stored exactly as they arrive - no resize, no re-encode, no inspection. The
-/// server has no image library and this milestone deliberately does not give it one: decoders are
-/// a well-known remote-code-execution and denial-of-service surface, and the avatar endpoints
-/// already set the precedent of validating the declared type and the length and nothing more.
-/// Milestone 7 will need server-side decoding for barcode reading, and that is the moment to
-/// revisit normalising on ingest - not before.
+/// avatar endpoints set the precedent: validate the declared type and the length, and nothing more.
+/// </para>
+/// <para>
+/// Milestone 7 was named here as the moment to revisit that, because barcode reading needs a real
+/// decoder and one arrived. It was revisited, and the answer was to leave this alone: re-encoding on
+/// ingest would degrade every photo the model later reads, to protect a decoder that only
+/// <c>ZXingBarcodeDecoder</c> runs. That class guards itself instead - it reads the image header and
+/// refuses implausible dimensions before allocating any pixels, which is the denial-of-service half
+/// of the concern. So these endpoints still store bytes without opening them.
 /// </para>
 /// <para>
 /// Photos are personal and are never shared, unlike catalog items. Another account's image is a

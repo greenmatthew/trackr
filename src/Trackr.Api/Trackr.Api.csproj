@@ -15,6 +15,12 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" />
     <PackageReference Include="Net.Codecrete.QrCodeGenerator" />
+    <PackageReference Include="ZXing.Net" />
+    <PackageReference Include="ZXing.Net.Bindings.SkiaSharp" />
+    <PackageReference Include="SkiaSharp" />
+    <!-- Not referenced by any code, and not removable: it carries the native libSkiaSharp
+         the Alpine image needs. See the note in Directory.Packages.props. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
   </ItemGroup>
 
   <ItemGroup>

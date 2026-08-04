@@ -12,7 +12,13 @@ namespace Trackr.Shared.Nutrition;
 /// The phone encodes to WebP at quality 90 before uploading - Android's
 /// <c>Bitmap.Compress</c> does it with no extra package. That is a convention, not an invariant:
 /// the server accepts JPEG and PNG too and stores exactly what arrives, because a share target or
-/// a future non-MAUI client may send either. Nothing on the server decodes the bytes.
+/// a future non-MAUI client may send either.
+/// </para>
+/// <para>
+/// This once said nothing on the server decodes the bytes, which milestone 7 made false: the barcode
+/// stage of the cascade decodes them. What still holds, and is the part that matters, is that
+/// <strong>the stored bytes are never re-encoded</strong> - an upload is kept exactly as it arrived.
+/// The decoder guards itself instead, by refusing implausible dimensions before allocating pixels.
 /// </para>
 /// </remarks>
 public static class MealImageRules

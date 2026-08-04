@@ -17,4 +17,11 @@
     <ProjectReference Include="..\..\src\Trackr.Api\Trackr.Api.csproj" />
   </ItemGroup>
 
+  <!-- Real Open Food Facts responses, captured once from the live API, so the mapper is
+       tested against the crowd-edited data it will actually meet rather than against JSON
+       written by somebody who already believed the mapper was correct. -->
+  <ItemGroup>
+    <Content Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

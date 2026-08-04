@@ -67,3 +67,43 @@ keeps tripping.
 Rate limiting is the second line of defence. Per-account lockout — see
 [Accounts and 2FA](Accounts-and-2FA) — is the first, and is not configurable by environment
 variable.
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `TRACKR_LOOKUP_RATE_LIMIT` | `60` | Barcode lookups per minute. |
+
+`TRACKR_LOOKUP_RATE_LIMIT` is the odd one out: it is not protecting your server. Every lookup
+becomes a request to Open Food Facts, a free service run by volunteers, and this cap keeps a
+looping client from spending their bandwidth and getting your address throttled. It sits well
+above what a person logging meals could reach, so in practice it only ever catches a bug.
+
+## Open Food Facts
+
+The nutrition database behind barcode lookups. When you photograph something packaged, the server
+reads the barcode out of the picture and asks Open Food Facts what it is; a hit means the real
+label numbers instead of an AI estimate.
+
+**A barcode number is the only thing Trackr ever sends off your server.** Not the photo, not the
+meal, not anything about you. That is the single exception to everything staying on your machine,
+and it is a number with no account attached to it.
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `TRACKR_OFF_CONTACT_EMAIL` | — | A contact address to include in the `User-Agent`. Optional, but see below. |
+| `TRACKR_OFF_ENABLED` | `true` | Set to `false` for no outbound requests at all. |
+| `TRACKR_OFF_BASE_ADDRESS` | `https://world.openfoodfacts.org/` | Point at a mirror, or at their staging server. |
+| `TRACKR_OFF_TIMEOUT_SECONDS` | `10` | How long to wait for one lookup. |
+
+**Setting a contact address is encouraged.** Open Food Facts asks API callers to identify
+themselves, and anonymous callers are the ones that get throttled. Trackr always sends its name
+and version; adding an address means someone can email you about a misbehaving client instead of
+just blocking your server. It goes into a request header, so treat it as public.
+
+Turning lookups off is a real option rather than a footgun, but know the trade: packaged food then
+falls through to the AI, which is slower than a label lookup and worse at getting the numbers
+right. Leaving it on is the recommended setting.
+
+Trackr does not retry a failed lookup, deliberately — the reasoning is in
+`docs/decisions/08-barcode-off.md` in the repository. A lookup that fails or times out falls
+through to the AI, and the chat
+tells you it happened rather than quietly showing you an estimate as though it were a label.

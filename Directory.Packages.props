@@ -29,6 +29,25 @@
          1.7+ releases pull System.Drawing.Common on net6.0 - a Windows-oriented
          dependency in a Linux container. This one has no dependencies at all. -->
     <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="3.1.0" />
+    <!-- Barcode decoding for the cascade's first stage (milestone 7). Apache-2.0, so fine
+         under the AGPL (CLAUDE.md section 10). -->
+    <PackageVersion Include="ZXing.Net" Version="0.16.11" />
+    <!-- ZXing reads luminance, not files, so it needs an image decoder underneath. This
+         binding is the adapter; SkiaSharp is the decoder. Apache-2.0 and MIT respectively.
+         SixLabors.ImageSharp would have been the obvious alternative and is deliberately
+         NOT used: since 3.0 it ships under the Six Labors Split License rather than
+         Apache-2.0, which is source-available and fails the section 10 licence rule. -->
+    <PackageVersion Include="ZXing.Net.Bindings.SkiaSharp" Version="0.16.22" />
+    <!-- Pinned to the major the binding above targets rather than the newest release: a
+         SkiaSharp major bump would be an API change under a package that is not rebuilt
+         against it. -->
+    <PackageVersion Include="SkiaSharp" Version="3.119.1" />
+    <!-- The native library SkiaSharp calls, and the reason a green build can still throw
+         DllNotFoundException at runtime. The API image is aspnet:10.0-alpine, which is musl
+         rather than glibc, and this package is the variant carrying a linux-musl-x64 build.
+         "NoDependencies" additionally means no fontconfig, which suits a decoder that never
+         draws text. -->
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
   </ItemGroup>
 
   <ItemGroup Label="Mobile (MAUI Android)">

@@ -338,6 +338,28 @@ Delete an entry, its items and its photos.
 
 **Responses:** `200`
 
+## Lookup
+
+### `GET /api/lookup/barcode/{barcode}`
+
+Ask Open Food Facts about a barcode. Writes nothing.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `barcode` | path | yes | string |
+
+**Responses:** `200`
+
+### `POST /api/lookup/image/{id}`
+
+Read a barcode out of an uploaded meal photo and look it up. Writes nothing.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `id` | path | yes | string (uuid) |
+
+**Responses:** `200`
+
 ## Nutrients
 
 ### `GET /api/nutrients`

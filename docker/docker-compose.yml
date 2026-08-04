@@ -58,6 +58,16 @@ services:
       # Raise if a household behind one address keeps tripping the auth rate limits.
       Trackr__RateLimiting__LoginPermitLimit: ${TRACKR_LOGIN_RATE_LIMIT:-10}
       Trackr__RateLimiting__SensitivePermitLimit: ${TRACKR_SENSITIVE_RATE_LIMIT:-5}
+      # Barcode lookups per minute. Unlike the two above, this one protects Open Food
+      # Facts rather than this server.
+      Trackr__RateLimiting__LookupPermitLimit: ${TRACKR_LOOKUP_RATE_LIMIT:-60}
+      # Open Food Facts, the nutrition database behind barcode lookups. A barcode number
+      # is the only thing this server ever sends anywhere; set OFF_ENABLED=false to stop
+      # even that, at the cost of falling back to the AI for every packaged product.
+      Trackr__OpenFoodFacts__Enabled: ${TRACKR_OFF_ENABLED:-true}
+      Trackr__OpenFoodFacts__ContactEmail: ${TRACKR_OFF_CONTACT_EMAIL:-}
+      Trackr__OpenFoodFacts__BaseAddress: ${TRACKR_OFF_BASE_ADDRESS:-https://world.openfoodfacts.org/}
+      Trackr__OpenFoodFacts__TimeoutSeconds: ${TRACKR_OFF_TIMEOUT_SECONDS:-10}
     networks: [internal]
 
   frontend:
