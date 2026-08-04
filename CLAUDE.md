@@ -232,6 +232,11 @@ lives — read the relevant one before changing anything it covers.
   looks like (grams not label units; `100ml` under a `_100g` key), one serving basis per product,
   deliberately **no retry**, the megapixel guard that answers milestone 6's deferred question, and
   the honest limits of testing a decoder on rendered barcodes.
+- [09-composites.md](docs/decisions/09-composites.md) — recipes: materialising nutrition on write
+  and the cache invalidation that buys, quantities in servings rather than grams, the advisory lock
+  behind the cycle check, the cross-account fan-out, why a global recipe may hold only global
+  ingredients, why deleting an ingredient is refused rather than cascaded, and the intersection rule
+  that keeps "missing is not zero" true through the arithmetic.
 
 ---
 
@@ -331,6 +336,9 @@ Sizing, model selection and how to test a candidate against real label photos:
     at creation; promotion to global is one-way. This amends the original "owning user" here, and
     the reasoning is in [07-data-layer.md](docs/decisions/07-data-layer.md). Do **not** build
     per-user duplicates of a shared product.
+  - **A composite item adds a `Yield` and a `FoodItemComponent` join** (parent, child, quantity in
+    *servings* of the child). Its nutrition is derived and materialized on write, so nothing
+    downstream treats it specially — see [09-composites.md](docs/decisions/09-composites.md).
 - **LogEntry** — id, user, timestamp/date, free-text note (nullable).
 - **LogItem** — id, log entry id, food item id (nullable if ad-hoc), quantity (number of
   servings), **full computed nutrient snapshot** at time of logging.
@@ -465,13 +473,21 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    A second decode pass at 2× resolution earned its place on a curved can. 3 of 4 barcodes read, 0
    invented. **Left open:** ingredients are not requested from OFF yet (milestone 10a), and no lookup
    caching, deliberately — milestone 10 putting items in the catalog is the real fix.
-   - **7a. Composite / recipe items** — a slice of its own, sequenced here because it wants a
-     global catalog holding real OFF-sourced ingredients to compose. Barcode+OFF covers packaged
-     food and fails completely on home cooking, which is the case the AI fallback handles worst.
-     A composite is still a `FoodItem`, plus a `FoodItemComponent` join and a `Yield`; nutrition
-     is **materialized on write**, so nothing downstream learns that composites exist. The shape
-     is settled in [07-data-layer.md](docs/decisions/07-data-layer.md) and the schema needs no
-     backfill — the real work is the cycle check and the fan-out recompute.
+   - ~~**7a. Composite / recipe items**~~ ✅ — [09-composites.md](docs/decisions/09-composites.md).
+     A composite is still a `FoodItem`, plus a `FoodItemComponent` join and a `Yield`; nutrition is
+     **materialized on write**, so nothing downstream learns composites exist. Quantities count
+     **servings of the ingredient**, never grams. Two rules the original sketch did not settle and
+     this milestone did: **a global recipe may hold only global ingredients** — which is also what
+     makes the delete cascade safe — and **a nutrient survives into a recipe only if every
+     ingredient reports it**, because summing a missing micronutrient as zero is a confident
+     understatement, and "missing is not zero" has to hold in the arithmetic or it holds nowhere.
+     The cycle check is backed by a **transaction-scoped advisory lock**, without which it is advice
+     rather than a guarantee; the fan-out recompute deliberately **crosses account boundaries**,
+     since a shared ingredient sits in other people's recipes. Deleting an item a recipe uses is
+     refused, never cascaded.
+     **Left open:** nothing writes a recipe yet but a person with an HTTP client — milestone 9 is
+     where saying "I made this from these" becomes possible — and there is no scaling or unit
+     conversion.
 8. **Ollama integration** — add the service, wire the backend to call it, define the
    strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the
    JSON. Configure `keep_alive`.
