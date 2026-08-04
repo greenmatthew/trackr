@@ -442,6 +442,13 @@ No properties.
 | `code` | string | yes |
 | `newPassword` | string | yes |
 
+### `SaveFoodComponentRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `foodItemId` | string (uuid) | no |
+| `quantity` | number or string (double) | no |
+
 ### `SaveFoodItemRequest`
 
 | Property | Type | Required |
@@ -458,6 +465,8 @@ No properties.
 | `carbohydrateG` | number or string (double) | no |
 | `proteinG` | number or string (double) | no |
 | `nutrients` | object | no |
+| `yield` | number or string (double), nullable | no |
+| `components` | array of [`SaveFoodComponentRequest`](#savefoodcomponentrequest) | no |
 
 ### `SaveLogEntryRequest`
 

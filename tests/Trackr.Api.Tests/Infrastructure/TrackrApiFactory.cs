@@ -65,7 +65,7 @@ public sealed class TrackrApiFactory(string connectionString, IDictionary<string
         // factory boots the host, so truncating it would leave every test after the first looking
         // at an empty catalog and every nutrient key failing validation.
         await db.Database.ExecuteSqlRawAsync(
-            """TRUNCATE "MealImages", "LogItemNutrients", "LogItems", "LogEntries", "FoodItemNutrients", "FoodItems", "Invites", "AspNetUserTokens", "AspNetUserLogins", "AspNetUserClaims", "AspNetUserRoles", "AspNetUsers" RESTART IDENTITY CASCADE;""");
+            """TRUNCATE "MealImages", "LogItemNutrients", "LogItems", "LogEntries", "FoodItemComponents", "FoodItemNutrients", "FoodItems", "Invites", "AspNetUserTokens", "AspNetUserLogins", "AspNetUserClaims", "AspNetUserRoles", "AspNetUsers" RESTART IDENTITY CASCADE;""");
     }
 
     /// <summary>

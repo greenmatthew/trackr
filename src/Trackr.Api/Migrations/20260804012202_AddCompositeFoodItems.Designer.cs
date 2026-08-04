@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Trackr.Api.Data;
@@ -11,9 +12,11 @@ using Trackr.Api.Data;
 namespace Trackr.Api.Migrations
 {
     [DbContext(typeof(TrackrDbContext))]
-    partial class TrackrDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260804012202_AddCompositeFoodItems")]
+    partial class AddCompositeFoodItems
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

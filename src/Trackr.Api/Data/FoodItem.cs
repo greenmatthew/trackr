@@ -98,6 +98,30 @@ public class FoodItem
     /// <summary>Everything else, one row per measured nutrient. Never the core four.</summary>
     public List<FoodItemNutrient> Nutrients { get; set; } = [];
 
+    /// <summary>
+    /// How many servings one batch of a recipe makes. Null for everything that is not a recipe.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Non-null is what makes an item a composite</strong>, and it comes with
+    /// <see cref="Components"/>: the API refuses a yield without components and components without a
+    /// yield, so the two are never out of step.
+    /// <para>
+    /// It exists so a recipe's per-serving values stay comparable with every other item's. The
+    /// components add up to a whole batch; dividing by the yield puts the result back on the same
+    /// footing as a scanned package, which is what lets the log, the stats views and the cascade
+    /// stay ignorant that composites exist at all.
+    /// </para>
+    /// </remarks>
+    public decimal? Yield { get; set; }
+
+    /// <summary>The ingredients, for a composite. Empty for everything else.</summary>
+    /// <remarks>
+    /// The nutrient columns and <see cref="Nutrients"/> above are <em>derived</em> from these when
+    /// the item is a composite - materialised on write by <see cref="CompositeNutrition"/> rather
+    /// than summed at read time, so no catalog list or dashboard has a tree walk in front of it.
+    /// </remarks>
+    public List<FoodItemComponent> Components { get; set; } = [];
+
     public DateTimeOffset CreatedUtc { get; set; }
 
     public DateTimeOffset UpdatedUtc { get; set; }

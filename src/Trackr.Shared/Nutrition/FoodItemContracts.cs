@@ -87,6 +87,44 @@ public sealed class SaveFoodItemRequest
     /// misread. The four core nutrients above must NOT appear here; sending one is a 400.
     /// </remarks>
     public Dictionary<string, decimal> Nutrients { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How many servings one batch of the recipe makes. Required with <see cref="Components"/>, and
+    /// refused without them.
+    /// </summary>
+    public decimal? Yield { get; set; }
+
+    /// <summary>
+    /// What the item is made of, for a recipe. Empty for everything else.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Sending components makes the nutrient fields above read-only.</strong> A recipe's
+    /// numbers are computed from its ingredients and its yield, so whatever was sent in
+    /// <see cref="EnergyKcal"/> and the rest is ignored rather than rejected - which is what lets a
+    /// client fetch an item, rename it and send the whole thing back.
+    /// </remarks>
+    public List<SaveFoodComponentRequest> Components { get; set; } = [];
+}
+
+/// <summary>One ingredient of a recipe.</summary>
+/// <remarks>
+/// A mutable class for the same binding reason as <see cref="SaveFoodItemRequest"/>.
+/// </remarks>
+public sealed class SaveFoodComponentRequest
+{
+    /// <summary>The ingredient, which must be an item the caller can see.</summary>
+    public Guid FoodItemId { get; set; }
+
+    /// <summary>
+    /// How many <em>servings</em> of the ingredient go into one batch - not grams.
+    /// </summary>
+    /// <remarks>
+    /// A serving is the only unit every catalog item has, and it is the unit the ingredient's own
+    /// nutrition is already expressed in, so composing is multiplication rather than a unit
+    /// conversion nobody has the data to make. "150 g of flour" is however many flour servings that
+    /// comes to.
+    /// </remarks>
+    public decimal Quantity { get; set; }
 }
 
 /// <summary>One catalog item, with everything known about it.</summary>
@@ -102,6 +140,14 @@ public sealed class SaveFoodItemRequest
 /// <param name="UpdatedByUserId">
 /// Who last edited it, for global items corrected wiki-style. Null if it has never been edited by
 /// anyone but its creator, or if that account has since been deleted.
+/// </param>
+/// <param name="Yield">
+/// How many servings one batch of the recipe makes, or null for anything that is not a recipe.
+/// Non-null is what makes an item a composite.
+/// </param>
+/// <param name="Components">
+/// The ingredients, for a recipe. The nutrient values above are computed from these and are not
+/// separately editable, so a client renders them rather than offering them for correction.
 /// </param>
 public sealed record FoodItemResponse(
     Guid Id,
@@ -120,9 +166,24 @@ public sealed record FoodItemResponse(
     IReadOnlyDictionary<string, decimal> Nutrients,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
-    Guid? UpdatedByUserId);
+    Guid? UpdatedByUserId,
+    decimal? Yield,
+    IReadOnlyList<FoodComponentResponse> Components);
+
+/// <summary>One ingredient of a recipe, named so a client need not fetch each one.</summary>
+/// <param name="Quantity">Servings of the ingredient per batch of the recipe.</param>
+public sealed record FoodComponentResponse(
+    Guid FoodItemId,
+    string Name,
+    string? Brand,
+    decimal Quantity,
+    decimal ServingSize,
+    string ServingUnit);
 
 /// <summary>A catalog row for a list. No nutrient map - fetch the item for that.</summary>
+/// <param name="Yield">
+/// Non-null for a recipe, which is how a list tells one apart without loading its ingredients.
+/// </param>
 public sealed record FoodItemSummaryResponse(
     Guid Id,
     string Name,
@@ -137,4 +198,5 @@ public sealed record FoodItemSummaryResponse(
     decimal FatG,
     decimal CarbohydrateG,
     decimal ProteinG,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    decimal? Yield);

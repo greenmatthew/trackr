@@ -205,6 +205,10 @@ builder.Services.AddSingleton<NutrientCatalog>();
 // rather than a rewrite of every aggregate - see DayBoundary.
 builder.Services.AddSingleton<DayBoundary>();
 
+// Recipes: the cycle check on write, and the recompute that carries a corrected ingredient up
+// through everything made of it. Scoped, because it works through the request's DbContext.
+builder.Services.AddScoped<CompositeNutrition>();
+
 builder.Services.AddTrackrRateLimiting(builder.Configuration);
 
 // Stages one and two of the logging cascade: barcode decoding, and Open Food Facts lookups. The

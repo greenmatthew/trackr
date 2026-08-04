@@ -37,6 +37,12 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
 
     public DbSet<FoodItemNutrient> FoodItemNutrients => Set<FoodItemNutrient>();
 
+    /// <summary>
+    /// The ingredient lists of composite items. The only place a recipe's structure lives - its
+    /// nutrition is materialised onto <see cref="FoodItem"/> itself.
+    /// </summary>
+    public DbSet<FoodItemComponent> FoodItemComponents => Set<FoodItemComponent>();
+
     public DbSet<LogEntry> LogEntries => Set<LogEntry>();
 
     public DbSet<LogItem> LogItems => Set<LogItem>();
@@ -152,6 +158,14 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
             food.Property(f => f.CarbohydrateG).HasPrecision(12, 4);
             food.Property(f => f.ProteinG).HasPrecision(12, 4);
 
+            // Non-null means composite. A batch that yields nothing would make the per-serving
+            // division either a divide by zero or a negative recipe, so the constraint is here as
+            // well as at the API boundary.
+            food.Property(f => f.Yield).HasPrecision(10, 3);
+            food.ToTable(table => table.HasCheckConstraint(
+                "CK_FoodItems_YieldPositive",
+                "\"Yield\" IS NULL OR \"Yield\" > 0"));
+
             // Two foreign keys to the same principal table, so both are configured explicitly -
             // as on Invite. The delete behaviours differ on purpose and are explained on the entity.
             food.HasOne(f => f.User)
@@ -201,6 +215,33 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
             amount.ToTable(table => table.HasCheckConstraint(
                 "CK_FoodItemNutrients_NotCore",
                 NotCoreConstraint));
+        });
+
+        builder.Entity<FoodItemComponent>(component =>
+        {
+            component.HasKey(c => new { c.ParentFoodItemId, c.ChildFoodItemId });
+            component.Property(c => c.Quantity).HasPrecision(10, 3);
+
+            // Two foreign keys to the same principal table, so both are configured explicitly.
+            component.HasOne(c => c.Parent)
+                .WithMany(f => f.Components)
+                .HasForeignKey(c => c.ParentFoodItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Cascade here too, which reads alarming and is not: the API answers 409 rather than
+            // delete an item a recipe uses, so the only delete that reaches this is an account's.
+            // A global recipe may hold only global ingredients, so no surviving recipe can lose an
+            // ingredient this way - see FoodItemComponent for the whole argument.
+            component.HasOne(c => c.Child)
+                .WithMany()
+                .HasForeignKey(c => c.ChildFoodItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Self-reference is caught by the cycle check with a message that explains itself, but
+            // the one-step case is cheap to make impossible.
+            component.ToTable(table => table.HasCheckConstraint(
+                "CK_FoodItemComponents_NotSelf",
+                "\"ParentFoodItemId\" <> \"ChildFoodItemId\""));
         });
 
         builder.Entity<LogEntry>(entry =>

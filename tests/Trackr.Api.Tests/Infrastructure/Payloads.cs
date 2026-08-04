@@ -14,6 +14,9 @@ internal static class Payloads
         string? barcode = null,
         FoodVisibility visibility = FoodVisibility.Personal,
         decimal energyKcal = 210.5m,
+        decimal fatG = 9.25m,
+        decimal carbohydrateG = 22.125m,
+        decimal proteinG = 7.5m,
         Dictionary<string, decimal>? nutrients = null) =>
         new()
         {
@@ -25,10 +28,41 @@ internal static class Payloads
             Source = FoodSource.Manual,
             Visibility = visibility,
             EnergyKcal = energyKcal,
-            FatG = 9.25m,
-            CarbohydrateG = 22.125m,
-            ProteinG = 7.5m,
+            FatG = fatG,
+            CarbohydrateG = carbohydrateG,
+            ProteinG = proteinG,
             Nutrients = nutrients ?? new Dictionary<string, decimal>(StringComparer.Ordinal)
+        };
+
+    /// <summary>
+    /// A composite item: <paramref name="yield"/> servings' worth, made of the given ingredients.
+    /// </summary>
+    /// <remarks>
+    /// No nutrient values, because a recipe's are computed. Anything sent in those fields is ignored
+    /// by the server, which is the behaviour <c>A_recipes_own_numbers_are_ignored</c> pins down.
+    /// </remarks>
+    public static SaveFoodItemRequest Recipe(
+        string name = "Household chilli",
+        decimal yield = 4m,
+        FoodVisibility visibility = FoodVisibility.Personal,
+        params (FoodItemResponse Ingredient, decimal Quantity)[] components) =>
+        new()
+        {
+            Name = name,
+            Brand = null,
+            ServingSize = 1m,
+            ServingUnit = "bowl",
+            Source = FoodSource.Manual,
+            Visibility = visibility,
+            Yield = yield,
+            Components =
+            [
+                .. components.Select(part => new SaveFoodComponentRequest
+                {
+                    FoodItemId = part.Ingredient.Id,
+                    Quantity = part.Quantity
+                })
+            ]
         };
 
     /// <summary>An entry logging <paramref name="quantity"/> servings of a catalog item.</summary>

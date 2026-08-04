@@ -129,6 +129,22 @@ the entry is saved.
 `GET /api/nutrients` returns this whole set, ordered, and is what a client caches to render display
 names and units — see [API Reference](API-Reference).
 
+### Recipes report less than you might expect, on purpose
+
+A recipe — a catalog item assembled from other catalog items — does not store nutrition of its own.
+Its values are computed from its ingredients when it is saved, and recomputed whenever one of those
+ingredients is corrected, so what you read is always the sum of what is underneath it.
+
+**A nutrient only appears on a recipe if every one of its ingredients reports it.** If the beans list
+iron and the rice says nothing about iron, the chilli lists no iron at all — rather than the beans'
+figure alone, which would look like the whole answer while being a fraction of it. Silence means "not
+measured", not "none", and adding it up as zero would produce a confident understatement.
+
+So a recipe built from one thorough barcode hit and one hand-typed ingredient will show calories and
+macros and little else. That is the honest reading, and it fills in on its own as the ingredients
+underneath it get better data. The four always-present nutrients are unaffected: every item has them,
+so every recipe does.
+
 ## How the display should behave
 
 Render in label order, and show only what the source actually provided. A confirmation card
