@@ -3,7 +3,7 @@
 #
 #   ./scripts/server.sh up [--build]        start db + backend + frontend on :8000
 #   ./scripts/server.sh down                stop it, keeping the database
-#   ./scripts/server.sh reset               stop it AND delete the database volume
+#   ./scripts/server.sh reset               stop it AND delete the database volume (keeps models)
 #   ./scripts/server.sh rebuild SERVICE     rebuild and restart one service
 #   ./scripts/server.sh ps
 #   ./scripts/server.sh logs [SERVICE]
@@ -45,8 +45,24 @@ cmd_up() {
 
 # The next `up` starts from an empty database, so registration reopens and the first account
 # claims the server again.
+#
+# The database volume BY NAME, not `down -v`. Since milestone 8 the stack also has an
+# `ollama-models` volume holding several gigabytes of downloaded model, and `-v` takes every
+# volume the project declares - turning "reset the database" into an overnight re-download for
+# anyone who ran it casually. Naming the one to drop is what the dev compose file's comment on
+# that volume has claimed all along.
 cmd_reset() {
-    compose down -v
+    compose down
+
+    # The compose project name prefixes it; `|| true` because a stack that was never up has no
+    # volume to remove, and that is not a failure.
+    docker volume rm "$(compose_project)_db-data" >/dev/null 2>&1 || true
+}
+
+# Whatever `name:` the dev compose file declares, read from the file rather than repeated here so
+# the two cannot drift.
+compose_project() {
+    awk '/^name:/ { print $2; exit }' "$DEV"
 }
 
 cmd_health() {
