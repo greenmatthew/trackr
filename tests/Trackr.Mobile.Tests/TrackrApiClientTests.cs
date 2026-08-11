@@ -244,8 +244,15 @@ public sealed class TrackrApiClientTests
         var settings = Substitute.For<IServerSettings>();
         settings.BaseUrl.Returns(Server);
 
+        // The analysis client is a second, separately configured HttpClient in the app - long
+        // timeout, no resilience pipeline. Here it is the same stub handler, because what these
+        // tests assert is what the client does with an answer, not how it was configured.
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        httpClientFactory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient(handler));
+
         return new TrackrApiClient(
             new HttpClient(handler),
+            httpClientFactory,
             settings,
             NullLogger<TrackrApiClient>.Instance);
     }

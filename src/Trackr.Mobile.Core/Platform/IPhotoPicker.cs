@@ -14,7 +14,24 @@ namespace Trackr.Mobile.Core.Platform;
 /// </remarks>
 public interface IPhotoPicker
 {
+    /// <summary>Chooses an existing picture from the device.</summary>
     Task<PhotoPickResult> PickAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes a new one with the camera.
+    /// </summary>
+    /// <remarks>
+    /// The one that matters for a meal, and the reason this interface grew a second method:
+    /// CLAUDE.md section 1 puts logging on the phone precisely because that is where you are when
+    /// you eat, and going via the gallery would mean taking the photo in another app first.
+    /// <para>
+    /// Unlike <see cref="PickAsync"/>, this needs a permission - the gallery picker hands back a
+    /// URI the system has already granted for one file, whereas the camera is the app opening the
+    /// hardware itself. A refusal comes back as a <see cref="PhotoPickResult.Problem"/> rather than
+    /// an exception, because "no" is an answer the user is entitled to give.
+    /// </para>
+    /// </remarks>
+    Task<PhotoPickResult> CaptureAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>

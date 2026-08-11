@@ -25,7 +25,9 @@ public sealed class MediaPickerPhotoPicker : IPhotoPicker
         {
             var picked = await MediaPicker.Default.PickPhotosAsync(new MediaPickerOptions
             {
-                Title = "Choose a profile picture",
+                // Neutral wording: the same picker serves the profile screen and the chat, and a
+                // title naming one of them is wrong half the time.
+                Title = "Choose a photo",
                 SelectionLimit = 1,
             });
 
@@ -52,6 +54,35 @@ public sealed class MediaPickerPhotoPicker : IPhotoPicker
             // the time it is opened - a cloud-backed gallery entry that is not on the device
             // is the usual way.
             return PhotoPickResult.Failed("That picture could not be opened. Try another one.");
+        }
+    }
+
+    public async Task<PhotoPickResult> CaptureAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var captured = await MediaPicker.Default.CapturePhotoAsync();
+
+            // Null when the camera was closed without a shot. A decision, not a failure.
+            return captured is null
+                ? PhotoPickResult.Cancelled
+                : PhotoPickResult.Picked(await captured.OpenReadAsync());
+        }
+        catch (PermissionException)
+        {
+            // Refusing the camera is a legitimate answer, and the gallery still works - worth
+            // saying, because otherwise the only visible outcome is that nothing happened.
+            return PhotoPickResult.Failed(
+                "Trackr was not allowed to use the camera. Grant it when Android asks, or choose "
+                + "a photo instead.");
+        }
+        catch (FeatureNotSupportedException)
+        {
+            return PhotoPickResult.Failed("This device has no camera Trackr can use.");
+        }
+        catch (IOException)
+        {
+            return PhotoPickResult.Failed("That photo could not be read. Try taking it again.");
         }
     }
 }

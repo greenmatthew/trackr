@@ -9,6 +9,7 @@ using Polly.Timeout;
 using Trackr.Mobile.Core.Platform;
 using Trackr.Shared.Auth;
 using Trackr.Shared.Health;
+using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.Api;
 
@@ -23,9 +24,28 @@ namespace Trackr.Mobile.Core.Api;
 /// </remarks>
 public sealed class TrackrApiClient(
     HttpClient http,
+    IHttpClientFactory httpClientFactory,
     IServerSettings serverSettings,
     ILogger<TrackrApiClient> logger) : ITrackrApiClient
 {
+    /// <summary>
+    /// The named client used for <c>POST /api/analyze</c> alone - long timeout, no resilience
+    /// pipeline. Configured in <see cref="ServiceCollectionExtensions"/>, which says why.
+    /// </summary>
+    public const string AnalysisClientName = "trackr-analysis";
+
+    /// <summary>
+    /// How long to wait for an analysis before giving up.
+    /// </summary>
+    /// <remarks>
+    /// Comfortably past the server's own model timeout (<c>Trackr:Ollama:TimeoutSeconds</c>, 240
+    /// seconds by default) plus the barcode and Open Food Facts stages in front of it. Deliberately
+    /// the looser of the two: when an analysis does run long, the useful outcome is the server's
+    /// explanation of what went wrong, and a client that gave up first would replace it with
+    /// "the server took too long to answer".
+    /// </remarks>
+    public static readonly TimeSpan AnalysisTimeout = TimeSpan.FromMinutes(5);
+
     public async Task<ServerCheckResult> CheckServerAsync(
         Uri baseUrl,
         CancellationToken cancellationToken = default)
@@ -403,6 +423,157 @@ public sealed class TrackrApiClient(
             logger.LogWarning(ex, "Avatar removal failed");
 
             return AvatarChangeResult.Failed("Could not reach the server. Check your connection.");
+        }
+    }
+
+    public async Task<IReadOnlyList<NutrientResponse>?> GetNutrientsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.GetAsync(Endpoint("api/nutrients"), cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "Nutrient catalog answered with {StatusCode}",
+                    (int)response.StatusCode);
+
+                return null;
+            }
+
+            return await response.Content
+                .ReadFromJsonAsync<IReadOnlyList<NutrientResponse>>(cancellationToken);
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Nutrient catalog fetch failed");
+
+            // Null rather than an empty list: the caller shows fewer rows when it does not have
+            // the names, and "there are no nutrients" is a different and wrong thing to say.
+            return null;
+        }
+    }
+
+    public async Task<MealImageUploadResult> UploadMealImageAsync(
+        byte[] content,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Raw bytes with a Content-Type, matching the avatar upload and what the endpoint
+            // reads. There is one file and no fields to go with it.
+            using var body = new ByteArrayContent(content);
+            body.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+            using var response = await http.PostAsync(
+                Endpoint("api/images"),
+                body,
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var image = await response.Content
+                    .ReadFromJsonAsync<MealImageResponse>(cancellationToken);
+
+                return image is null
+                    ? MealImageUploadResult.Failed("The server returned an empty response.")
+                    : MealImageUploadResult.Ok(image.Id);
+            }
+
+            if (response.StatusCode is HttpStatusCode.RequestEntityTooLarge)
+            {
+                return MealImageUploadResult.Failed(
+                    $"That photo is over {MealImageRules.MaxBytes / (1024 * 1024)} MB.");
+            }
+
+            return MealImageUploadResult.Failed(await ReadProblemAsync(response, cancellationToken));
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Meal photo upload failed");
+
+            return MealImageUploadResult.Failed("Could not reach the server. Check your connection.");
+        }
+    }
+
+    public async Task<MealAnalysisResult> AnalyzeMealAsync(
+        AnalyzeMealRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        // The one call that does not use the injected client - see AnalysisClientName.
+        using var client = httpClientFactory.CreateClient(AnalysisClientName);
+
+        try
+        {
+            using var response = await client.PostAsJsonAsync(
+                Endpoint("api/analyze"),
+                request,
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content
+                    .ReadFromJsonAsync<MealAnalysisResult>(cancellationToken);
+
+                // A 200 carrying an unreadable body is the one case the server cannot explain for
+                // itself, so this is the only reason produced here rather than relayed.
+                return result ?? MealAnalysisResult.Failed("The server returned an empty response.");
+            }
+
+            if (response.StatusCode is HttpStatusCode.TooManyRequests)
+            {
+                return MealAnalysisResult.Failed(
+                    "Too many meals analysed in a short time. Wait a few minutes and try again.");
+            }
+
+            return MealAnalysisResult.Failed(await ReadProblemAsync(response, cancellationToken));
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Meal analysis failed");
+
+            // Named separately from the other transport failures because the likely cause is
+            // different: the request reached a server that is thinking, and thought for longer than
+            // this client was willing to wait. Telling the user to check their connection would send
+            // them after the wrong problem.
+            return MealAnalysisResult.Failed(
+                ex is TaskCanceledException && !cancellationToken.IsCancellationRequested
+                    ? $"The server did not answer within {AnalysisTimeout.TotalMinutes:0} minutes. "
+                      + "It may still be working - check the log before sending this again."
+                    : "Could not reach the server. Check your connection.");
+        }
+    }
+
+    public async Task<SaveLogResult> SaveLogEntryAsync(
+        SaveLogEntryRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.PostAsJsonAsync(
+                Endpoint("api/log"),
+                request,
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var entry = await response.Content
+                    .ReadFromJsonAsync<LogEntryResponse>(cancellationToken);
+
+                return entry is null
+                    ? SaveLogResult.Failed("The server returned an empty response.")
+                    : SaveLogResult.Ok(entry);
+            }
+
+            return SaveLogResult.Failed(await ReadProblemAsync(response, cancellationToken));
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Saving the log entry failed");
+
+            return SaveLogResult.Failed("Could not reach the server. Nothing was saved.");
         }
     }
 

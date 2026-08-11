@@ -2,27 +2,417 @@
 <ContentPage
     x:Class="Trackr.Mobile.Pages.ChatPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:chat="clr-namespace:Trackr.Mobile.Core.ViewModels.Chat;assembly=Trackr.Mobile.Core"
+    xmlns:pages="clr-namespace:Trackr.Mobile.Pages"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:ChatViewModel">
 
     <!-- The input surface, and the defining UX decision of the app (CLAUDE.md section 1):
-         describe what you ate in plain language, optionally attach a photo with a + button
-         bottom-left, and confirm a card before anything is written.
+         describe what you ate in plain language, optionally attach a photo with the + button
+         bottom-left, and approve a card before anything is written.
 
-         Empty until milestone 9, which builds the chat and wires the cascade behind it. The
-         tab exists now so the shell it lives in was settled once, rather than being rebuilt
-         underneath the chat later. -->
+         Nothing about food happens here. The barcode decode, the Open Food Facts lookup and the
+         model are one POST /api/analyze on the server, because a client that ran the stages itself
+         would be a second copy of the cascade that only changes when a new APK ships (section 10). -->
 
-    <VerticalStackLayout Padding="24" Spacing="12" VerticalOptions="Center">
+    <ContentPage.Resources>
 
-        <Label
-            Text="Chat"
-            Style="{StaticResource PageTitle}"
-            HorizontalOptions="Center" />
+        <!-- What the user said. Right-aligned and filled, the one thing on screen they wrote. -->
+        <DataTemplate x:Key="UserTemplate" x:DataType="chat:UserMessage">
+            <VerticalStackLayout
+                HorizontalOptions="End"
+                Spacing="6"
+                Margin="48,4,0,4">
 
-        <Label
-            Text="Tell Trackr what you ate and it works out the numbers. Arriving in a later milestone."
-            Style="{StaticResource Caption}" />
+                <CollectionView
+                    ItemsSource="{Binding Photos}"
+                    IsVisible="{Binding HasPhotos}"
+                    HeightRequest="120">
 
-    </VerticalStackLayout>
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Horizontal" ItemSpacing="6" />
+                    </CollectionView.ItemsLayout>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="{x:Null}">
+                            <Border StrokeThickness="0" StrokeShape="RoundRectangle 10">
+                                <Image
+                                    Source="{Binding ., Converter={StaticResource ByteArrayToImageSourceConverter}}"
+                                    Aspect="AspectFill"
+                                    WidthRequest="120"
+                                    HeightRequest="120" />
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+
+                <Border
+                    IsVisible="{Binding HasText}"
+                    Padding="14,10"
+                    StrokeThickness="0"
+                    StrokeShape="RoundRectangle 16"
+                    BackgroundColor="{StaticResource Primary}">
+
+                    <!-- Dark text on a brand fill, never light: the brand colours run 1.8-2.4:1
+                         against a light surface - see docs/decisions/04-branding.md. -->
+                    <Label
+                        Text="{Binding Text}"
+                        Style="{StaticResource Body}"
+                        TextColor="{StaticResource PrimaryDarkText}" />
+
+                </Border>
+
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- The model's own sentence about what it did. -->
+        <DataTemplate x:Key="NoteTemplate" x:DataType="chat:NoteMessage">
+            <Label
+                Text="{Binding Text}"
+                Style="{StaticResource Body}"
+                Margin="0,4,48,4" />
+        </DataTemplate>
+
+        <!-- Shown whatever the model said. CLAUDE.md section 5: a rate limit, a timeout or an
+             assumed serving size reaches the user even when the reply never mentions it, which is
+             why this is its own strip rather than a line folded into the note above. -->
+        <DataTemplate x:Key="WarningTemplate" x:DataType="chat:WarningMessage">
+            <Border
+                Margin="0,4"
+                Padding="12,10"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 10"
+                Stroke="{AppThemeBinding Light={StaticResource WarningOnLight}, Dark={StaticResource Warning}}"
+                BackgroundColor="Transparent">
+
+                <Label
+                    Text="{Binding Text}"
+                    Style="{StaticResource Body}"
+                    TextColor="{AppThemeBinding Light={StaticResource WarningOnLight}, Dark={StaticResource Warning}}" />
+
+            </Border>
+        </DataTemplate>
+
+        <!-- One food on the card. -->
+        <DataTemplate x:Key="ConfirmableItemTemplate" x:DataType="chat:ConfirmableItem">
+            <VerticalStackLayout Spacing="6" Margin="0,8">
+
+                <Label Text="{Binding Name}" Style="{StaticResource Body}" FontAttributes="Bold" />
+
+                <Label Text="{Binding Brand}" Style="{StaticResource FieldLabel}" IsVisible="{Binding HasBrand}" />
+
+                <Label Text="{Binding ServingDescription}" Style="{StaticResource FieldLabel}" IsVisible="{Binding HasServingDescription}" />
+
+                <Label Text="{Binding SourceDescription}" Style="{StaticResource FieldLabel}" />
+
+                <!-- Milestone 8's validator is the main thing standing between a small model and a
+                     wrong number in the database. Its verdict has to look different from a normal
+                     item rather than read as a footnote, or the whole check is decoration. -->
+                <Border
+                    IsVisible="{Binding IsLowConfidence}"
+                    Padding="10,6"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 8"
+                    Stroke="{AppThemeBinding Light={StaticResource WarningOnLight}, Dark={StaticResource Warning}}">
+
+                    <Label
+                        Text="These numbers did not add up. Check them before saving."
+                        Style="{StaticResource Body}"
+                        FontSize="13"
+                        TextColor="{AppThemeBinding Light={StaticResource WarningOnLight}, Dark={StaticResource Warning}}" />
+
+                </Border>
+
+                <!-- Visible without a tap, for the same reason. -->
+                <VerticalStackLayout
+                    IsVisible="{Binding HasWarnings}"
+                    BindableLayout.ItemsSource="{Binding Warnings}"
+                    Spacing="2">
+
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="{x:Null}">
+                            <Label Text="{Binding .}" Style="{StaticResource FieldLabel}" />
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+
+                </VerticalStackLayout>
+
+                <!-- Servings and calories, the two the user corrects most. Per serving, with the
+                     total spelled out underneath - the server does the multiplication. -->
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+
+                    <VerticalStackLayout>
+                        <Label Text="Servings" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding QuantityText}" Keyboard="Numeric" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Column="1">
+                        <Label Text="kcal per serving" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding EnergyText}" Keyboard="Numeric" />
+                    </VerticalStackLayout>
+
+                </Grid>
+
+                <Label Text="{Binding TotalDescription}" Style="{StaticResource FieldLabel}" />
+
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+
+                    <VerticalStackLayout>
+                        <Label Text="Fat (g)" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding FatText}" Keyboard="Numeric" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Column="1">
+                        <Label Text="Carbs (g)" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding CarbohydrateText}" Keyboard="Numeric" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Column="2">
+                        <Label Text="Protein (g)" Style="{StaticResource FieldLabel}" />
+                        <Entry Text="{Binding ProteinText}" Keyboard="Numeric" />
+                    </VerticalStackLayout>
+
+                </Grid>
+
+                <!-- Only the nutrients the source actually reported. A card padded with "-" rows for
+                     everything nobody measured would quietly teach the reader that absent means zero
+                     - see wiki/Nutrient-Reference.md. -->
+                <VerticalStackLayout
+                    IsVisible="{Binding HasNutrients}"
+                    BindableLayout.ItemsSource="{Binding Nutrients}"
+                    Spacing="2"
+                    Margin="0,4,0,0">
+
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="chat:NutrientRow">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Text="{Binding DisplayName}" Style="{StaticResource FieldLabel}" />
+                                <Label Grid.Column="1" Text="{Binding Amount}" Style="{StaticResource FieldLabel}" />
+                            </Grid>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </DataTemplate>
+
+        <!-- The only thing in the app that turns an analysis into a log entry. POST /api/analyze
+             writes nothing; this is the confirm-before-save rule of section 2 as a piece of UI. -->
+        <DataTemplate x:Key="ConfirmationTemplate" x:DataType="chat:ConfirmationCard">
+            <Border Style="{StaticResource Card}" Margin="0,6,24,6">
+                <VerticalStackLayout Spacing="8">
+
+                    <Label Text="Does this look right?" Style="{StaticResource Body}" FontAttributes="Bold" />
+
+                    <VerticalStackLayout
+                        BindableLayout.ItemsSource="{Binding Items}"
+                        BindableLayout.ItemTemplate="{StaticResource ConfirmableItemTemplate}" />
+
+                    <Label Text="{Binding TotalDescription, StringFormat='Meal total: {0}'}" Style="{StaticResource Body}" FontAttributes="Bold" />
+
+                    <Label Text="{Binding Problem}" Style="{StaticResource ErrorText}" IsVisible="{Binding Problem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+                    <Label Text="{Binding StateDescription}" Style="{StaticResource FieldLabel}" IsVisible="{Binding StateDescription, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding IsPending}">
+
+                        <Button
+                            Text="Discard"
+                            Style="{StaticResource LinkAction}"
+                            Command="{Binding DiscardCommand}" />
+
+                        <Button
+                            Grid.Column="1"
+                            Text="Save"
+                            AutomationId="SaveMeal"
+                            Command="{Binding ConfirmCommand}" />
+
+                    </Grid>
+
+                </VerticalStackLayout>
+            </Border>
+        </DataTemplate>
+
+        <pages:ChatMessageTemplateSelector
+            x:Key="MessageTemplate"
+            User="{StaticResource UserTemplate}"
+            Note="{StaticResource NoteTemplate}"
+            Warning="{StaticResource WarningTemplate}"
+            Confirmation="{StaticResource ConfirmationTemplate}" />
+
+    </ContentPage.Resources>
+
+    <!-- Container on three edges so the transcript stays clear of the system bars, SoftInput at the
+         bottom so the composer rises above the keyboard instead of being typed into blind. This is
+         the one screen in the app where that distinction matters. -->
+    <Grid
+        RowDefinitions="*,Auto"
+        SafeAreaEdges="Container, Container, Container, SoftInput">
+
+        <CollectionView
+            x:Name="Transcript"
+            ItemsSource="{Binding Messages}"
+            ItemTemplate="{StaticResource MessageTemplate}"
+            Margin="16,8">
+
+            <CollectionView.EmptyView>
+                <VerticalStackLayout Padding="24" Spacing="8" VerticalOptions="Center">
+
+                    <Label Text="What did you eat?" Style="{StaticResource PageTitle}" HorizontalOptions="Center" />
+
+                    <Label
+                        Text="Describe it in your own words, or attach a photo with the + button. Trackr works out the numbers and shows you them before anything is saved."
+                        Style="{StaticResource Caption}" />
+
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
+        </CollectionView>
+
+        <VerticalStackLayout Grid.Row="1" Padding="12,8" Spacing="8">
+
+            <Label
+                Text="{Binding Error}"
+                Style="{StaticResource ErrorText}"
+                IsVisible="{Binding Error, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+            <!-- Analysing a meal on a self-hosted CPU takes minutes. Saying so, and offering a way
+                 out, is the difference between a slow answer and one nobody waits for. -->
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" IsVisible="{Binding IsBusy}">
+
+                <ActivityIndicator IsRunning="{Binding IsBusy}" WidthRequest="20" HeightRequest="20" />
+
+                <Label Grid.Column="1" Text="{Binding Status}" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+
+                <Button Grid.Column="2" Text="Cancel" Style="{StaticResource LinkAction}" Command="{Binding CancelCommand}" />
+
+            </Grid>
+
+            <Button
+                Text="Try again"
+                Style="{StaticResource LinkAction}"
+                Command="{Binding RetryCommand}"
+                IsVisible="{Binding CanRetry}" />
+
+            <CollectionView
+                ItemsSource="{Binding Attachments}"
+                HeightRequest="84"
+                IsVisible="{Binding HasAttachments}">
+
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Horizontal" ItemSpacing="8" />
+                </CollectionView.ItemsLayout>
+
+                <!-- Tapping the thumbnail removes it, with the badge saying so. A Button laid over
+                     the corner was the obvious thing and is the wrong one: Material gives it a
+                     minimum touch size that swallows most of an 84pt thumbnail, so what looked like
+                     a small x covered the photo it was meant to annotate. -->
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PendingPhoto">
+                        <Border
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 10"
+                            WidthRequest="84"
+                            HeightRequest="84">
+
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ChatViewModel}}, Path=RemoveAttachmentCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Border.GestureRecognizers>
+
+                            <Grid>
+
+                                <Image
+                                    Source="{Binding Content, Converter={StaticResource ByteArrayToImageSourceConverter}}"
+                                    Aspect="AspectFill"
+                                    WidthRequest="84"
+                                    HeightRequest="84"
+                                    SemanticProperties.Description="Attached photo. Tap to remove." />
+
+                                <Border
+                                    Style="{StaticResource AvatarCircle}"
+                                    WidthRequest="24"
+                                    HeightRequest="24"
+                                    Margin="4"
+                                    HorizontalOptions="End"
+                                    VerticalOptions="Start">
+
+                                    <Label
+                                        Text="x"
+                                        FontSize="13"
+                                        FontAttributes="Bold"
+                                        TextColor="{StaticResource PrimaryDarkText}"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center" />
+
+                                </Border>
+
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+            <!-- Camera first: photographing the meal in front of you is what the phone is for.
+                 Two plain buttons rather than a platform action sheet, so the choice stays a pair
+                 of commands the view model exposes and a test can drive. -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" IsVisible="{Binding IsAttachMenuOpen}">
+
+                <Button
+                    Text="Take a photo"
+                    AutomationId="CapturePhoto"
+                    Command="{Binding CapturePhotoCommand}" />
+
+                <Button
+                    Grid.Column="1"
+                    Text="Choose a photo"
+                    AutomationId="ChoosePhoto"
+                    Command="{Binding AttachPhotoCommand}" />
+
+            </Grid>
+
+            <!-- The + is bottom-left of the text box and the send button is bottom-right, both
+                 within a thumb's reach of the bottom of the screen (CLAUDE.md section 1). -->
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" VerticalOptions="End">
+
+                <Button
+                    Text="+"
+                    AutomationId="AttachPhoto"
+                    SemanticProperties.Description="Attach a photo"
+                    FontSize="24"
+                    WidthRequest="48"
+                    HeightRequest="48"
+                    Padding="0"
+                    CornerRadius="24"
+                    VerticalOptions="End"
+                    Command="{Binding ToggleAttachMenuCommand}" />
+
+                <Editor
+                    Grid.Column="1"
+                    Text="{Binding Draft}"
+                    AutomationId="MealText"
+                    Placeholder="Say what you ate"
+                    AutoSize="TextChanges"
+                    MaximumHeightRequest="140"
+                    VerticalOptions="End" />
+
+                <Button
+                    Grid.Column="2"
+                    Text="Send"
+                    AutomationId="SendMeal"
+                    HeightRequest="48"
+                    VerticalOptions="End"
+                    Command="{Binding SendCommand}" />
+
+            </Grid>
+
+        </VerticalStackLayout>
+
+    </Grid>
 
 </ContentPage>

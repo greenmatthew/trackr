@@ -27,4 +27,13 @@
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+  <!-- Photographing the meal in front of you is the core loop (CLAUDE.md section 1), so the
+       camera is asked for. Still no READ_MEDIA_IMAGES: the gallery picker hands back a URI the
+       system has already granted for the one chosen file, and broad library access would be a
+       permission the app never exercises.
+       required="false" so the app still installs on a device without a camera - the gallery path
+       works there, and CaptureAsync reports the absence rather than crashing. -->
+  <uses-permission android:name="android.permission.CAMERA" />
+  <uses-feature android:name="android.hardware.camera" android:required="false" />
+
 </manifest>

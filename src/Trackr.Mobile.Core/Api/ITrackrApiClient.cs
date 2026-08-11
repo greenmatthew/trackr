@@ -1,4 +1,5 @@
 using Trackr.Shared.Auth;
+using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.Api;
 
@@ -65,6 +66,81 @@ public interface ITrackrApiClient
 
     /// <summary>Removes the profile picture, falling back to initials. Idempotent.</summary>
     Task<AvatarChangeResult> DeleteAvatarAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every nutrient the server knows about: key, display name, unit and label order.
+    /// </summary>
+    /// <remarks>
+    /// Null when it could not be asked. The server owns this vocabulary and adding to it is a data
+    /// change (wiki/Nutrient-Reference.md), so the phone must not carry its own copy - a hardcoded
+    /// list would go stale the first time a nutrient is added and would then render an amount
+    /// against the wrong name or the wrong unit.
+    /// </remarks>
+    Task<IReadOnlyList<NutrientResponse>?> GetNutrientsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores a meal photo and returns its id, for the analysis and the log entry to refer to.
+    /// </summary>
+    /// <remarks>
+    /// Uploaded before either happens, which is why both take ids rather than bytes: a photo can
+    /// then be analysed twice - after a correction, or by a better model later - without being sent
+    /// again, and confirming a card does not re-upload what the analysis already looked at.
+    /// </remarks>
+    Task<MealImageUploadResult> UploadMealImageAsync(
+        byte[] content,
+        string contentType,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs the whole cascade over some text and some already-uploaded photos. Writes nothing.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Always returns a result, never throws for a failure.</strong> An unreachable server,
+    /// a rate limit and a model that could not read the label all arrive as
+    /// <see cref="MealAnalysisOutcome.Failed"/> carrying a reason in
+    /// <see cref="MealAnalysisResult.Warnings"/> - the same shape the server uses for its own
+    /// failures. CLAUDE.md section 5 requires every one of them to reach the user in plain language,
+    /// and one shape means the chat renders them all without a special case per cause.
+    /// <para>
+    /// Minutes, not milliseconds: see <see cref="TrackrApiClient.AnalysisTimeout"/>. Callers must
+    /// expect to sit on this and should pass a token the user can cancel.
+    /// </para>
+    /// </remarks>
+    Task<MealAnalysisResult> AnalyzeMealAsync(
+        AnalyzeMealRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes a confirmed entry to the log. The only call in this interface that stores food.
+    /// </summary>
+    Task<SaveLogResult> SaveLogEntryAsync(
+        SaveLogEntryRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Outcome of storing a meal photo.</summary>
+/// <param name="ImageId">The stored photo's id, set only on success.</param>
+public sealed record MealImageUploadResult(
+    bool Succeeded,
+    Guid ImageId = default,
+    string? Problem = null)
+{
+    public static MealImageUploadResult Ok(Guid imageId) => new(true, imageId);
+
+    public static MealImageUploadResult Failed(string problem) => new(false, Problem: problem);
+}
+
+/// <summary>Outcome of writing a log entry.</summary>
+/// <param name="Entry">What was stored, set only on success.</param>
+public sealed record SaveLogResult(
+    bool Succeeded,
+    LogEntryResponse? Entry = null,
+    string? Problem = null)
+{
+    public static SaveLogResult Ok(LogEntryResponse entry) => new(true, entry);
+
+    public static SaveLogResult Failed(string problem) => new(false, Problem: problem);
 }
 
 /// <summary>Outcome of probing a candidate server address.</summary>

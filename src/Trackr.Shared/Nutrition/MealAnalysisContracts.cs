@@ -146,6 +146,39 @@ public sealed record MealAnalysisItem(
     IReadOnlyDictionary<string, decimal> Nutrients,
     IReadOnlyList<string> Warnings);
 
+/// <summary>Turning a confirmed analysis into something the log will accept.</summary>
+public static class MealAnalysisItemExtensions
+{
+    /// <summary>
+    /// Copies an analysed item onto a save request, field for field.
+    /// </summary>
+    /// <remarks>
+    /// <strong>A copy, and deliberately nothing else - no rounding, no defaulting, no arithmetic.</strong>
+    /// The two types are kept the same shape on purpose (there is a test that fails when they drift),
+    /// so anything clever here would be a second place for a number to change between what the user
+    /// approved and what was stored, which CLAUDE.md section 2 names as the failure to avoid. Edits
+    /// belong upstream of this, on the <see cref="MealAnalysisItem"/> the card is holding.
+    /// <para>
+    /// <see cref="SaveLogItemRequest.FoodItemId"/> stays null: the cascade does not read the catalog,
+    /// so there is no id to carry. Milestone 10 fills it in by upserting an item at this moment.
+    /// </para>
+    /// </remarks>
+    public static SaveLogItemRequest ToSaveLogItemRequest(this MealAnalysisItem item) =>
+        new()
+        {
+            Name = item.Name,
+            Brand = item.Brand,
+            Quantity = item.Quantity,
+            ServingSize = item.ServingSize,
+            ServingUnit = item.ServingUnit,
+            EnergyKcal = item.EnergyKcal,
+            FatG = item.FatG,
+            CarbohydrateG = item.CarbohydrateG,
+            ProteinG = item.ProteinG,
+            Nutrients = new Dictionary<string, decimal>(item.Nutrients, StringComparer.Ordinal)
+        };
+}
+
 /// <summary>Everything one run of the cascade produced. Nothing here has been saved.</summary>
 /// <remarks>
 /// <strong>This endpoint writes nothing</strong>, which is the confirm-before-save rule of CLAUDE.md
