@@ -239,6 +239,15 @@ lives — read the relevant one before changing anything it covers.
   behind the cycle check, the cross-account fan-out, why a global recipe may hold only global
   ingredients, why deleting an ingredient is refused rather than cascaded, and the intersection rule
   that keeps "missing is not zero" true through the arithmetic.
+- [10-ollama.md](docs/decisions/10-ollama.md) — the local model: why the server does the serving
+  arithmetic, why the prompt pins a product's serving, what a schema `enum` does and does not buy
+  under constrained decoding, the validator's four severities and the three checks that are not
+  obvious, the context-window trap, `repeat_penalty`, the Qwen licence trap, and why a
+  mixture-of-experts model is the *fast* one on a processor.
+- [11-chat.md](docs/decisions/11-chat.md) — the chat: the separate analysis `HttpClient` and why a
+  resilience pipeline is wrong for it, four message types rather than one with a flag, editable
+  numbers bound as text, confirming as a copy with the edits applied upstream, photos uploaded on
+  send but retried by id, camera capture and the permission it brings, and the 2560px re-encode.
 
 ---
 
@@ -454,9 +463,12 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    **Two things it pulled forward on purpose:** the avatar needed an EF entity, a migration and
    endpoints (milestone 6 work) and a profile screen (§9.13). Neither means those milestones
    partly shipped — the record says what was and was not taken.
-   **Left open:** the Android status bar renders `colorPrimary` and clashes with the title bar.
-   The fix is going edge-to-edge and handling insets, which is a layout change wanting its own
-   slice; two cheaper approaches were tried and both fail structurally (see the record).
+   **The status bar clash it left open is fixed** — before milestone 9, since the chat is the most
+   inset-sensitive screen in the app and building it against a layout about to change would mean
+   building it twice. It needed no slice: the app was already edge-to-edge (Android 15 enforces it
+   at API 35+), and the band was the Shell's `AppBarLayout` painting `colorPrimary` through the
+   status bar inset. An Android resource override fixes it; the amendment on the record has the
+   reasoning and the two things `ConfigChanges.UiMode` made necessary.
 6. ~~**Data layer**~~ ✅ — [07-data-layer.md](docs/decisions/07-data-layer.md). Seven entities,
    the relational nutrient store seeded with 29 nutrients, and CRUD for catalog, log and meal
    photos. The acceptance criterion — store and read back a full multi-nutrient item — is
@@ -494,11 +506,6 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
      **Left open:** nothing writes a recipe yet but a person with an HTTP client — milestone 9 is
      where saying "I made this from these" becomes possible — and there is no scaling or unit
      conversion.
-- [10-ollama.md](docs/decisions/10-ollama.md) — the local model: why the server does the serving
-  arithmetic, why the prompt pins a product's serving, what a schema `enum` does and does not buy
-  under constrained decoding, the validator's four severities and the three checks that are not
-  obvious, the context-window trap, `repeat_penalty`, the Qwen licence trap, and why a
-  mixture-of-experts model is the *fast* one on a processor.
 8. ~~**Ollama integration**~~ ✅ — [10-ollama.md](docs/decisions/10-ollama.md). `IMealAnalyzer`
    behind a typed client, a prompt and JSON schema **generated from `NutrientCatalog`**, the
    image-vs-structured-data swap in `MealPrompt.PhotosToSend`, and `MealAnalysisReader` — the
@@ -518,11 +525,23 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    *video* memory and gives a CPU-only server far too little.
    **Left open:** nothing calls the route but an HTTP client, and the mobile client cannot — its
    30-second timeout and retry pipeline would queue four inference jobs for one meal.
-9. **Chat UI + cascade + confirm** — build the chat interface **in the Android app** (new-chat
-   flow, message list, text box with a `+` button bottom-left to attach images) and wire the
-   full cascade from §5 into it. The parsed result appears as an in-chat **confirmation card**
-   (calories/macros/servings, editable) with any fallback warnings, and only writes to the DB
-   on confirm. Include the serving-count math. Camera and photo-picker permissions land here.
+9. ~~**Chat UI + cascade + confirm**~~ ✅ — [11-chat.md](docs/decisions/11-chat.md). The chat page,
+   the `+` button with camera and gallery, and the in-chat confirmation card that turns an analysis
+   into a `POST /api/log`. The cascade itself was already one server call, so this is MAUI work plus
+   the client fix without which none of it runs: **analysis needs its own named `HttpClient`** —
+   five-minute timeout, no resilience pipeline — because the shared 30-second client with retries
+   queued four inference jobs per meal.
+   **Three things it settled.** Confirming is `items.Select(ToSaveLogItemRequest)` and nothing else,
+   with edits applied upstream as `analysed with { … }`, so no mapping layer sits between the number
+   on screen and the number stored. Editable figures are bound as **text**, parsed here, and an
+   unreadable one blocks the save rather than becoming zero. And a photo is uploaded on send but
+   kept **by id**, so retrying a failed analysis costs no second upload.
+   **The two inherited rules landed where they had to:** a `Confidence: Low` item is drawn
+   differently with its warnings visible without a tap, and the card lists only nutrients the source
+   reported — never a "—" row for one nobody measured.
+   **Left open:** a quantity the validator does not catch (the model echoed a serving's gram weight
+   as a count and produced a 43 000 kcal meal with no `Low` flag — a `MealAnalysisReader` gap), the
+   transcript not surviving a tab switch, and no physical-phone run.
 10. **Catalog growth** — upsert items from OFF/AI into the catalog; let the user pick from
     previously logged items for fast re-logging.
     - **10a. Ingredients** — capture what a product is *made of*, not just its nutrition. Lettered

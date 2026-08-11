@@ -194,6 +194,43 @@ Both were invisible to a build and to the unit tests, and are the argument for C
   The real fix is going edge-to-edge — dropping `maui_edgetoedge_optout`, letting the shell paint
   behind the status bar, and handling insets. That is a layout change with its own testing, and it
   wants its own slice. Both attempts were reverted.
+
+  > **Amended, fixed before milestone 9.** The paragraph above is kept because the two failures it
+  > records are still true and still worth not repeating — but its diagnosis was wrong, and the
+  > slice it asked for turned out not to exist.
+  >
+  > **The app was already edge-to-edge, and always had been.** Android 15 enforces it for anything
+  > targeting API 35 or later, which leaves MAUI's `maui_edgetoedge_optout` nothing to opt out of.
+  > Overriding it to `false` was tried and produced a screenshot identical to the pixel — there was
+  > no layout change to make and no insets to handle, because MAUI was handling them correctly the
+  > whole time.
+  >
+  > What painted the band is that MAUI gives the Shell's `AppBarLayout` a `?attr/colorPrimary`
+  > background through the `MauiAppBarLayout` theme overlay. Under edge-to-edge that layout absorbs
+  > the status bar inset as padding and paints its own background through it, while the `Toolbar`
+  > inside it takes the white of `Shell.BackgroundColor`. Hence a cyan strip *on top of* a white bar
+  > rather than a uniformly cyan one — a detail the original description recorded accurately and
+  > which should have been the clue.
+  >
+  > The fix is `MauiAppBarLayout` overridden in `Platforms/Android/Resources/values/styles.xml` to
+  > take `@color/titleBarBackground`, a new colour mirroring `Shell.BackgroundColor` across
+  > `values/` and `values-night/`. **A resource is the one lever that works here**, which is the
+  > through-line connecting it to the two failures above: the activity theme is replaced in
+  > `base.OnCreate` and the status bar colour API is dead on API 35+, but resource resolution
+  > happens before either.
+  >
+  > **Two things had to follow, both from `ConfigChanges.UiMode`.** The activity declares it, so a
+  > light/dark switch does not recreate it, so already-inflated views keep the drawables they
+  > resolved at inflation. MAUI's own XAML re-themes itself through `AppThemeBinding`; the
+  > `AppBarLayout` background and the system bars' `windowLightStatusBar` do not, so both are
+  > re-applied in `MainActivity.OnConfigurationChanged`. Without the second, switching into dark
+  > leaves a dark clock on a navy bar.
+  >
+  > Verified on the emulator (API 36) in both themes, cold-started and switched at runtime in both
+  > directions, across `AuthShell`, all three tabs, the pushed profile page and landscape.
+  > `FindViewById(Resource.Id.navigationlayout_appbar)` returns null at runtime — the id constant
+  > the app compiles against does not resolve to the one MAUI inflated the view with — so the
+  > repaint walks the view tree for the type instead.
 - **No offline log queue.** It has no schema until milestone 9, and inventing one now would be
   guessing at a shape the cascade has not settled.
 - **No goals, no catalog browse, no chat.** Milestones 9, 10 and 12 respectively.
