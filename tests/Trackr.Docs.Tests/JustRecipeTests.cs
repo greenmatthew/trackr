@@ -54,6 +54,21 @@ public sealed class JustRecipeTests
         Assert.Contains("docs::publish", JustRecipes.Names);
     }
 
+    /// <summary>
+    /// Guards the guard again, for the half that was added late.
+    /// </summary>
+    /// <remarks>
+    /// The scripts scan is narrower than the markdown one - qualified names only - so it would sit
+    /// there matching nothing and passing if the glob or the path were ever wrong.
+    /// </remarks>
+    [Fact]
+    public void The_scripts_are_being_read_too()
+    {
+        Assert.Contains(
+            Mentions(),
+            mention => mention.File.StartsWith("scripts/", StringComparison.Ordinal));
+    }
+
     private static IEnumerable<(string File, string Recipe)> Mentions()
     {
         foreach (var file in DocumentationFiles())
@@ -62,20 +77,49 @@ public sealed class JustRecipeTests
 
             foreach (var code in MarkdownCode.Extract(markdown))
             {
-                foreach (Match match in Invocation.Matches(code))
+                foreach (var recipe in RecipesIn(code, qualifiedOnly: false))
                 {
-                    var recipe = match.Groups["recipe"].Value.TrimEnd(':', '-');
-
-                    // A documented glob (`just docs::*`) names a set, not a recipe, and a bare
-                    // module name (`just docs`) lists that module rather than running anything.
-                    if (recipe.Contains('*') || JustRecipes.ModuleNames.Contains(recipe))
-                    {
-                        continue;
-                    }
-
                     yield return (file, recipe);
                 }
             }
+        }
+
+        // The scripts too, because they tell a reader what to run next just as a page does - and
+        // when they are wrong nobody finds out until somebody is already stuck. Every message in
+        // scripts/device.sh naming a `just mobile::connect` recipe survived the removal of that
+        // recipe, because this test only ever read the markdown.
+        foreach (var file in ScriptFiles())
+        {
+            // No markdown extraction: a shell script is code all the way down. That also means the
+            // prose in its comments is in scope, so only module-qualified names count here -
+            // otherwise "or just the Core library" would be read as a recipe called "the". A stale
+            // module::recipe is the failure that actually happens in these files.
+            foreach (var recipe in RecipesIn(RepoRoot.ReadText(file), qualifiedOnly: true))
+            {
+                yield return (file, recipe);
+            }
+        }
+    }
+
+    private static IEnumerable<string> RecipesIn(string text, bool qualifiedOnly)
+    {
+        foreach (Match match in Invocation.Matches(text))
+        {
+            var recipe = match.Groups["recipe"].Value.TrimEnd(':', '-');
+
+            // A documented glob (`just docs::*`) names a set, not a recipe, and a bare module name
+            // (`just docs`) lists that module rather than running anything.
+            if (recipe.Contains('*') || JustRecipes.ModuleNames.Contains(recipe))
+            {
+                continue;
+            }
+
+            if (qualifiedOnly && !recipe.Contains("::", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            yield return recipe;
         }
     }
 
@@ -87,6 +131,14 @@ public sealed class JustRecipeTests
         foreach (var page in RepoRoot.Glob("wiki", "*.md"))
         {
             yield return $"wiki/{System.IO.Path.GetFileName(page)}";
+        }
+    }
+
+    private static IEnumerable<string> ScriptFiles()
+    {
+        foreach (var script in RepoRoot.Glob("scripts", "*.sh"))
+        {
+            yield return $"scripts/{System.IO.Path.GetFileName(script)}";
         }
     }
 

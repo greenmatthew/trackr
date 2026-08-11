@@ -64,7 +64,7 @@ cmd_pair() {
     echo ""
     echo "Paired - but not yet connected. Take the port from Wireless debugging ->"
     echo "IP address & Port (NOT the pairing port above) and run:"
-    echo "  just mobile::connect ${address%%:*}:<port>"
+    echo "  ./scripts/device.sh connect ${address%%:*}:<port>"
 }
 
 cmd_connect() {
@@ -76,7 +76,7 @@ cmd_connect() {
         *) die "error: no port given. It is on the phone under Wireless debugging ->" \
                "       IP address & Port, it changes on every reboot, and it is NOT the" \
                "       pairing port." \
-               "         just mobile::connect $address:<port>" ;;
+               "         ./scripts/device.sh connect $address:<port>" ;;
     esac
 
     adb_server
@@ -128,7 +128,7 @@ print(d["BusId"], state, d.get("Description") or "")
         "       Plug the phone in, unlock it, enable USB debugging and accept the" \
         "       prompt on its screen. Then check what Windows can see:" \
         "         '$USBIPD' state" \
-        "       and pass the bus ID directly:  just mobile::usb 7-3"
+        "       and pass the bus ID directly:  ./scripts/device.sh usb 7-3"
 
     local busid state description
     read -r busid state description <<<"$found"
@@ -163,7 +163,7 @@ print(d["BusId"], state, d.get("Description") or "")
 
     echo ""
     die "error: attached, but adb never saw it. Check for an 'Allow USB debugging' prompt" \
-        "       on the phone, then run: just mobile::devices"
+        "       on the phone, then run: ./scripts/device.sh list"
 }
 
 cmd_usb_detach() {
@@ -189,9 +189,9 @@ cmd_serial() {
     case ${#found[@]} in
         1) printf '%s\n' "${found[0]}" ;;
         0) die "error: no phone connected." \
-               "       USB:      just mobile::usb" \
-               "       Wireless: just mobile::pair <ip>:<pairing-port>   (once)" \
-               "                 just mobile::connect <ip>:<debug-port>  (after every reboot)" \
+               "       USB:      ./scripts/device.sh usb" \
+               "       Wireless: ./scripts/device.sh pair <ip>:<pairing-port>   (once)" \
+               "                 ./scripts/device.sh connect <ip>:<debug-port>  (after every reboot)" \
                "       Or let it walk you through it:  just mobile::run" ;;
         *) die "error: ${#found[@]} phones connected; set ANDROID_SERIAL to one of: ${found[*]}" ;;
     esac
@@ -215,10 +215,10 @@ cmd_reverse() {
 
 no_device_help() {
     echo "error: no device. Start one of these first:" >&2
-    echo "         just emulator::up                       the emulator, headless" >&2
-    echo "         just emulator::show                     the emulator, with a window" >&2
-    echo "         just mobile::usb                        a USB-tethered phone" >&2
-    echo "         just mobile::connect <ip>:<port>        a phone over wifi" >&2
+    echo "         just emulator::up                        the emulator, headless" >&2
+    echo "         just emulator::show                      the emulator, with a window" >&2
+    echo "         ./scripts/device.sh usb                  a USB-tethered phone" >&2
+    echo "         ./scripts/device.sh connect <ip>:<port>  a phone over wifi" >&2
 }
 
 # Wireless, walked through. `connect` first because pairing usually survives from last time,

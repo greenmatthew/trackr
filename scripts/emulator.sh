@@ -10,7 +10,7 @@
 #   ./scripts/emulator.sh delete           remove the AVD itself (~2GB)
 #
 # Installing, screenshotting and following the log are the same on the emulator as on a phone,
-# so they are recipes rather than subcommands here: just mobile::run, mobile::shot, mobile::logs.
+# so they live in app.sh rather than here: ./scripts/app.sh install, shot, logs.
 #
 # Requires membership of the `kvm` group. Without it the emulator falls back to interpreting
 # every guest instruction in software and is unusable:
@@ -141,7 +141,7 @@ cmd_delete() {
         sleep 2
     fi
     "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" delete avd -n "$AVD_NAME"
-    echo "Deleted the $AVD_NAME AVD. Recreate it with: just emulator::create"
+    echo "Deleted the $AVD_NAME AVD. Recreate it with: ./scripts/emulator.sh create"
 }
 
 cmd_status() {
