@@ -1,7 +1,8 @@
 # Self-Hosting
 
-Trackr runs as four containers behind your own reverse proxy. Nothing is published to the
-public internet by the stack itself — the reverse proxy decides what is reachable.
+Trackr runs as four long-running containers, plus a one-shot model downloader, behind your own
+reverse proxy. Nothing is published to the public internet by the stack itself — the reverse proxy
+decides what is reachable.
 
 ## What the stack contains
 
@@ -10,7 +11,8 @@ public internet by the stack itself — the reverse proxy decides what is reacha
 | `frontend` | nginx. Serves the web app's static files and reverse-proxies `/api/` to the backend. This is the only service your reverse proxy talks to, and the address the Android app points at. |
 | `backend` | The ASP.NET Core API — accounts, and later the food-logging cascade. Plain HTTP on 8080, internal network only. |
 | `db` | PostgreSQL 18, with a persistent named volume. |
-| `ollama` | The local vision model. *Not present yet — arrives with the AI milestone.* |
+| `ollama` | The local vision model that reads food photos. Internal network only — it has no authentication of its own, so it must never be exposed. See [Ollama Setup](Ollama-Setup). |
+| `ollama-init` | Downloads the model once and exits. It shows as **exited**, which is success rather than a failed container. |
 
 `frontend` joins both the internal network and your reverse proxy's external network.
 `backend` and `db` stay internal and are unreachable from outside the stack.

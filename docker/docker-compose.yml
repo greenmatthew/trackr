@@ -68,6 +68,92 @@ services:
       Trackr__OpenFoodFacts__ContactEmail: ${TRACKR_OFF_CONTACT_EMAIL:-}
       Trackr__OpenFoodFacts__BaseAddress: ${TRACKR_OFF_BASE_ADDRESS:-https://world.openfoodfacts.org/}
       Trackr__OpenFoodFacts__TimeoutSeconds: ${TRACKR_OFF_TIMEOUT_SECONDS:-10}
+      # The local vision model - the stage that reads a photo when the barcode path cannot.
+      # Nothing it sees leaves this machine.
+      Trackr__Ollama__Enabled: ${TRACKR_OLLAMA_ENABLED:-true}
+      Trackr__Ollama__BaseAddress: http://ollama:11434/
+      # The difference between the two models below is architecture, not size.
+      #
+      #   gemma4:26b  Mixture-of-Experts - 25.2B parameters in total but only about 3.8B run
+      #               for any one token, so a processor reads roughly 2.7 GB per token rather
+      #               than all 18. THIS IS THE CPU-ONLY CHOICE, and it is both faster and more
+      #               accurate on such a machine than the smaller dense 12B. Holds about 18 GB
+      #               of RAM while loaded, and unloads again after TRACKR_OLLAMA_KEEP_ALIVE.
+      #
+      #   gemma4:31b  Dense - every parameter runs for every token. Better answers, and it
+      #               wants a graphics card: on a processor it is several times slower for a
+      #               modest gain. Uncomment it in .env if you have one.
+      #
+      # Both are Apache-2.0. Swapping models is this variable, never a rebuild.
+      Trackr__Ollama__Model: ${TRACKR_OLLAMA_MODEL:-gemma4:26b}
+      # How long the model stays in memory after answering. Short so it is not held for hours
+      # between meals; not zero, so correcting a photo and trying again does not reload it.
+      Trackr__Ollama__KeepAlive: ${TRACKR_OLLAMA_KEEP_ALIVE:-5m}
+      # Raise on a slow machine. It must stay under the read timeout of YOUR reverse proxy,
+      # which commonly defaults to 60 seconds - see the wiki's Troubleshooting page.
+      Trackr__Ollama__TimeoutSeconds: ${TRACKR_OLLAMA_TIMEOUT_SECONDS:-240}
+      # The context window, in tokens. Set explicitly on purpose: left alone, Ollama sizes it
+      # from graphics memory, so a machine without a card gets a window far too small.
+      #
+      # A photo is expensive - one 1280-pixel image measured at about 7000 tokens - so this
+      # is the setting to raise if analyses start failing when you attach several. Raising it
+      # costs RAM; lowering TRACKR_OLLAMA_MAX_IMAGE_EDGE is the other way to fix the same
+      # thing, at the cost of small print being harder for the model to read.
+      Trackr__Ollama__ContextLength: ${TRACKR_OLLAMA_CONTEXT_LENGTH:-16384}
+      # Photos per request, and how far each is scaled down before the model sees it. The
+      # stored photo is never altered; only the copy sent to the model is.
+      Trackr__Ollama__MaxImages: ${TRACKR_OLLAMA_MAX_IMAGES:-4}
+      Trackr__Ollama__MaxImageEdgePixels: ${TRACKR_OLLAMA_MAX_IMAGE_EDGE:-1280}
+      # Meal analyses per five minutes. Unlike the limits above this one protects your own
+      # processor: one analysis can occupy it for a minute or more.
+      Trackr__RateLimiting__AnalysisPermitLimit: ${TRACKR_ANALYSIS_RATE_LIMIT:-30}
+    networks: [internal]
+
+  # The vision model. Deliberately on the internal network only and never on the proxy one:
+  # Ollama has no authentication of any kind, and its API includes endpoints that download and
+  # create models. It is a far larger thing to expose than the tracker in front of it.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: ${TRACKR_OLLAMA_KEEP_ALIVE:-5m}
+      # One request at a time, and one model in memory. Without these, two people logging a
+      # meal at once can make Ollama load a second copy of the model - which is exactly the
+      # several-gigabytes-of-RAM surprise the keep-alive setting exists to avoid. The second
+      # request queues instead.
+      OLLAMA_NUM_PARALLEL: 1
+      OLLAMA_MAX_LOADED_MODELS: 1
+    volumes:
+      # Without this, every redeploy re-downloads the whole model.
+      - ollama-models:/root/.ollama
+    healthcheck:
+      # The image ships no healthcheck of its own, and ollama-init below depends on this one:
+      # without it that container races the server, finds nothing listening, and exits having
+      # done nothing - on a fresh deployment, with no error anybody would recognise.
+      test: ["CMD-SHELL", "ollama ps || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [internal]
+
+  # Downloads the model once, then exits. Ollama does not fetch a model on demand, so without
+  # this a fresh stack answers every meal log with "model not found" until somebody opens a
+  # shell - which is not a reasonable thing to ask of a Portainer deployment.
+  #
+  # It shows as "exited" once it has finished. That is success, not a failed container.
+  #
+  # `backend` deliberately does not depend on it: the download is gigabytes, and the rest of
+  # Trackr works perfectly well while it runs.
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${TRACKR_OLLAMA_MODEL:-gemma4:26b}"]
     networks: [internal]
 
   frontend:
@@ -92,3 +178,4 @@ networks:
 
 volumes:
   db-data:
+  ollama-models:

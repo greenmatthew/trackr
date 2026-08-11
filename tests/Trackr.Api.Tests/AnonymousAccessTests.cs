@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
 using Trackr.Api.Tests.Infrastructure;
+using Trackr.Shared.Nutrition;
 using Xunit;
 
 namespace Trackr.Api.Tests;
@@ -51,6 +53,21 @@ public sealed class AnonymousAccessTests(PostgresFixture postgres) : AuthTestBas
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(response.Headers.Location);
+    }
+
+    /// <remarks>
+    /// The most expensive route on the server - an anonymous caller who could reach it would be able
+    /// to occupy the vision model, and through it the whole machine, for as long as they liked.
+    /// </remarks>
+    [Fact]
+    public async Task Analysing_a_meal_requires_a_session()
+    {
+        using var client = Factory.NewClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/analyze", new AnalyzeMealRequest { Text = "two eggs" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

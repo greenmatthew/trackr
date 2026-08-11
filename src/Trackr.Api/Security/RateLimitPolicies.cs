@@ -31,6 +31,23 @@ public static class RateLimitPolicies
     /// catches a bug.
     /// </remarks>
     public const string Lookup = "product-lookup";
+
+    /// <summary>
+    /// Meal analyses, which each occupy the vision model for as long as it takes.
+    /// </summary>
+    /// <remarks>
+    /// A third distinct concern. Login and Sensitive protect this server's accounts, Lookup protects
+    /// somebody else's service, and this one protects <em>this server's CPU</em>: one analysis on a
+    /// machine without a graphics card is tens of seconds to a couple of minutes of it.
+    /// <para>
+    /// So the window is five minutes rather than one. A per-minute budget is the wrong unit for an
+    /// operation that can take two - sixty a minute would be two hours of work requested per minute
+    /// of wall clock. The real limiter is <c>OLLAMA_NUM_PARALLEL=1</c> on the model container, which
+    /// makes concurrent requests queue instead of each loading their own copy of the model; this is
+    /// the outer guard that stops a looping client filling that queue.
+    /// </para>
+    /// </remarks>
+    public const string Analysis = "meal-analysis";
 }
 
 /// <summary>Bound from the <c>Trackr:RateLimiting</c> configuration section.</summary>
@@ -51,6 +68,13 @@ public sealed class RateLimitSettings
     public int LookupPermitLimit { get; set; } = 60;
 
     public int LookupWindowSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Meal analyses per five minutes. Far more than a household eats, few enough to catch a loop.
+    /// </summary>
+    public int AnalysisPermitLimit { get; set; } = 30;
+
+    public int AnalysisWindowSeconds { get; set; } = 300;
 }
 
 public static class RateLimitingExtensions
@@ -91,6 +115,15 @@ public static class RateLimitingExtensions
                     {
                         PermitLimit = settings.LookupPermitLimit,
                         Window = TimeSpan.FromSeconds(settings.LookupWindowSeconds),
+                        QueueLimit = 0
+                    }));
+
+            options.AddPolicy(RateLimitPolicies.Analysis, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(PartitionKey(httpContext), _ =>
+                    new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = settings.AnalysisPermitLimit,
+                        Window = TimeSpan.FromSeconds(settings.AnalysisWindowSeconds),
                         QueueLimit = 0
                     }));
 

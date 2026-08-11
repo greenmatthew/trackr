@@ -71,72 +71,29 @@ public sealed class ZXingBarcodeDecoder(ILogger<ZXingBarcodeDecoder> logger) : I
     /// </remarks>
     private const long MaxRetryPixels = 4_000_000;
 
-    /// <summary>
-    /// The most pixels this will decode, about 30 megapixels.
-    /// </summary>
-    /// <remarks>
-    /// <strong>A byte limit is not a pixel limit, and this is the gap between them.</strong>
-    /// <c>MealImageRules.MaxBytes</c> caps an upload at 12 MB, but compression means 12 MB of JPEG
-    /// can describe a 20000x20000 image, which decodes to well over a gigabyte of RGBA - one
-    /// request, one exhausted home server. So the dimensions are read from the header first and the
-    /// pixels are only allocated if they are plausible. A phone camera produces about 12 MP, so this
-    /// leaves generous headroom.
-    /// <para>
-    /// This is the answer to the note left on <c>ImageEndpoints</c>, which recorded that the server
-    /// had no image decoder and that this milestone would be the moment to revisit it. It is
-    /// revisited, and the conclusion is narrow: uploads are still stored byte-for-byte as they
-    /// arrive, because the model wants the original photo and re-encoding on ingest would degrade it
-    /// for every user to guard a decoder that only this class runs. The guard belongs where the
-    /// decoding happens.
-    /// </para>
-    /// </remarks>
-    private const long MaxPixels = 30_000_000;
-
     public BarcodeDecodeResult Decode(byte[] image)
     {
-        if (image.Length == 0)
-        {
-            return BarcodeDecodeResult.Unreadable("That image was empty.");
-        }
-
         SKBitmap? bitmap = null;
 
         try
         {
-            // Header first, pixels second. SKData wraps a copy of the bytes so it stays valid for as
-            // long as the codec needs it.
-            using var data = SKData.CreateCopy(image);
-            using var codec = SKCodec.Create(data);
-
-            // Null rather than throwing is how Skia reports "these bytes are not an image I know".
-            if (codec is null)
+            // The decompression-bomb guard lives in ImageGuard because milestone 8 gave it a second
+            // caller - the copy of a photo that goes to the model. Its remarks carry the reasoning
+            // that used to sit here, including why uploads are still never re-encoded on ingest.
+            if (!ImageGuard.TryDecode(image, out bitmap, out var info, out var problem, out var refusal))
             {
-                return BarcodeDecodeResult.Unreadable(
-                    "That image could not be read - it may be corrupt or in a format the server "
-                        + "does not support.");
+                if (refusal is ImageRefusal.TooManyPixels)
+                {
+                    logger.LogWarning(
+                        "Refused to decode a {Width}x{Height} image for barcodes.",
+                        info.Width,
+                        info.Height);
+                }
+
+                return BarcodeDecodeResult.Unreadable(problem);
             }
 
-            var pixels = (long)codec.Info.Width * codec.Info.Height;
-
-            if (pixels > MaxPixels)
-            {
-                logger.LogWarning(
-                    "Refused to decode a {Width}x{Height} image for barcodes.",
-                    codec.Info.Width,
-                    codec.Info.Height);
-
-                return BarcodeDecodeResult.Unreadable(
-                    "That image's dimensions are too large for the server to examine.");
-            }
-
-            bitmap = SKBitmap.Decode(codec);
-
-            if (bitmap is null)
-            {
-                return BarcodeDecodeResult.Unreadable(
-                    "That image could not be read - it may be corrupt or in a format the server "
-                        + "does not support.");
-            }
+            var pixels = (long)info.Width * info.Height;
 
             var result = Read(bitmap);
 

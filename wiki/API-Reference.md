@@ -70,6 +70,16 @@ Change the password, re-checking the current one first.
 
 **Responses:** `200`
 
+## Analyze
+
+### `POST /api/analyze`
+
+Work out what a description and some photos add up to. Writes nothing.
+
+**Request body:** `application/json` → [`AnalyzeMealRequest`](#analyzemealrequest)
+
+**Responses:** `200`
+
 ## Auth
 
 ### `POST /api/auth/forgot-password`
@@ -371,6 +381,13 @@ Every nutrient the server can record, in nutrition-label order.
 ## Schemas
 
 The request and response shapes above. These are the DTOs in `Trackr.Shared`, which the web app and the Android app reference directly rather than generating a client from this document.
+
+### `AnalyzeMealRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `text` | string, nullable | no |
+| `imageIds` | array of string (uuid) | no |
 
 ### `ChangePasswordRequest`
 

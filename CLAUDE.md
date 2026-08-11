@@ -193,7 +193,9 @@ for each. Toolchain setup is in [Development-Environment](wiki/Development-Envir
 Four services on a shared Docker network, orchestrated by `docker/docker-compose.yml`:
 **frontend** (nginx serving `Trackr.Web` and proxying `/api/` to the backend — also the address
 the Android app points at), **backend** (the Web API: auth, cascade orchestration, DB access,
-OFF and Ollama calls), **ollama**, and **db** (Postgres with a persistent volume). Detail is in
+OFF and Ollama calls), **ollama**, and **db** (Postgres with a persistent volume). A fifth,
+**ollama-init**, pulls the model once and exits — Ollama does not download one on demand, so
+without it a fresh deployment fails every meal log until somebody opens a shell. Detail is in
 [Self-Hosting](wiki/Self-Hosting.md).
 
 Open Food Facts is **not** a container — it's an external public API the backend calls. The
@@ -396,6 +398,10 @@ Concretely:
 - Use secure, HttpOnly cookies or properly-scoped tokens for the session.
 - Data stays on the user's server; images are not sent to third parties; only barcode numbers
   go to Open Food Facts.
+- **The `ollama` container is on the internal network only, never the proxy one.** It has no
+  authentication of any kind and its API includes endpoints that download and create models — a
+  much larger thing to expose than the tracker in front of it. Nothing in Trackr should ever
+  publish its port outside the dev stack.
 - Keep secrets (DB creds, any API keys for an optional cloud fallback) in environment variables
   / a secrets file, never committed.
 
@@ -488,9 +494,30 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
      **Left open:** nothing writes a recipe yet but a person with an HTTP client — milestone 9 is
      where saying "I made this from these" becomes possible — and there is no scaling or unit
      conversion.
-8. **Ollama integration** — add the service, wire the backend to call it, define the
-   strict-JSON prompt, implement the image-vs-structured-data swap, parse and validate the
-   JSON. Configure `keep_alive`.
+- [10-ollama.md](docs/decisions/10-ollama.md) — the local model: why the server does the serving
+  arithmetic, why the prompt pins a product's serving, what a schema `enum` does and does not buy
+  under constrained decoding, the validator's four severities and the three checks that are not
+  obvious, the context-window trap, `repeat_penalty`, the Qwen licence trap, and why a
+  mixture-of-experts model is the *fast* one on a processor.
+8. ~~**Ollama integration**~~ ✅ — [10-ollama.md](docs/decisions/10-ollama.md). `IMealAnalyzer`
+   behind a typed client, a prompt and JSON schema **generated from `NutrientCatalog`**, the
+   image-vs-structured-data swap in `MealPrompt.PhotosToSend`, and `MealAnalysisReader` — the
+   validator §5 marks REQUIRED, which is where the milestone's weight sits. One read-only route,
+   `POST /api/analyze`, running all three stages; it **writes nothing**, with a test that says so.
+   **Two things it settled beyond the original scope.** The model reports *per serving* plus a
+   quantity and **the server does the multiplication** — a deviation from §5's "the prompt computes
+   serving math", because small models are bad at arithmetic and the result maps 1:1 onto
+   `SaveLogItemRequest`. And **the prompt pins each identified product's serving**, without which
+   merging Open Food Facts' figures with the model's re-creates milestone 7's "each number
+   defensible, total nonsense" failure across a new seam.
+   **Two traps worth knowing before touching any of it:** a JSON-schema keyword Ollama's grammar
+   converter does not support is **skipped in silence**, leaving that part of the reply
+   unconstrained with no runtime symptom — hence
+   `The_schema_uses_no_construct_the_grammar_skips_silently`. And a photograph costs about 7 000
+   tokens, so the context window is set explicitly rather than left to Ollama, which sizes it from
+   *video* memory and gives a CPU-only server far too little.
+   **Left open:** nothing calls the route but an HTTP client, and the mobile client cannot — its
+   30-second timeout and retry pipeline would queue four inference jobs for one meal.
 9. **Chat UI + cascade + confirm** — build the chat interface **in the Android app** (new-chat
    flow, message list, text box with a `+` button bottom-left to attach images) and wire the
    full cascade from §5 into it. The parsed result appears as an in-chat **confirmation card**

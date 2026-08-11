@@ -211,8 +211,8 @@ builder.Services.AddScoped<CompositeNutrition>();
 
 builder.Services.AddTrackrRateLimiting(builder.Configuration);
 
-// Stages one and two of the logging cascade: barcode decoding, and Open Food Facts lookups. The
-// model (stage three) is milestone 8.
+// All three stages of the logging cascade: barcode decoding, Open Food Facts lookups, and the local
+// vision model, plus the orchestration that decides which of them gets to answer.
 builder.Services.AddTrackrCascade(builder.Configuration);
 
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
@@ -286,6 +286,7 @@ app.MapFoodEndpoints();
 app.MapImageEndpoints();
 app.MapLogEndpoints();
 app.MapLookupEndpoints();
+app.MapAnalyzeEndpoints();
 
 #if DEBUG
 if (app.Environment.IsDevelopment())

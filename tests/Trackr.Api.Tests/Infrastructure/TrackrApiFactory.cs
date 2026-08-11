@@ -31,6 +31,12 @@ public sealed class TrackrApiFactory(string connectionString, IDictionary<string
         builder.UseSetting("Trackr:RateLimiting:LoginPermitLimit", "1000");
         builder.UseSetting("Trackr:RateLimiting:SensitivePermitLimit", "1000");
 
+        // No Ollama in the test environment, and off is the safe default rather than an
+        // inconvenience: a test that reaches /api/analyze without substituting IMealAnalyzer would
+        // otherwise try to open a connection to a host that is not there. Disabled, it fails
+        // immediately and says why. Tests that want the real analyzer turn it back on.
+        builder.UseSetting("Trackr:Ollama:Enabled", "false");
+
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())
         {
             builder.UseSetting(key, value);

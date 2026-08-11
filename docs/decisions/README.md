@@ -21,6 +21,8 @@ the wiki at `wiki/` instead, where the self-hoster can read it too. See CLAUDE.m
 | 5 — Mobile UX & architecture | [06-mobile-ux.md](06-mobile-ux.md) |
 | 6 — Data layer | [07-data-layer.md](07-data-layer.md) |
 | 7 — Barcode and Open Food Facts | [08-barcode-off.md](08-barcode-off.md) |
+| 7a — Composite / recipe items | [09-composites.md](09-composites.md) |
+| 8 — Ollama | [10-ollama.md](10-ollama.md) |
 
 A decision that is later reversed stays in its original file, with a note pointing at the
 record that superseded it. Deleting it would hide the reasoning that made the reversal

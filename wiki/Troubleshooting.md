@@ -110,6 +110,43 @@ locks an account for 15 minutes, and wrong 2FA codes count too.
 There is no back door. You need database access to clear the account's 2FA state directly.
 See [Accounts and 2FA](Accounts-and-2FA).
 
+## Every meal log says the vision model is still downloading
+
+It probably is. Ollama does not fetch a model on demand, so until the one-shot `ollama-init`
+container finishes pulling it, every analysis fails this way. A first pull is gigabytes.
+
+```bash
+docker compose logs ollama-init
+```
+
+If that container exited long ago and the message persists, the model name is wrong — check
+`TRACKR_OLLAMA_MODEL` against `docker compose exec ollama ollama list`.
+
+## Analyses fail after exactly 60 seconds
+
+That is **your** reverse proxy, not Trackr. nginx defaults `proxy_read_timeout` to 60 seconds, and
+reading a nutrition label on a machine without a graphics card routinely takes longer than that.
+Trackr's own nginx already allows 300 seconds; the proxy in front of it is the one to raise.
+
+The tell is that the failure is a gateway error page rather than a message from Trackr, and that it
+lands on the same second every time. Trackr's own limit is `TRACKR_OLLAMA_TIMEOUT_SECONDS`, which
+defaults to 240 and produces a proper explanation in the chat.
+
+## "Your photos needed more room than the local model has been given"
+
+Photos are expensive in tokens — one 1280-pixel image is roughly 7 000 of them — so a couple of
+pictures plus the instructions can exceed the model's context window.
+
+Send fewer photos, raise `TRACKR_OLLAMA_CONTEXT_LENGTH` (which costs RAM), or lower
+`TRACKR_OLLAMA_MAX_IMAGE_EDGE` (which costs the model's ability to read small print — below about
+768 pixels it cannot read a label at all). See [Ollama Setup](Ollama-Setup).
+
+## Analyses are slow when more than one person logs a meal
+
+Expected. `OLLAMA_NUM_PARALLEL=1` makes a second request wait rather than letting Ollama load a
+whole second copy of the model into RAM. On a household server that is the right trade; if the queue
+starts causing timeouts, the answer is a faster model rather than more parallelism.
+
 ---
 
 ## Development

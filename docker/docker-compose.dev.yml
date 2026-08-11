@@ -46,8 +46,50 @@ services:
       # appsettings.Development.json - inside the network the database is `db`.
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Trackr: Host=db;Port=5432;Database=trackr;Username=trackr;Password=trackr_dev
+      Trackr__Ollama__BaseAddress: http://ollama:11434/
+      # A much smaller model than the deployment stack's, because this one has to be pulled and
+      # loaded on a development machine rather than a server. granite3.2-vision is 2.4 GB and was
+      # built for pulling text out of tables and charts, which is what a nutrition panel is - so it
+      # is a fair test of the pipeline even though a bigger model reads labels better.
+      #
+      # It is a different model family from the deployment default, so a prompt quirk can hide
+      # here. The photo runs in wiki/Ollama-Setup.md are done against the deployed model for that
+      # reason.
+      Trackr__Ollama__Model: ${TRACKR_OLLAMA_MODEL:-granite3.2-vision:2b}
+      # 16K is this model's entire window, which one photo plus the instructions needs.
+      Trackr__Ollama__ContextLength: 16384
     ports:
       - "8080:8080"
+
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_KEEP_ALIVE: 5m
+      OLLAMA_NUM_PARALLEL: 1
+      OLLAMA_MAX_LOADED_MODELS: 1
+    volumes:
+      # Named, so `server.sh reset` can drop the database without re-downloading the model.
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama ps || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    ports:
+      # Published so a candidate model can be pulled and prodded directly with curl while
+      # testing one, which is the experiment wiki/Ollama-Setup.md asks for.
+      - "11434:11434"
+
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${TRACKR_OLLAMA_MODEL:-granite3.2-vision:2b}"]
 
   frontend:
     build:
@@ -63,3 +105,4 @@ services:
 
 volumes:
   db-data:
+  ollama-models:

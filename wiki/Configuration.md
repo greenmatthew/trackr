@@ -71,11 +71,17 @@ variable.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `TRACKR_LOOKUP_RATE_LIMIT` | `60` | Barcode lookups per minute. |
+| `TRACKR_ANALYSIS_RATE_LIMIT` | `30` | Meal analyses per **five** minutes. |
 
 `TRACKR_LOOKUP_RATE_LIMIT` is the odd one out: it is not protecting your server. Every lookup
 becomes a request to Open Food Facts, a free service run by volunteers, and this cap keeps a
 looping client from spending their bandwidth and getting your address throttled. It sits well
 above what a person logging meals could reach, so in practice it only ever catches a bug.
+
+`TRACKR_ANALYSIS_RATE_LIMIT` is a third kind again: it protects your **processor**. One meal
+analysis can occupy the vision model for a minute or more, so a per-minute budget would be the
+wrong unit — thirty per five minutes is far more than a household eats and few enough to catch a
+client stuck in a loop.
 
 ## Open Food Facts
 
@@ -107,3 +113,50 @@ Trackr does not retry a failed lookup, deliberately — the reasoning is in
 `docs/decisions/08-barcode-off.md` in the repository. A lookup that fails or times out falls
 through to the AI, and the chat
 tells you it happened rather than quietly showing you an estimate as though it were a label.
+
+## Local AI
+
+The vision model that reads a photo when the barcode path cannot — home cooking, anything
+unpackaged, anything Open Food Facts has never heard of. It runs in the `ollama` container on your
+own hardware, and **nothing it sees ever leaves the machine.**
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `TRACKR_OLLAMA_ENABLED` | `true` | Set to `false` to turn the model off. Barcode lookups keep working; everything else stops. |
+| `TRACKR_OLLAMA_MODEL` | `gemma4:26b` | Which model to ask. See below — the obvious reading of this one is wrong. |
+| `TRACKR_OLLAMA_KEEP_ALIVE` | `5m` | How long the model stays in RAM after answering. |
+| `TRACKR_OLLAMA_TIMEOUT_SECONDS` | `240` | How long to wait for one analysis. |
+| `TRACKR_OLLAMA_CONTEXT_LENGTH` | `16384` | The context window, in tokens. |
+| `TRACKR_OLLAMA_MAX_IMAGES` | `4` | Photos one analysis may look at. |
+| `TRACKR_OLLAMA_MAX_IMAGE_EDGE` | `1280` | Longest edge of the copy sent to the model. Your stored photo is never altered. |
+
+### Choosing a model on a server with no graphics card
+
+**Bigger can be faster, and that is not a typo.** `gemma4:26b` has 25.2 billion parameters but is
+a mixture-of-experts model: only about 3.8 billion of them run for any one token, so your processor
+reads roughly 2.7 GB per token instead of all 18. The dense `gemma4:12b` reads all 7.6 GB of itself
+every token. On a machine without a graphics card the 26B is both **faster and more accurate** than
+the smaller model — it just needs about 18 GB of RAM while it is loaded, which it releases again
+after `TRACKR_OLLAMA_KEEP_ALIVE`.
+
+If you do have a graphics card, `gemma4:31b` is dense and answers better. On a processor it is
+several times slower for a modest gain.
+
+If 18 GB of RAM is too much, `gemma4:12b` is the fallback and it is a good one — see
+[Ollama Setup](Ollama-Setup) for what it actually scored against real label photographs.
+
+### The three settings that are really one setting
+
+`TRACKR_OLLAMA_CONTEXT_LENGTH`, `TRACKR_OLLAMA_MAX_IMAGES` and `TRACKR_OLLAMA_MAX_IMAGE_EDGE` trade
+against each other, because **a photograph is expensive in tokens and the number is not intuitive**:
+one 1280-pixel image measured at roughly 7 000 tokens. The obvious first guess of 8192 fits the
+instructions and one picture, and then fails on two.
+
+If an analysis comes back saying your photos needed more room than the model has, either raise the
+context length — which costs RAM — or lower the edge size, which costs the model's ability to read
+small print. Below about 768 pixels it stops being able to read a label at all, which is the whole
+job, so raising the context is usually the better trade.
+
+`TRACKR_OLLAMA_TIMEOUT_SECONDS` has a constraint of its own: it must stay **under** the read timeout
+of your own reverse proxy. nginx defaults to 60 seconds, which will cut an analysis off long before
+this fires — see [Troubleshooting](Troubleshooting).
