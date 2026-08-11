@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark half of the mirror described in values/colors.xml. Gray950 - the palette's
+         Background, and the dark value of `Shell.BackgroundColor` in Styles.xaml. -->
+    <color name="titleBarBackground">#FF122E42</color>
+</resources>

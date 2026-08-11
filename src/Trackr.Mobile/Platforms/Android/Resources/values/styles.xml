@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Stops the status bar rendering as a cyan band above the title bar - the clash
+         docs/decisions/06-mobile-ux.md left open.
+
+         The record assumed the fix was "go edge-to-edge". Measured on API 36, the app is
+         *already* edge-to-edge and always was: Android 15 forces it for anything targeting
+         API 35 or later, so MAUI's `maui_edgetoedge_optout` attribute has nothing left to opt
+         out of. Setting it to false was tried here and produced a pixel-identical screenshot.
+
+         What actually paints the band is this style. MAUI gives the Shell's `AppBarLayout` a
+         `?attr/colorPrimary` background, and under edge-to-edge that layout absorbs the status
+         bar inset as padding and paints its own background through it. The Toolbar drawn
+         inside it is white, from `Shell.BackgroundColor` - hence a cyan strip on top of a
+         white bar rather than a uniformly cyan one. Matching the background to the Shell's is
+         the whole fix; the insets were never mishandled.
+
+         Parented off MAUI's own style so anything else it sets is inherited rather than
+         forked, in the same way the theme override below the comment in Colors.xaml is. -->
+    <style name="MauiAppBarLayout" parent="ThemeOverlay.AppCompat.Dark.ActionBar">
+        <item name="android:background">@color/titleBarBackground</item>
+    </style>
+
+</resources>

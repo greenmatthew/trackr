@@ -3,4 +3,10 @@
     <color name="colorPrimary">#1DD2E3</color>
     <color name="colorPrimaryDark">#122E42</color>
     <color name="colorAccent">#FF7A59</color>
+
+    <!-- Behind the Shell title bar, and behind the status bar above it - see styles.xml.
+         Must equal the light value of `Shell.BackgroundColor` in Styles.xaml (White); the
+         dark one lives in values-night. An Android resource cannot read a MAUI one, so this
+         is a mirror that has to be updated in step, like the three brand colours above. -->
+    <color name="titleBarBackground">#FFFFFFFF</color>
 </resources>
