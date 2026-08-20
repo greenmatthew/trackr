@@ -250,7 +250,14 @@ public sealed class MealCascade(
             // replaced by the database's - so keeping them would put "these numbers do not add up"
             // on a card whose numbers are fine and are not the ones being described. A partial match
             // keeps them, because there its figures partly survived.
-            Warnings: complete ? [] : item?.Warnings ?? []);
+            Warnings: complete ? [] : item?.Warnings ?? [],
+
+            // Always the database's, never the model's, and on a partial match too. What a product
+            // contains is a fact about a formulation, and OFF has the manufacturer's own words for
+            // it where it has anything at all.
+            IngredientsText: draft.IngredientsText,
+            Allergens: draft.Allergens,
+            DietFlags: draft.DietFlags);
     }
 
     private static MealAnalysisItem FromModel(ModelItem item) =>

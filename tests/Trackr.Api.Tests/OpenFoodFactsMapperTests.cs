@@ -389,6 +389,80 @@ public sealed class OpenFoodFactsMapperTests
         OpenFoodFactsMapper.Map(product.Code ?? "0000000000000", product, _catalog);
 
     /// <summary>Parses a product out of a whole captured API response.</summary>
+    /// <summary>Milestone 10a: the ingredient list, for free, on any barcode hit.</summary>
+    [Fact]
+    public void The_english_ingredient_list_is_preferred()
+    {
+        var result = OpenFoodFactsMapper.Map(
+            "1",
+            Product("""
+                {"code":"1","product_name":"Bar","serving_quantity":45,"serving_quantity_unit":"g",
+                 "ingredients_text_en":"Oats, sugar.","ingredients_text":"Avoine, sucre.",
+                 "nutriments":{"energy-kcal_100g":400,"fat_100g":10,"carbohydrates_100g":60,"proteins_100g":8}}
+                """),
+            _catalog);
+
+        Assert.Equal("Oats, sugar.", result.Product!.IngredientsText);
+    }
+
+    /// <remarks>
+    /// A French ingredient list is a worse answer to "what is in this" than an English one and a
+    /// much better answer than nothing.
+    /// </remarks>
+    [Fact]
+    public void A_list_in_another_language_is_kept_when_there_is_no_english_one()
+    {
+        var result = OpenFoodFactsMapper.Map(
+            "1",
+            Product("""
+                {"code":"1","product_name":"Bar","serving_quantity":45,"serving_quantity_unit":"g",
+                 "ingredients_text":"Avoine, sucre.",
+                 "nutriments":{"energy-kcal_100g":400,"fat_100g":10,"carbohydrates_100g":60,"proteins_100g":8}}
+                """),
+            _catalog);
+
+        Assert.Equal("Avoine, sucre.", result.Product!.IngredientsText);
+    }
+
+    /// <remarks>
+    /// Not filtered against a vocabulary. OFF's taxonomy grows without asking, and a server that
+    /// dropped tags it had not heard of would discard a real allergen warning the first time one
+    /// was added. Lowercased and de-duplicated, because these are identifiers rather than prose.
+    /// </remarks>
+    [Fact]
+    public void Allergen_and_analysis_tags_are_carried_as_reported()
+    {
+        var result = OpenFoodFactsMapper.Map(
+            "1",
+            Product("""
+                {"code":"1","product_name":"Bar","serving_quantity":45,"serving_quantity_unit":"g",
+                 "allergens_tags":["en:milk","EN:Milk","en:nuts"],
+                 "ingredients_analysis_tags":["en:palm-oil","en:vegan-status-unknown"],
+                 "nutriments":{"energy-kcal_100g":400,"fat_100g":10,"carbohydrates_100g":60,"proteins_100g":8}}
+                """),
+            _catalog);
+
+        Assert.Equal(["en:milk", "en:nuts"], result.Product!.Allergens);
+
+        // Including the unknown: dropping it would turn "nobody could tell" into silence.
+        Assert.Equal(["en:palm-oil", "en:vegan-status-unknown"], result.Product.DietFlags);
+    }
+
+    [Fact]
+    public void A_product_with_no_ingredient_list_reports_none()
+    {
+        var result = OpenFoodFactsMapper.Map(
+            "1",
+            Product("""
+                {"code":"1","product_name":"Bar","serving_quantity":45,"serving_quantity_unit":"g",
+                 "nutriments":{"energy-kcal_100g":400,"fat_100g":10,"carbohydrates_100g":60,"proteins_100g":8}}
+                """),
+            _catalog);
+
+        Assert.Null(result.Product!.IngredientsText);
+        Assert.Empty(result.Product.Allergens!);
+    }
+
     private static OpenFoodFactsProduct LoadFixture(string name)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "OpenFoodFacts", $"{name}.json");

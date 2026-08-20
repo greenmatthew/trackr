@@ -35,7 +35,11 @@ public static class OpenFoodFactsNutrients
     /// </remarks>
     public const string Fields =
         "code,product_name,product_name_en,brands,serving_size,serving_quantity,"
-        + "serving_quantity_unit,nutrition_data_per,nutriments";
+        + "serving_quantity_unit,nutrition_data_per,nutriments,"
+        // Milestone 10a. ingredients_text_en first, falling back to ingredients_text, which is
+        // whatever language the contributor used - a French ingredient list is still a better
+        // answer to "what is in this" than nothing.
+        + "ingredients_text_en,ingredients_text,allergens_tags,ingredients_analysis_tags";
 
     /// <summary>OFF's name for energy in kilocalories, which is already Trackr's stored unit.</summary>
     public const string EnergyStem = "energy-kcal";

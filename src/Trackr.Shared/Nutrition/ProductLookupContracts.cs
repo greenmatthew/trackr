@@ -83,7 +83,10 @@ public sealed record ProductDraft(
     decimal? FatG,
     decimal? CarbohydrateG,
     decimal? ProteinG,
-    IReadOnlyDictionary<string, decimal> Nutrients);
+    IReadOnlyDictionary<string, decimal> Nutrients,
+    string? IngredientsText = null,
+    IReadOnlyList<string>? Allergens = null,
+    IReadOnlyList<string>? DietFlags = null);
 
 /// <summary>
 /// What a lookup learned, and anything the user should be told about how it went.

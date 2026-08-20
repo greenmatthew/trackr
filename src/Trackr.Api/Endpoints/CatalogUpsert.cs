@@ -186,6 +186,10 @@ internal static class CatalogUpsert
             item.ProteinG,
             item.Nutrients);
 
+        // Milestone 10a. Safe without the brand-or-barcode check the catalog endpoints run: this
+        // path only ever reaches here for an item that has a barcode.
+        CatalogItems.ApplyIngredients(created, item.IngredientsText, item.Allergens, item.DietFlags);
+
         return created;
     }
 

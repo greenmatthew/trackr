@@ -84,6 +84,38 @@ public sealed record OpenFoodFactsProduct
     /// </summary>
     [JsonPropertyName("nutriments")]
     public Dictionary<string, JsonElement>? Nutriments { get; init; }
+
+    /// <summary>The ingredient list in English, when the entry has one.</summary>
+    [JsonPropertyName("ingredients_text_en")]
+    public string? IngredientsTextEnglish { get; init; }
+
+    /// <summary>
+    /// The ingredient list in whatever language the contributor used.
+    /// </summary>
+    /// <remarks>
+    /// Kept as a fallback rather than skipped. A French ingredient list is a worse answer to "what
+    /// is in this" than an English one and a much better answer than nothing, and the alternative -
+    /// asking the model to read a label the database already has - costs a photograph's worth of
+    /// tokens to get the same words in a different order.
+    /// </remarks>
+    [JsonPropertyName("ingredients_text")]
+    public string? IngredientsText { get; init; }
+
+    /// <summary>Declared allergens as taxonomy tags: <c>en:milk</c>, <c>en:nuts</c>.</summary>
+    [JsonPropertyName("allergens_tags")]
+    public List<string>? AllergensTags { get; init; }
+
+    /// <summary>
+    /// What OFF's own ingredient analysis concluded: <c>en:palm-oil</c>, <c>en:non-vegan</c>.
+    /// </summary>
+    /// <remarks>
+    /// Inferences drawn from the ingredient list rather than claims a label made, and OFF says so
+    /// itself with tags like <c>en:vegan-status-unknown</c>. Carried as reported, including the
+    /// unknowns - dropping those would turn "nobody could tell" into silence, which reads as a
+    /// stronger statement than it is.
+    /// </remarks>
+    [JsonPropertyName("ingredients_analysis_tags")]
+    public List<string>? IngredientsAnalysisTags { get; init; }
 }
 
 /// <summary>

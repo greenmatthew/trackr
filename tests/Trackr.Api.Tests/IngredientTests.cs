@@ -127,6 +127,48 @@ public sealed class IngredientTests(PostgresFixture postgres) : AuthTestBase(pos
         Assert.Equal(["en:milk"], Assert.Single(listed!).Allergens);
     }
 
+    /// <summary>
+    /// The whole point of part one: a barcode hit brings the list with it, for free.
+    /// </summary>
+    [Fact]
+    public async Task Confirming_a_scanned_product_files_what_it_is_made_of()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        var request = Payloads.AdHocLog(barcode: "0076840100446");
+        request.Items[0].IngredientsText = "Cream, sugar, cocoa.";
+        request.Items[0].Allergens = ["en:milk"];
+        request.Items[0].DietFlags = ["en:vegetarian"];
+
+        using var logged = await client.PostAsJsonAsync("/api/log", request);
+        logged.EnsureSuccessStatusCode();
+
+        var summary = Assert.Single((await client.GetFromJsonAsync<FoodItemSummaryResponse[]>("/api/foods"))!);
+        var item = await client.GetFromJsonAsync<FoodItemResponse>($"/api/foods/{summary.Id}");
+
+        Assert.Equal("Cream, sugar, cocoa.", item!.IngredientsText);
+        Assert.Equal(["en:milk"], item.Allergens);
+        Assert.Equal(["en:vegetarian"], item.DietFlags);
+    }
+
+    /// <remarks>
+    /// What a product contains is a fact about the product, not about the meal, so an item with no
+    /// barcode - which files nothing - carries its list nowhere.
+    /// </remarks>
+    [Fact]
+    public async Task An_ingredient_list_on_an_unfiled_item_goes_nowhere()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        var request = Payloads.AdHocLog(barcode: null);
+        request.Items[0].IngredientsText = "Chicken.";
+
+        using var logged = await client.PostAsJsonAsync("/api/log", request);
+        logged.EnsureSuccessStatusCode();
+
+        Assert.Empty((await client.GetFromJsonAsync<FoodItemSummaryResponse[]>("/api/foods"))!);
+    }
+
     /// <remarks>
     /// Wholesale, like the nutrient map: a merge leaves "that list was wrong, here is the right
     /// one" inexpressible.

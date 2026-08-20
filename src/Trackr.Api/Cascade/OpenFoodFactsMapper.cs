@@ -35,6 +35,12 @@ public static class OpenFoodFactsMapper
 
     private const int MaxUnitLength = 32;
 
+    /// <summary>What the <c>IngredientsText</c> column holds.</summary>
+    private const int MaxIngredientsLength = 4000;
+
+    /// <summary>Longer than any tag OFF publishes.</summary>
+    private const int MaxTagLength = 64;
+
     public static ProductLookupResult Map(
         string requestedBarcode,
         OpenFoodFactsProduct product,
@@ -118,7 +124,16 @@ public static class OpenFoodFactsMapper
             FatG: Round(fatG),
             CarbohydrateG: Round(carbohydrateG),
             ProteinG: Round(proteinG),
-            Nutrients: nutrients);
+            Nutrients: nutrients,
+
+            // Milestone 10a. English first, then whatever the contributor wrote: a French list is a
+            // worse answer than an English one and a far better one than none.
+            IngredientsText: Truncate(
+                OpenFoodFactsValues.Text(product.IngredientsTextEnglish)
+                    ?? OpenFoodFactsValues.Text(product.IngredientsText),
+                MaxIngredientsLength),
+            Allergens: Tags(product.AllergensTags),
+            DietFlags: Tags(product.IngredientsAnalysisTags));
 
         // What the model would have to determine from the photo. Section 5 calls a match "full" only
         // when calories and macros are there; a nameless product is no use either, since the
@@ -304,6 +319,23 @@ public static class OpenFoodFactsMapper
 
     private static decimal? Round(decimal? value) =>
         value is null ? null : StoredPrecision.Amount(value.Value);
+
+    /// <summary>
+    /// Tidies a tag list, dropping blanks and anything longer than the column takes.
+    /// </summary>
+    /// <remarks>
+    /// Not filtered against a vocabulary. OFF's taxonomy is theirs and grows without asking, and a
+    /// server that dropped tags it had not heard of would silently discard a real allergen warning
+    /// the first time one was added.
+    /// </remarks>
+    private static IReadOnlyList<string> Tags(List<string>? tags) =>
+        tags is null
+            ? []
+            : [.. tags
+                .Select(tag => tag?.Trim().ToLowerInvariant())
+                .Where(tag => !string.IsNullOrEmpty(tag) && tag.Length <= MaxTagLength)
+                .Distinct(StringComparer.Ordinal)
+                .Select(tag => tag!)];
 
     private static string? Truncate(string? value, int maxLength) =>
         value is null || value.Length <= maxLength ? value : value[..maxLength].TrimEnd();

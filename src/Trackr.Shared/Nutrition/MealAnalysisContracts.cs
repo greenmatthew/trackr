@@ -154,7 +154,10 @@ public sealed record MealAnalysisItem(
     decimal CarbohydrateG,
     decimal ProteinG,
     IReadOnlyDictionary<string, decimal> Nutrients,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    string? IngredientsText = null,
+    IReadOnlyList<string>? Allergens = null,
+    IReadOnlyList<string>? DietFlags = null);
 
 /// <summary>Turning a confirmed analysis into something the log will accept.</summary>
 public static class MealAnalysisItemExtensions
@@ -187,7 +190,10 @@ public static class MealAnalysisItemExtensions
             FatG = item.FatG,
             CarbohydrateG = item.CarbohydrateG,
             ProteinG = item.ProteinG,
-            Nutrients = new Dictionary<string, decimal>(item.Nutrients, StringComparer.Ordinal)
+            Nutrients = new Dictionary<string, decimal>(item.Nutrients, StringComparer.Ordinal),
+            IngredientsText = item.IngredientsText,
+            Allergens = [.. item.Allergens ?? []],
+            DietFlags = [.. item.DietFlags ?? []]
         };
 }
 

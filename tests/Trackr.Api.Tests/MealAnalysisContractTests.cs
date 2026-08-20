@@ -46,8 +46,8 @@ public sealed class MealAnalysisContractTests
     /// <remarks>
     /// Same name is not enough - a <c>double</c> where the other has a <c>decimal</c> would compile,
     /// round differently, and put a slightly wrong number in the database. The nutrient map is the
-    /// one pair that legitimately differs, because a response hands out a read-only view of what a
-    /// request supplies as a mutable dictionary.
+    /// collections that legitimately differ, because a response hands out read-only views of what a
+    /// request supplies as mutable ones.
     /// </remarks>
     [Fact]
     public void The_numbers_on_both_are_the_same_kind_of_number()
@@ -58,7 +58,10 @@ public sealed class MealAnalysisContractTests
 
         foreach (var property in typeof(SaveLogItemRequest).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            if (property.Name is nameof(SaveLogItemRequest.FoodItemId) or nameof(SaveLogItemRequest.Nutrients)
+            if (property.Name is nameof(SaveLogItemRequest.FoodItemId)
+                    or nameof(SaveLogItemRequest.Nutrients)
+                    or nameof(SaveLogItemRequest.Allergens)
+                    or nameof(SaveLogItemRequest.DietFlags)
                 || !analysed.TryGetValue(property.Name, out var type))
             {
                 continue;

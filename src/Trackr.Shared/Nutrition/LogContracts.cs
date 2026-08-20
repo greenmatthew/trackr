@@ -94,6 +94,23 @@ public sealed class SaveLogItemRequest
 
     /// <summary>Per-serving amounts for every nutrient except the core four. Same rules as the catalog.</summary>
     public Dictionary<string, decimal> Nutrients { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What the product is made of, when the item came off a package.
+    /// </summary>
+    /// <remarks>
+    /// Carried for the same reason as <see cref="Barcode"/> and used at the same moment: it is
+    /// filed onto the catalog row this confirmation creates. Nothing is stored on the log item -
+    /// what a product contained is a fact about the product, not about the meal.
+    /// </remarks>
+    [StringLength(4000)]
+    public string? IngredientsText { get; set; }
+
+    /// <summary>Declared allergens as Open Food Facts tags. Filed with the item, not the meal.</summary>
+    public List<string> Allergens { get; set; } = [];
+
+    /// <summary>What an ingredient analysis concluded. Filed with the item, not the meal.</summary>
+    public List<string> DietFlags { get; set; } = [];
 }
 
 /// <param name="Items">Never empty.</param>

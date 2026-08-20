@@ -519,6 +519,9 @@ No properties.
 | `carbohydrateG` | number or string (double) | no |
 | `proteinG` | number or string (double) | no |
 | `nutrients` | object | no |
+| `ingredientsText` | string, nullable | no |
+| `allergens` | array of string | no |
+| `dietFlags` | array of string | no |
 
 ### `TokenRequest`
 
