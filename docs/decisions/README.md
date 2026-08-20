@@ -27,6 +27,7 @@ the wiki at `wiki/` instead, where the self-hoster can read it too. See CLAUDE.m
 | 10 — Catalog growth | [12-catalog-growth.md](12-catalog-growth.md) |
 | 10a — Ingredients | [13-ingredients.md](13-ingredients.md) |
 | 11 — Stats views | [14-stats.md](14-stats.md) |
+| 12 — Goals | [15-goals.md](15-goals.md) |
 
 A decision that is later reversed stays in its original file, with a note pointing at the
 record that superseded it. Deleting it would hide the reasoning that made the reversal

@@ -630,8 +630,19 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
     nobody reported stays absent. The average divides by **days logged**, not by the length of the
     range, and the screen says so. The chart is scaled rectangles rather than a package.
     **Left open:** the zone is still UTC (§9.13), and nothing compares a number to a target yet.
-12. **Goals (LATE)** — calorie / macro / specific-nutrient targets and progress against them,
-    layered on top of the stats views.
+12. ~~**Goals**~~ ✅ — [15-goals.md](docs/decisions/15-goals.md). Targets keyed by nutrient, so a
+    target for selenium is a row rather than a migration — the second thing "core four as columns
+    *and* catalog rows" bought. **A target carries a direction**, because "at least 100 g protein"
+    is met by passing it and "at most 2 000 kcal" is broken by the same; the fraction is uncapped on
+    the wire so a client can draw that difference, and **a floor not yet reached is a day in
+    progress rather than a failure**. One target per nutrient (two would be a contradiction);
+    `PUT /api/goals` replaces wholesale. Progress is measured server-side, for milestone 11's
+    reason. A nutrient nothing reported counts as nothing eaten — a target asks what was eaten, and
+    reporting one met on the strength of food nobody described would be the dishonest answer. The
+    editor is a settings form, which §10 permits, on a route off Home rather than a fourth tab.
+    **No targets is a perfectly good state** and draws nothing.
+    **Left open:** nothing suggests a target (needs §9.13's body metrics; a hand-typed one always
+    works), targets are per-day only, and Trends does not draw them.
 13. **User profile (LATE, potential)** — per-account settings beyond credentials: display name,
     **time zone**, unit preferences (metric/imperial, kcal vs kJ), and optional body metrics.
     Also the natural home for the account self-service milestone 2 left out — changing the
