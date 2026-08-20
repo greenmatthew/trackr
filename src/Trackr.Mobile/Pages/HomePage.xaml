@@ -64,6 +64,44 @@
 
             </Grid>
 
+            <!-- Targets, above the breakdown. A ceiling passed is drawn as a warning and a floor
+                 reached as done; a floor not yet reached is a day in progress rather than a
+                 failure, which is what keeps this from being an accusation at breakfast. -->
+            <VerticalStackLayout
+                BindableLayout.ItemsSource="{Binding Goals}"
+                IsVisible="{Binding HasGoals}"
+                Spacing="10">
+
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GoalRow">
+                        <VerticalStackLayout Spacing="2">
+
+                            <Grid ColumnDefinitions="*,Auto">
+
+                                <Label Text="{Binding DisplayName}" />
+
+                                <Label
+                                    Grid.Column="1"
+                                    Text="{Binding Amount}"
+                                    Style="{StaticResource FieldLabel}" />
+
+                            </Grid>
+
+                            <ProgressBar
+                                Progress="{Binding Fraction}"
+                                ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+
+                            <Label
+                                Text="over"
+                                Style="{StaticResource ErrorText}"
+                                IsVisible="{Binding IsOver}" />
+
+                        </VerticalStackLayout>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+
+            </VerticalStackLayout>
+
             <!-- Only what today actually reported. A row per known nutrient with a dash against the
                  unmeasured ones would read as a list of zeroes. -->
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Nutrients}" Spacing="4">
@@ -76,6 +114,11 @@
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>
+
+            <Button
+                Text="Daily targets"
+                AutomationId="OpenGoals"
+                Command="{Binding OpenGoalsCommand}" />
 
             <VerticalStackLayout Spacing="8" IsVisible="{Binding HasAnything, Converter={StaticResource InvertedBoolConverter}}">
 

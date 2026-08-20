@@ -22,8 +22,10 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// redraw somebody's day.
 /// </para>
 /// </remarks>
-public sealed partial class HomeViewModel(ITrackrApiClient api, NutrientCatalogCache nutrients)
-    : ObservableObject
+public sealed partial class HomeViewModel(
+    ITrackrApiClient api,
+    NutrientCatalogCache nutrients,
+    INavigationService navigation) : ObservableObject
 {
     /// <summary>
     /// The day being totalled, as the server understands it.
@@ -44,6 +46,18 @@ public sealed partial class HomeViewModel(ITrackrApiClient api, NutrientCatalogC
 
     /// <summary>Micronutrients something reported today, in label order.</summary>
     public ObservableCollection<NutrientRow> Nutrients { get; } = [];
+
+    /// <summary>
+    /// Daily targets against today, drawn above the totals.
+    /// </summary>
+    /// <remarks>
+    /// Empty until somebody sets one, and empty is a perfectly good state: CLAUDE.md's closing note
+    /// is that tracking is a tool, and an app that demanded targets before it would show a number
+    /// would be the version of this that drives anxiety rather than helping.
+    /// </remarks>
+    public ObservableCollection<GoalRow> Goals { get; } = [];
+
+    public bool HasGoals => Goals.Count > 0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasAnything))]
@@ -83,6 +97,7 @@ public sealed partial class HomeViewModel(ITrackrApiClient api, NutrientCatalogC
         {
             var catalog = await nutrients.EnsureLoadedAsync();
             var stats = await api.GetStatsAsync();
+            var goals = await api.GetGoalProgressAsync();
 
             if (stats is null)
             {
@@ -101,6 +116,15 @@ public sealed partial class HomeViewModel(ITrackrApiClient api, NutrientCatalogC
             {
                 Nutrients.Add(row);
             }
+
+            Goals.Clear();
+
+            foreach (var goal in goals ?? [])
+            {
+                Goals.Add(new GoalRow(goal, catalog));
+            }
+
+            OnPropertyChanged(nameof(HasGoals));
         }
         finally
         {
@@ -116,6 +140,13 @@ public sealed partial class HomeViewModel(ITrackrApiClient api, NutrientCatalogC
         OnPropertyChanged(nameof(CarbohydrateText));
         OnPropertyChanged(nameof(ProteinText));
     }
+
+    /// <remarks>
+    /// A route rather than a fourth tab: three tabs are the shape of the app, and a target is set
+    /// occasionally and then left alone.
+    /// </remarks>
+    [RelayCommand]
+    private Task OpenGoalsAsync() => navigation.GoToGoalsAsync();
 
     private static string Format(decimal value) => NutrientRows.Format(value);
 }

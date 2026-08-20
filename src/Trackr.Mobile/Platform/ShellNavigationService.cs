@@ -27,6 +27,8 @@ public sealed class ShellNavigationService : INavigationService
     // gives the profile a back arrow and returns the user to the tab they opened it from.
     public Task GoToProfileAsync() => GoToAsync(Routes.Profile);
 
+    public Task GoToGoalsAsync() => GoToAsync(Routes.Goals);
+
     private static Task GoToAsync(string route) =>
         // Shell navigation must happen on the UI thread, and commands may complete on a
         // thread-pool thread after an await.

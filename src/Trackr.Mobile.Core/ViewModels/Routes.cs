@@ -43,4 +43,13 @@ public static class Routes
     /// inside the TabBar would put it in the tab strip.
     /// </summary>
     public const string Profile = "profile";
+
+    /// <summary>
+    /// Setting the daily targets, reached from Home.
+    /// </summary>
+    /// <remarks>
+    /// A route rather than a fourth tab, for the reason the profile is one: three tabs are the
+    /// shape of the app, and a target is set occasionally and then left alone.
+    /// </remarks>
+    public const string Goals = "goals";
 }

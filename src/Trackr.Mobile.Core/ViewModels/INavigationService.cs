@@ -27,4 +27,9 @@ public interface INavigationService
     /// than replaces, so it gets a back arrow and returns to the tab it was opened from.
     /// </summary>
     Task GoToProfileAsync();
+
+    /// <summary>
+    /// Opens the daily targets from Home. Pushes, like the profile, so it comes back.
+    /// </summary>
+    Task GoToGoalsAsync();
 }

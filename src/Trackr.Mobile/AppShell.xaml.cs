@@ -18,6 +18,7 @@ public partial class AppShell : Shell
         // TabBar becomes a tab, and the profile is reached from the avatar instead. This is
         // also the app's only pushed route - see INavigationService.GoToProfileAsync.
         Routing.RegisterRoute(Routes.Profile, typeof(ProfilePage));
+        Routing.RegisterRoute(Routes.Goals, typeof(GoalsPage));
     }
 
     protected override void OnAppearing()

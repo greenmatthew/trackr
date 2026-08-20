@@ -109,6 +109,21 @@ public interface ITrackrApiClient
         int days,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Each daily target against what has been eaten today.</summary>
+    /// <remarks>
+    /// Measured by the server, on the account's day. Null when it could not be asked.
+    /// </remarks>
+    Task<IReadOnlyList<GoalProgressResponse>?> GetGoalProgressAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The daily targets themselves, for editing.</summary>
+    Task<IReadOnlyList<GoalResponse>?> GetGoalsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Replaces the whole set of targets.</summary>
+    Task<IReadOnlyList<GoalResponse>?> SaveGoalsAsync(
+        SaveGoalsRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Foods this account has logged before, most recently eaten first.
     /// </summary>

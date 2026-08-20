@@ -74,6 +74,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<RegisterViewModel>();
         services.AddTransient<HomeViewModel>();
         services.AddTransient<TrendsViewModel>();
+        services.AddTransient<GoalsViewModel>();
 
         // Singleton, unlike the view models below: it holds the server's nutrient vocabulary, which
         // changes about once a year, and one fetch per visit to the chat would be a round trip for

@@ -1,6 +1,7 @@
 using NSubstitute;
 using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Nutrition;
+using Trackr.Mobile.Core.Platform;
 using Trackr.Mobile.Core.ViewModels;
 using Trackr.Shared.Nutrition;
 using Xunit;
@@ -169,11 +170,91 @@ public sealed class StatsViewModelTests
         Assert.Equal([true, false, true], trends.Days.Select(bar => bar.HasAnything));
     }
 
+    /// <summary>
+    /// A ceiling passed and a floor reached are opposite results and must not draw the same.
+    /// </summary>
+    /// <remarks>
+    /// Drawing both as "done" would congratulate somebody for going over their calories.
+    /// </remarks>
+    [Fact]
+    public async Task A_ceiling_passed_is_a_warning_and_a_floor_reached_is_not()
+    {
+        var (home, api) = BuildHome();
+
+        api.GetStatsAsync(null, null, Arg.Any<CancellationToken>()).Returns(Stats(Day()));
+        api.GetGoalProgressAsync(Arg.Any<CancellationToken>()).Returns(
+        [
+            new GoalProgressResponse("energy_kcal", 2_000m, GoalKind.AtMost, 2_400m, 1.2d, false),
+            new GoalProgressResponse("protein", 100m, GoalKind.AtLeast, 120m, 1.2d, true)
+        ]);
+
+        await home.RefreshCommand.ExecuteAsync(null);
+
+        var energy = home.Goals[0];
+        var protein = home.Goals[1];
+
+        Assert.True(energy.IsOver);
+        Assert.False(energy.IsDone);
+
+        Assert.False(protein.IsOver);
+        Assert.True(protein.IsDone);
+
+        // Clamped for the bar; "over" is carried by the flag rather than by a bar past its end.
+        Assert.Equal(1d, energy.Fraction);
+    }
+
+    /// <remarks>
+    /// A floor not yet reached is a day in progress, not a failure - which is what keeps a progress
+    /// bar from being an accusation at breakfast.
+    /// </remarks>
+    [Fact]
+    public async Task A_target_not_yet_reached_is_neither_done_nor_a_warning()
+    {
+        var (home, api) = BuildHome();
+
+        api.GetStatsAsync(null, null, Arg.Any<CancellationToken>()).Returns(Stats(Day()));
+        api.GetGoalProgressAsync(Arg.Any<CancellationToken>()).Returns(
+        [
+            new GoalProgressResponse("protein", 100m, GoalKind.AtLeast, 40m, 0.4d, false)
+        ]);
+
+        await home.RefreshCommand.ExecuteAsync(null);
+
+        var protein = Assert.Single(home.Goals);
+
+        Assert.False(protein.IsDone);
+        Assert.False(protein.IsOver);
+        Assert.Equal("Protein", protein.DisplayName);
+        Assert.Equal("40 of 100 g", protein.Amount);
+    }
+
+    /// <remarks>
+    /// An account with no targets is a perfectly good state. CLAUDE.md's closing note is that
+    /// tracking is a tool, and an app that demanded targets before showing a number would be the
+    /// version of this that drives anxiety rather than helping.
+    /// </remarks>
+    [Fact]
+    public async Task An_account_with_no_targets_simply_has_none()
+    {
+        var (home, api) = BuildHome();
+
+        api.GetStatsAsync(null, null, Arg.Any<CancellationToken>()).Returns(Stats(Day()));
+        api.GetGoalProgressAsync(Arg.Any<CancellationToken>()).Returns([]);
+
+        await home.RefreshCommand.ExecuteAsync(null);
+
+        Assert.False(home.HasGoals);
+        Assert.True(home.HasAnything);
+        Assert.Null(home.Problem);
+    }
+
     private static (HomeViewModel Home, ITrackrApiClient Api) BuildHome()
     {
         var api = WithCatalog();
 
-        return (new HomeViewModel(api, new NutrientCatalogCache(api)), api);
+        return (
+            new HomeViewModel(api, new NutrientCatalogCache(api), Substitute.For<INavigationService>()),
+            api);
     }
 
     private static (TrendsViewModel Trends, ITrackrApiClient Api) BuildTrends()
@@ -189,7 +270,9 @@ public sealed class StatsViewModelTests
 
         api.GetNutrientsAsync(Arg.Any<CancellationToken>()).Returns(
         [
-            new NutrientResponse("sodium", "Sodium", NutrientUnit.Milligram, NutrientGroup.SterolsAndElectrolytes, 90, false)
+            new NutrientResponse("sodium", "Sodium", NutrientUnit.Milligram, NutrientGroup.SterolsAndElectrolytes, 90, false),
+            new NutrientResponse("protein", "Protein", NutrientUnit.Gram, NutrientGroup.Core, 4, true),
+            new NutrientResponse("energy_kcal", "Energy", NutrientUnit.Kilocalorie, NutrientGroup.Core, 1, true)
         ]);
 
         return api;

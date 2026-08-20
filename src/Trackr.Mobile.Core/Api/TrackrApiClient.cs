@@ -426,6 +426,69 @@ public sealed class TrackrApiClient(
         }
     }
 
+    public Task<IReadOnlyList<GoalProgressResponse>?> GetGoalProgressAsync(
+        CancellationToken cancellationToken = default) =>
+        ReadAsync<IReadOnlyList<GoalProgressResponse>>("api/goals/progress", "Goal progress", cancellationToken);
+
+    public Task<IReadOnlyList<GoalResponse>?> GetGoalsAsync(CancellationToken cancellationToken = default) =>
+        ReadAsync<IReadOnlyList<GoalResponse>>("api/goals", "Goals", cancellationToken);
+
+    public async Task<IReadOnlyList<GoalResponse>?> SaveGoalsAsync(
+        SaveGoalsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.PutAsJsonAsync(Endpoint("api/goals"), request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Saving goals answered with {StatusCode}", (int)response.StatusCode);
+
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<IReadOnlyList<GoalResponse>>(cancellationToken);
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Saving goals failed");
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A plain authenticated GET that answers null rather than throwing.
+    /// </summary>
+    /// <remarks>
+    /// The same shape three routes wanted, extracted rather than copied a third time. Null on any
+    /// failure, following GetNutrientsAsync: an empty list is a claim about the account, and a
+    /// server that did not answer has made no claim.
+    /// </remarks>
+    private async Task<T?> ReadAsync<T>(string path, string what, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.GetAsync(Endpoint(path), cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("{What} answered with {StatusCode}", what, (int)response.StatusCode);
+
+                return default;
+            }
+
+            return await response.Content.ReadFromJsonAsync<T>(cancellationToken);
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "{What} fetch failed", what);
+
+            return default;
+        }
+    }
+
     public Task<StatsResponse?> GetStatsAsync(
         DateOnly? from = null,
         DateOnly? to = null,

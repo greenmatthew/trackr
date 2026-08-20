@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="Trackr.Mobile.Pages.GoalsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:GoalsViewModel"
+    Title="Daily targets">
+
+    <!-- A form, and allowed to be one. Section 10 forbids forms as the way food is logged; this is
+         a settings screen, and section 9.12 requires a hand-typed target to work whether or not
+         anything ever suggests one. -->
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+
+            <Label
+                Text="A target is a floor by default - at least this much. Switch it to a ceiling for the ones you want to stay under."
+                Style="{StaticResource Caption}" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+
+            <Label
+                Text="{Binding Problem}"
+                Style="{StaticResource ErrorText}"
+                IsVisible="{Binding Problem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" Spacing="12">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GoalEditRow">
+
+                        <Border Style="{StaticResource Card}" Padding="12">
+                            <VerticalStackLayout Spacing="8">
+
+                                <Picker
+                                    ItemsSource="{Binding Source={RelativeSource AncestorType={x:Type vm:GoalsViewModel}}, Path=NutrientNames}"
+                                    SelectedIndex="{Binding NutrientIndex}" />
+
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+
+                                    <Entry
+                                        Text="{Binding TargetText}"
+                                        Placeholder="Amount"
+                                        Keyboard="Numeric" />
+
+                                    <HorizontalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                        <Label Text="At most" VerticalOptions="Center" />
+                                        <Switch IsToggled="{Binding IsCeiling}" />
+                                    </HorizontalStackLayout>
+
+                                    <Button
+                                        Grid.Column="2"
+                                        Text="Remove"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GoalsViewModel}}, Path=RemoveCommand}"
+                                        CommandParameter="{Binding .}" />
+
+                                </Grid>
+
+                            </VerticalStackLayout>
+                        </Border>
+
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <Button Text="Add a target" AutomationId="AddGoal" Command="{Binding AddCommand}" />
+
+            <Button
+                Text="Save"
+                AutomationId="SaveGoals"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding CanSave}" />
+
+            <Label
+                Text="Saved."
+                IsVisible="{Binding IsSaved}"
+                HorizontalOptions="Center" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

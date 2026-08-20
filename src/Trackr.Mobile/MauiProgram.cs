@@ -60,6 +60,7 @@ public static class MauiProgram
         builder.Services.AddTransient<HomePage>();
         builder.Services.AddTransient<ChatPage>();
         builder.Services.AddTransient<TrendsPage>();
+        builder.Services.AddTransient<GoalsPage>();
         builder.Services.AddTransient<ProfilePage>();
 
         // Both shells too, for the same reason: App resolves one on each auth transition, and
