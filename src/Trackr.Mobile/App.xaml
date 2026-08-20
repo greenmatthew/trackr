@@ -1,7 +1,8 @@
 <?xml version = "1.0" encoding = "UTF-8" ?>
 <Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:converters="clr-namespace:Trackr.Mobile.Converters"
+    xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:local="clr-namespace:Trackr.Mobile"
              x:Class="Trackr.Mobile.App">
     <Application.Resources>
@@ -21,6 +22,10 @@
                  and what the local cache will hold. This is what lets an Image bind to them
                  without a view model in Core having to know the MAUI ImageSource type. -->
             <toolkit:ByteArrayToImageSourceConverter x:Key="ByteArrayToImageSourceConverter" />
+
+            <!-- Milestone 11's trend bars. The view model reports a fraction; how tall the chart
+                 is belongs to the page, so this is the one place that decides. -->
+            <converters:BarHeightConverter x:Key="BarHeight" />
 
         </ResourceDictionary>
     </Application.Resources>

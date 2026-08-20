@@ -80,6 +80,23 @@ public interface ITrackrApiClient
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// What was eaten over a run of local days, totalled by the server.
+    /// </summary>
+    /// <remarks>
+    /// Null when it could not be asked, like the rest: an empty day and an unreachable server are
+    /// different things and must not draw the same.
+    /// <para>
+    /// The days are the <em>account's</em>, not the phone's. The server aggregates and owns the day
+    /// boundary, so omitting both bounds asks for "today" as the server understands it - which is
+    /// what stops a phone in another time zone from silently redrawing somebody's day.
+    /// </para>
+    /// </remarks>
+    Task<StatsResponse?> GetStatsAsync(
+        DateOnly? from = null,
+        DateOnly? to = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Foods this account has logged before, most recently eaten first.
     /// </summary>
     /// <remarks>

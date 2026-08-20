@@ -3,32 +3,94 @@
     x:Class="Trackr.Mobile.Pages.HomePage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:nutrition="clr-namespace:Trackr.Mobile.Core.Nutrition;assembly=Trackr.Mobile.Core"
     xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
     x:DataType="vm:HomeViewModel">
 
-    <!-- Today's totals: the output surface, and the tab the app opens on.
+    <!-- Today so far. CLAUDE.md section 1 calls this core rather than polish: logging a meal and
+         immediately seeing the day move is the loop the app is built around, which is why it sits
+         beside the chat rather than behind a menu.
 
-         An honest empty state rather than a dashboard of invented numbers. Nothing can be
-         logged until the cascade exists (milestone 9) and there is nothing to aggregate until
-         the data layer does (milestone 6); milestone 11 fills this in from the nutrient
-         snapshots on LogItems. The shape is here so that work is a fill-in, not a redesign. -->
+         The date is the phone's and is for display only; the totals are the server's, for an
+         account whose day boundary follows its own time zone rather than the phone's. -->
 
-    <VerticalStackLayout Padding="24" Spacing="12" VerticalOptions="Center">
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
 
-        <Label
-            Text="{Binding Today}"
-            Style="{StaticResource Caption}"
-            HorizontalOptions="Center" />
+            <Label
+                Text="{Binding Today}"
+                Style="{StaticResource Caption}"
+                HorizontalOptions="Center" />
 
-        <Label
-            Text="Nothing logged yet"
-            Style="{StaticResource PageTitle}"
-            HorizontalOptions="Center" />
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" />
 
-        <Label
-            Text="Your day's calories and nutrients will appear here once meal logging arrives."
-            Style="{StaticResource Caption}" />
+            <!-- Never drawn as an empty day: "you have eaten nothing" and "the server did not
+                 answer" look identical if you let them, and only one is the user's doing. -->
+            <Label
+                Text="{Binding Problem}"
+                Style="{StaticResource ErrorText}"
+                IsVisible="{Binding Problem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
 
-    </VerticalStackLayout>
+            <VerticalStackLayout Spacing="4" IsVisible="{Binding HasAnything}">
+
+                <Label
+                    Text="{Binding EnergyText}"
+                    Style="{StaticResource PageTitle}"
+                    HorizontalOptions="Center" />
+
+                <Label Text="kcal today" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+
+            </VerticalStackLayout>
+
+            <Grid
+                ColumnDefinitions="*,*,*"
+                ColumnSpacing="12"
+                IsVisible="{Binding HasAnything}">
+
+                <VerticalStackLayout>
+                    <Label Text="Fat" Style="{StaticResource FieldLabel}" />
+                    <Label Text="{Binding FatText}" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1">
+                    <Label Text="Carbs" Style="{StaticResource FieldLabel}" />
+                    <Label Text="{Binding CarbohydrateText}" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="2">
+                    <Label Text="Protein" Style="{StaticResource FieldLabel}" />
+                    <Label Text="{Binding ProteinText}" />
+                </VerticalStackLayout>
+
+            </Grid>
+
+            <!-- Only what today actually reported. A row per known nutrient with a dash against the
+                 unmeasured ones would read as a list of zeroes. -->
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Nutrients}" Spacing="4">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="nutrition:NutrientRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="{Binding DisplayName}" />
+                            <Label Grid.Column="1" Text="{Binding Amount}" />
+                        </Grid>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="8" IsVisible="{Binding HasAnything, Converter={StaticResource InvertedBoolConverter}}">
+
+                <Label
+                    Text="Nothing logged yet"
+                    Style="{StaticResource PageTitle}"
+                    HorizontalOptions="Center" />
+
+                <Label
+                    Text="Tell the Chat tab what you ate and it will show up here."
+                    Style="{StaticResource Caption}" />
+
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
 
 </ContentPage>

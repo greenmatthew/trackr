@@ -2,25 +2,122 @@
 <ContentPage
     x:Class="Trackr.Mobile.Pages.TrendsPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:nutrition="clr-namespace:Trackr.Mobile.Core.Nutrition;assembly=Trackr.Mobile.Core"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:TrendsViewModel">
 
-    <!-- Week and month summaries, and later the place goals are shown against (CLAUDE.md
-         9.12). Separate from Home so that "what have I eaten today" never involves scrolling
-         past a trend chart to reach it.
+    <!-- Week and month, in the "basic form" CLAUDE.md section 1 asks for: rolling summaries and a
+         simple trend, not analytics.
 
-         Empty until milestone 11. -->
+         The chart is two dozen scaled rectangles rather than a charting package. A dependency for
+         this would be a licence to check and a bundle to carry for something the layout can
+         already do, and the bars are bound to a fraction so how tall the chart is stays a
+         question for the page. -->
 
-    <VerticalStackLayout Padding="24" Spacing="12" VerticalOptions="Center">
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
 
-        <Label
-            Text="Trends"
-            Style="{StaticResource PageTitle}"
-            HorizontalOptions="Center" />
+            <Picker
+                ItemsSource="{Binding RangeLabels}"
+                SelectedIndex="{Binding SelectedRange}"
+                AutomationId="TrendRange" />
 
-        <Label
-            Text="Weekly and monthly summaries will appear here once there is something to summarise."
-            Style="{StaticResource Caption}" />
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" />
 
-    </VerticalStackLayout>
+            <Label
+                Text="{Binding Problem}"
+                Style="{StaticResource ErrorText}"
+                IsVisible="{Binding Problem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+            <VerticalStackLayout Spacing="4" IsVisible="{Binding HasAnything}">
+
+                <Label
+                    Text="{Binding Headline}"
+                    Style="{StaticResource PageTitle}"
+                    HorizontalOptions="Center" />
+
+                <!-- Says what the average is an average of. The server divides by the days that
+                     have something on them, so showing the figure without saying so would imply a
+                     fuller week than there was. -->
+                <Label
+                    Text="{Binding Detail}"
+                    Style="{StaticResource Caption}"
+                    HorizontalOptions="Center" />
+
+            </VerticalStackLayout>
+
+            <Border
+                Style="{StaticResource Card}"
+                IsVisible="{Binding HasAnything}"
+                Padding="12">
+
+                <CollectionView
+                    ItemsSource="{Binding Days}"
+                    ItemsLayout="HorizontalList"
+                    HeightRequest="160">
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DayBar">
+
+                            <Grid RowDefinitions="*,Auto" WidthRequest="34" Padding="2">
+
+                                <!-- Bottom-aligned inside a fixed row, with the height coming from
+                                     the fraction. A day with nothing logged draws no bar at all
+                                     rather than a floor, because a blank day and a small day are
+                                     different facts. -->
+                                <BoxView
+                                    VerticalOptions="End"
+                                    HeightRequest="{Binding Fraction, Converter={StaticResource BarHeight}}"
+                                    IsVisible="{Binding HasAnything}"
+                                    Color="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+
+                                <Label
+                                    Grid.Row="1"
+                                    Text="{Binding Label}"
+                                    FontSize="9"
+                                    LineBreakMode="TailTruncation"
+                                    HorizontalTextAlignment="Center" />
+
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+            </Border>
+
+            <Label
+                Text="An average day"
+                Style="{StaticResource FieldLabel}"
+                IsVisible="{Binding HasAnything}" />
+
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Nutrients}" Spacing="4">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="nutrition:NutrientRow">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="{Binding DisplayName}" />
+                            <Label Grid.Column="1" Text="{Binding Amount}" />
+                        </Grid>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout
+                Spacing="8"
+                IsVisible="{Binding HasAnything, Converter={StaticResource InvertedBoolConverter}}">
+
+                <Label
+                    Text="Nothing to summarise yet"
+                    Style="{StaticResource PageTitle}"
+                    HorizontalOptions="Center" />
+
+                <Label
+                    Text="Log a few meals and a week's shape will start to show here."
+                    Style="{StaticResource Caption}" />
+
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
 
 </ContentPage>

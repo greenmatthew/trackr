@@ -1,5 +1,6 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Trackr.Mobile.Core.Nutrition;
 using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.ViewModels.Chat;
@@ -201,46 +202,10 @@ public sealed partial class ConfirmableItem : ObservableObject
 
     private static IReadOnlyList<NutrientRow> BuildNutrientRows(
         IReadOnlyDictionary<string, decimal> amounts,
-        IReadOnlyDictionary<string, NutrientResponse>? catalog)
-    {
-        if (catalog is null)
-        {
-            // No names and no units to render against. Showing the raw keys would be worse than
-            // showing nothing, and the calories and macros above do not need the catalog.
-            return [];
-        }
+        IReadOnlyDictionary<string, NutrientResponse>? catalog) =>
+        NutrientRows.Build(amounts, catalog);
 
-        return
-        [
-            .. amounts
-                .Where(amount => catalog.ContainsKey(amount.Key))
-                .Select(amount => (Nutrient: catalog[amount.Key], amount.Value))
-                .Where(pair => !pair.Nutrient.IsCore)
-                .OrderBy(pair => pair.Nutrient.SortOrder)
-                .Select(pair => new NutrientRow(
-                    pair.Nutrient.DisplayName,
-                    $"{Format(pair.Value)} {UnitSymbol(pair.Nutrient.Unit)}"))
-        ];
-    }
-
-    private static string UnitSymbol(NutrientUnit unit) => unit switch
-    {
-        NutrientUnit.Gram => "g",
-        NutrientUnit.Milligram => "mg",
-        NutrientUnit.Microgram => "µg",
-        _ => "kcal"
-    };
-
-    /// <summary>
-    /// Trailing zeros trimmed, so 78.00 reads as 78.
-    /// </summary>
-    /// <remarks>
-    /// The current culture, because these are read by a person. Parsing accepts both this and the
-    /// invariant form, so a value that round-trips through a keyboard laid out for another decimal
-    /// separator still reads.
-    /// </remarks>
-    private static string Format(decimal value) =>
-        value.ToString("0.####", CultureInfo.CurrentCulture);
+    private static string Format(decimal value) => NutrientRows.Format(value);
 
     private static decimal Read(string? text) => TryRead(text, out var value) ? value : 0m;
 
@@ -267,10 +232,3 @@ public sealed partial class ConfirmableItem : ObservableObject
         return value >= 0m;
     }
 }
-
-/// <summary>One micronutrient line on a card: "Vitamin C", "12 mg".</summary>
-/// <remarks>
-/// Formatted here rather than in XAML because the unit belongs to the nutrient rather than to the
-/// amount, and a template that formatted its own would need the catalog to reach the view.
-/// </remarks>
-public sealed record NutrientRow(string DisplayName, string Amount);
