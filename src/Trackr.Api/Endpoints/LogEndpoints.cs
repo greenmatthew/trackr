@@ -441,8 +441,8 @@ public static class LogEndpoints
             return;
         }
 
-        var visible = await db.FoodItems
-            .Where(item => referenced.Contains(item.Id) && (item.UserId == userId || item.UserId == null))
+        var visible = await CatalogItems.VisibleTo(db, userId)
+            .Where(item => referenced.Contains(item.Id))
             .Select(item => item.Id)
             .ToListAsync(cancellationToken);
 

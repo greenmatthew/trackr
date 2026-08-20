@@ -214,21 +214,16 @@ public static class FoodEndpoints
 
         var now = Timestamps.UtcNow();
 
-        var item = new FoodItem
-        {
-            UserId = owner,
-            Name = request.Name.Trim(),
-            Brand = Blank(request.Brand),
-            Barcode = barcode,
-            // Rounded to what the columns keep, so this response is exactly what a later GET
-            // will report - see StoredPrecision.
-            ServingSize = StoredPrecision.Measure(request.ServingSize),
-            ServingUnit = request.ServingUnit.Trim(),
-            Source = request.Source,
-            CreatedUtc = now,
-            UpdatedUtc = now,
-            UpdatedByUserId = user.Id
-        };
+        var item = CatalogItems.New(
+            name: request.Name.Trim(),
+            brand: Blank(request.Brand),
+            barcode: barcode,
+            servingSize: request.ServingSize,
+            servingUnit: request.ServingUnit.Trim(),
+            source: request.Source,
+            owner: owner,
+            editorId: user.Id,
+            now: now);
 
         if (isRecipe)
         {
@@ -537,9 +532,9 @@ public static class FoodEndpoints
         return Results.NoContent();
     }
 
-    /// <summary>Everything this account may see: its own items, plus the shared catalog.</summary>
+    /// <inheritdoc cref="CatalogItems.VisibleTo"/>
     private static IQueryable<FoodItem> VisibleTo(TrackrDbContext db, Guid userId) =>
-        db.FoodItems.Where(item => item.UserId == userId || item.UserId == null);
+        CatalogItems.VisibleTo(db, userId);
 
     /// <summary>
     /// One item with everything <see cref="ToResponse"/> needs: the nutrient map, and - for a recipe
@@ -557,30 +552,14 @@ public static class FoodEndpoints
             .ThenInclude(component => component.Child);
 
     /// <summary>Copies the request's own nutrition onto an item that is not a recipe.</summary>
-    /// <remarks>
-    /// RemoveRange and Add inside one SaveChanges, deliberately not ExecuteDeleteAsync: that runs
-    /// outside the SaveChanges transaction, so a failure on the insert would leave the item with
-    /// half a nutrient map and no error to explain it.
-    /// </remarks>
-    private static void ApplyNutritionFrom(FoodItem item, SaveFoodItemRequest request)
-    {
-        item.EnergyKcal = StoredPrecision.Amount(request.EnergyKcal);
-        item.FatG = StoredPrecision.Amount(request.FatG);
-        item.CarbohydrateG = StoredPrecision.Amount(request.CarbohydrateG);
-        item.ProteinG = StoredPrecision.Amount(request.ProteinG);
-
-        item.Nutrients.Clear();
-
-        foreach (var (key, amount) in request.Nutrients)
-        {
-            item.Nutrients.Add(new FoodItemNutrient
-            {
-                FoodItemId = item.Id,
-                NutrientKey = key,
-                Amount = StoredPrecision.Amount(amount)
-            });
-        }
-    }
+    private static void ApplyNutritionFrom(FoodItem item, SaveFoodItemRequest request) =>
+        CatalogItems.ApplyNutrition(
+            item,
+            request.EnergyKcal,
+            request.FatG,
+            request.CarbohydrateG,
+            request.ProteinG,
+            request.Nutrients);
 
     /// <summary>
     /// Hangs the ingredient list on a recipe and computes the nutrition it implies.
