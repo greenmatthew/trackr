@@ -75,10 +75,16 @@ public static class ServiceCollectionExtensions
         // an answer the process already had.
         services.AddSingleton<NutrientCatalogCache>();
 
-        // Transient like the rest, which means a transcript does not survive leaving the tab. That
-        // is the right default until milestone 14's offline queue gives a conversation somewhere to
-        // live - a half-finished chat kept only in memory would be lost to a phone call anyway.
-        services.AddTransient<ChatViewModel>();
+        // Singleton, unlike the view models above, because the transcript is the screen: a chat that
+        // empties itself on the way back from the Home tab reads as a crash rather than a design.
+        // Milestone 14's offline queue is what gives a conversation somewhere to live that a phone
+        // call cannot destroy; until then, surviving a tab switch is most of the value at none of
+        // the cost.
+        //
+        // What it costs is the obligation AvatarStore already carries: state that outlives a visit
+        // also outlives an account, so ChatViewModel takes AuthSession and empties itself on a
+        // sign-out rather than leaving one person's meals for the next.
+        services.AddSingleton<ChatViewModel>();
 
         services.AddTransient<ProfileViewModel>();
         services.AddTransient<AppShellViewModel>();

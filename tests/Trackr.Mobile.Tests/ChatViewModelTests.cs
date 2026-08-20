@@ -1,5 +1,6 @@
 using NSubstitute;
 using Trackr.Mobile.Core.Api;
+using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Nutrition;
 using Trackr.Mobile.Core.Platform;
 using Trackr.Mobile.Core.ViewModels;
@@ -462,6 +463,66 @@ public sealed class ChatViewModelTests
         Assert.Contains("not allowed", chat.Error);
     }
 
+    /// <summary>
+    /// The view model is a singleton so the transcript survives a tab switch, and that is exactly
+    /// why it must not survive an account.
+    /// </summary>
+    /// <remarks>
+    /// What is held here is what somebody ate, what their kitchen looks like and what they typed
+    /// about it. Leaving it for the next person to sign in on the device is the same failure
+    /// AvatarStore drops its bytes to avoid.
+    /// </remarks>
+    [Fact]
+    public async Task Signing_out_empties_the_conversation()
+    {
+        var (chat, api, _, _, session) = BuildWithSession();
+
+        api.AnalyzeMealAsync(Arg.Any<AnalyzeMealRequest>(), Arg.Any<CancellationToken>())
+            .Returns(MealAnalysisResult.Analyzed([Analysed()]));
+
+        chat.Draft = "an egg";
+
+        await chat.SendCommand.ExecuteAsync(null);
+
+        Assert.NotEmpty(chat.Messages);
+
+        await session.SignOutAsync();
+
+        Assert.Empty(chat.Messages);
+        Assert.Empty(chat.Attachments);
+        Assert.Equal(string.Empty, chat.Draft);
+        Assert.False(chat.CanRetry);
+    }
+
+    /// <remarks>
+    /// Cancelling the request is not enough on its own. An analysis takes minutes, the reply may
+    /// already be on its way back, and it arrives on a continuation that knows nothing about the
+    /// sign-out that happened while it waited - so without the generation check it would append one
+    /// account's meal to the next account's empty chat.
+    /// </remarks>
+    [Fact]
+    public async Task A_reply_that_arrives_after_a_sign_out_is_never_shown()
+    {
+        var (chat, api, _, _, session) = BuildWithSession();
+
+        var analysing = new TaskCompletionSource<MealAnalysisResult>();
+
+        api.AnalyzeMealAsync(Arg.Any<AnalyzeMealRequest>(), Arg.Any<CancellationToken>())
+            .Returns(_ => analysing.Task);
+
+        chat.Draft = "an egg";
+
+        var sending = chat.SendCommand.ExecuteAsync(null);
+
+        await session.SignOutAsync();
+
+        analysing.SetResult(MealAnalysisResult.Analyzed([Analysed()]));
+
+        await sending;
+
+        Assert.Empty(chat.Messages);
+    }
+
     private static MealAnalysisItem Analysed(
         decimal quantity = 1m,
         decimal energyKcal = 78m,
@@ -497,6 +558,22 @@ public sealed class ChatViewModelTests
     private static (ChatViewModel Chat, ITrackrApiClient Api, IPhotoPicker Picker, IImageDownsizer Downsizer)
         Build(bool withNutrientCatalog = true)
     {
+        var (chat, api, picker, downsizer, _) = BuildWithSession(withNutrientCatalog);
+
+        return (chat, api, picker, downsizer);
+    }
+
+    /// <summary>
+    /// The same, with the session handed back so a test can sign out mid-conversation.
+    /// </summary>
+    /// <remarks>
+    /// A real <see cref="AuthSession"/> rather than a substitute, matching LoginViewModelTests:
+    /// raising <c>Changed</c> at the right moment is the behaviour under test, and a substitute
+    /// would stub out exactly that.
+    /// </remarks>
+    private static (ChatViewModel Chat, ITrackrApiClient Api, IPhotoPicker Picker, IImageDownsizer Downsizer, AuthSession Session)
+        BuildWithSession(bool withNutrientCatalog = true)
+    {
         var api = Substitute.For<ITrackrApiClient>();
         var picker = Substitute.For<IPhotoPicker>();
         var downsizer = Substitute.For<IImageDownsizer>();
@@ -509,10 +586,17 @@ public sealed class ChatViewModelTests
             ]
             : null);
 
+        var settings = Substitute.For<IServerSettings>();
+        settings.BaseUrl.Returns(new Uri("https://trackr.example.test/"));
+
+        var session = new AuthSession(
+            api, Substitute.For<ITokenStore>(), settings, LocalStore.InMemory());
+
         return (
-            new ChatViewModel(api, picker, downsizer, new NutrientCatalogCache(api)),
+            new ChatViewModel(api, picker, downsizer, new NutrientCatalogCache(api), session),
             api,
             picker,
-            downsizer);
+            downsizer,
+            session);
     }
 }

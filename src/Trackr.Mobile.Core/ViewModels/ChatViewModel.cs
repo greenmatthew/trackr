@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Trackr.Mobile.Core.Api;
+using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Nutrition;
 using Trackr.Mobile.Core.Platform;
 using Trackr.Mobile.Core.ViewModels.Chat;
@@ -23,11 +24,7 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// own, which is the confirm-before-save rule of section 2 expressed as the absence of a code path.
 /// </para>
 /// </remarks>
-public sealed partial class ChatViewModel(
-    ITrackrApiClient api,
-    IPhotoPicker photoPicker,
-    IImageDownsizer downsizer,
-    NutrientCatalogCache nutrients) : ObservableObject
+public sealed partial class ChatViewModel : ObservableObject
 {
     /// <summary>
     /// The longest edge a meal photo is uploaded at.
@@ -49,7 +46,48 @@ public sealed partial class ChatViewModel(
     /// </remarks>
     private const int MaxPhotoEdgePixels = 2560;
 
+    private readonly ITrackrApiClient _api;
+
+    private readonly IPhotoPicker _photoPicker;
+
+    private readonly IImageDownsizer _downsizer;
+
+    private readonly NutrientCatalogCache _nutrients;
+
+    private readonly AuthSession _session;
+
     private CancellationTokenSource? inFlight;
+
+    /// <summary>
+    /// Which conversation is on screen. Incremented whenever the transcript is dropped.
+    /// </summary>
+    /// <remarks>
+    /// An analysis takes minutes, and a sign-out during one would otherwise finish by appending the
+    /// previous account's meal to the next account's empty chat. Cancelling is not enough on its
+    /// own: the request may already have succeeded, and the reply arrives on a continuation that
+    /// knows nothing about what happened while it waited.
+    /// </remarks>
+    private int conversation;
+
+    public ChatViewModel(
+        ITrackrApiClient api,
+        IPhotoPicker photoPicker,
+        IImageDownsizer downsizer,
+        NutrientCatalogCache nutrients,
+        AuthSession session)
+    {
+        _api = api;
+        _photoPicker = photoPicker;
+        _downsizer = downsizer;
+        _nutrients = nutrients;
+        _session = session;
+
+        // This view model outlives a visit to the tab, so it also outlives an account. A previous
+        // user's meals, photographs and half-typed message sitting in memory is exactly the sort of
+        // thing CLAUDE.md section 8 asks care about - AvatarStore drops its bytes here for the same
+        // reason.
+        _session.Changed += OnSessionChanged;
+    }
 
     /// <summary>Everything said so far, oldest first. Nothing is ever removed.</summary>
     public ObservableCollection<ChatMessage> Messages { get; } = [];
@@ -116,11 +154,11 @@ public sealed partial class ChatViewModel(
 
     /// <summary>Takes a photo of the meal in front of you - the case the app exists for.</summary>
     [RelayCommand]
-    private Task CapturePhotoAsync() => AttachAsync(photoPicker.CaptureAsync);
+    private Task CapturePhotoAsync() => AttachAsync(_photoPicker.CaptureAsync);
 
     /// <summary>Attaches one already on the phone.</summary>
     [RelayCommand]
-    private Task AttachPhotoAsync() => AttachAsync(photoPicker.PickAsync);
+    private Task AttachPhotoAsync() => AttachAsync(_photoPicker.PickAsync);
 
     private async Task AttachAsync(Func<CancellationToken, Task<PhotoPickResult>> source)
     {
@@ -144,7 +182,7 @@ public sealed partial class ChatViewModel(
 
         await using var content = picked.Content;
 
-        var image = await downsizer.DownsizeAsync(content, MaxPhotoEdgePixels);
+        var image = await _downsizer.DownsizeAsync(content, MaxPhotoEdgePixels);
 
         if (image is null)
         {
@@ -224,7 +262,7 @@ public sealed partial class ChatViewModel(
 
             foreach (var photo in photos)
             {
-                var uploaded = await api.UploadMealImageAsync(photo.Content, photo.ContentType);
+                var uploaded = await _api.UploadMealImageAsync(photo.Content, photo.ContentType);
 
                 if (!uploaded.Succeeded)
                 {
@@ -276,13 +314,15 @@ public sealed partial class ChatViewModel(
 
     private async Task RunAnalysisAsync(SentMeal meal)
     {
+        var started = conversation;
+
         LastAttempt = meal;
 
         Status = "Working it out - this can take a minute or two...";
 
         // Fetched alongside rather than before: a card whose micronutrient names could not be looked
         // up still shows its calories and macros, so this must never be able to stop an analysis.
-        var catalog = await nutrients.EnsureLoadedAsync();
+        var catalog = await _nutrients.EnsureLoadedAsync();
 
         using var cancellation = new CancellationTokenSource();
         inFlight = cancellation;
@@ -291,19 +331,29 @@ public sealed partial class ChatViewModel(
 
         try
         {
-            result = await api.AnalyzeMealAsync(
+            result = await _api.AnalyzeMealAsync(
                 new AnalyzeMealRequest { Text = meal.Text, ImageIds = [.. meal.ImageIds] },
                 cancellation.Token);
         }
         catch (OperationCanceledException)
         {
-            AddWarning("Cancelled. Nothing was saved, and you can send it again.");
+            if (started == conversation)
+            {
+                AddWarning("Cancelled. Nothing was saved, and you can send it again.");
+            }
 
             return;
         }
         finally
         {
             inFlight = null;
+        }
+
+        // Signed out while the server was thinking. The reply belongs to a conversation that no
+        // longer exists, and appending it here would show one account another account's meal.
+        if (started != conversation)
+        {
+            return;
         }
 
         // The model's own sentence first, when it has one - it is the part written for a person, and
@@ -354,7 +404,7 @@ public sealed partial class ChatViewModel(
             Items = [.. card.Items.Select(item => item.Corrected.ToSaveLogItemRequest())]
         };
 
-        var result = await api.SaveLogEntryAsync(request, cancellationToken);
+        var result = await _api.SaveLogEntryAsync(request, cancellationToken);
 
         if (!result.Succeeded)
         {
@@ -366,6 +416,36 @@ public sealed partial class ChatViewModel(
         card.Problem = null;
         card.State = ConfirmationState.Saved;
         card.Detach();
+    }
+
+    /// <summary>
+    /// Empties the conversation when the account behind it changes.
+    /// </summary>
+    /// <remarks>
+    /// The transcript is the one piece of state here that is worth keeping across a visit to
+    /// another tab and must not be kept across a sign-out: it holds what somebody ate, what their
+    /// kitchen looks like and what they typed about it. Clearing beats leaving it for the next
+    /// account to find.
+    /// <para>
+    /// An analysis in flight is abandoned rather than awaited. The server may still finish it, which
+    /// costs nothing - <c>POST /api/analyze</c> writes nothing - and the reply would arrive for a
+    /// session that no longer exists.
+    /// </para>
+    /// </remarks>
+    private void OnSessionChanged()
+    {
+        conversation++;
+        inFlight?.Cancel();
+
+        Messages.Clear();
+        Attachments.Clear();
+        AttachmentsChanged();
+
+        Draft = string.Empty;
+        Error = null;
+        Status = null;
+        LastAttempt = null;
+        IsAttachMenuOpen = false;
     }
 
     private void AddWarning(string text) => Messages.Add(new WarningMessage(text));
