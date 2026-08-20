@@ -31,6 +31,21 @@ public sealed class StatsViewModelTests
     }
 
     /// <remarks>
+    /// The heading comes from the same answer as the numbers under it. Taking one from the phone
+    /// and the other from the server reports today's total under yesterday's name for most of every
+    /// evening, which is what the emulator showed.
+    /// </remarks>
+    [Fact]
+    public void The_heading_names_the_day_the_server_totalled()
+    {
+        var (home, _) = BuildHome();
+
+        home.Totals = Day(day: new DateOnly(2026, 8, 20));
+
+        Assert.Equal("Thursday 20 August", home.Today);
+    }
+
+    /// <remarks>
     /// The days are the account's rather than the phone's: the server aggregates and owns the day
     /// boundary, so a phone in another time zone must not be able to redraw somebody's day.
     /// </remarks>

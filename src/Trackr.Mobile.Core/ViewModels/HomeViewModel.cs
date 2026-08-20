@@ -25,7 +25,22 @@ namespace Trackr.Mobile.Core.ViewModels;
 public sealed partial class HomeViewModel(ITrackrApiClient api, NutrientCatalogCache nutrients)
     : ObservableObject
 {
-    public string Today => DateTime.Now.ToString("dddd d MMMM");
+    /// <summary>
+    /// The day being totalled, as the server understands it.
+    /// </summary>
+    /// <remarks>
+    /// The server's day rather than the phone's, and not merely for tidiness. The phone's date and
+    /// the account's day disagree for most of every evening, and a screen that took its heading
+    /// from one clock and its numbers from another would report today's total under yesterday's
+    /// name - which the emulator duly showed, with Home saying the 19th while Trends charted up to
+    /// the 20th.
+    /// <para>
+    /// Falls back to the phone's date only before the first answer arrives, where a blank heading
+    /// would be worse than an approximate one.
+    /// </para>
+    /// </remarks>
+    public string Today => (Totals?.Day.ToDateTime(TimeOnly.MinValue) ?? DateTime.Now)
+        .ToString("dddd d MMMM");
 
     /// <summary>Micronutrients something reported today, in label order.</summary>
     public ObservableCollection<NutrientRow> Nutrients { get; } = [];
@@ -95,6 +110,7 @@ public sealed partial class HomeViewModel(ITrackrApiClient api, NutrientCatalogC
 
     partial void OnTotalsChanged(DayTotals? value)
     {
+        OnPropertyChanged(nameof(Today));
         OnPropertyChanged(nameof(EnergyText));
         OnPropertyChanged(nameof(FatText));
         OnPropertyChanged(nameof(CarbohydrateText));
