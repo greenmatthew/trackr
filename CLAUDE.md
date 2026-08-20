@@ -575,9 +575,14 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
       where nutrients intersect, because the safe direction for "how much iron" is to say less and
       for "does this contain nuts" is to say more. Diet flags are not derived — "vegan" does not
       union.
-      **Left open:** the model is not asked to read a list off a label (§9.10a's other half of part
-      one — a real change to the prompt, schema, reader and item shape, worth doing properly), and
-      part 3 remains unbuilt as intended.
+      **The model reads a list off a label only where the database left a gap**, and that scope fell
+      out of milestone 10's rules rather than out of caution: a list is filed onto a catalog row, a
+      row needs a barcode, and a barcode came from Open Food Facts — so the only gap is a *partial*
+      match with no ingredients, whose photo is already being sent. The field is absent from the
+      schema and the prompt otherwise. Bounded at 600 characters for the **output budget**, not the
+      column, and an over-long list is **dropped rather than truncated** — the opposite of every
+      other text field, because a shortened ingredient list reads as a complete one.
+      **Left open:** part 3 remains unbuilt as intended.
       Lettered rather than renumbered because §9.10 and §9.13 are referenced by name from code
       comments.
       **Three parts, in this order, and the value drops off sharply after the second.**

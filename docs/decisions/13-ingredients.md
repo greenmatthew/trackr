@@ -80,22 +80,48 @@ always the database's, on a partial match too, because what a product contains i
 formulation and OFF has the manufacturer's own words for it. **Nothing is stored on the log
 row:** what a product contained is not a fact about a meal.
 
-**§9.10a's "where OFF has nothing, the model reads it off the photo" is not built.** It is the
-one part of part one that is a real change rather than a mapping — the prompt, the JSON schema,
-the reader and the item shape all move — and it buys an ingredient list for exactly the items
-Open Food Facts did not recognise, whose numbers are already the model's estimate. Worth doing;
-not worth doing badly at the end of a milestone. Recorded as open rather than skipped.
+### The model reads one only where the database left a gap
+
+§9.10a's other half — "where OFF has nothing, the model reads it off the photo" — is built, and
+**much more narrowly than that sentence suggests**. The scope narrowed itself, out of milestone
+10's rules rather than out of caution:
+
+> A list is filed onto a catalog row. A row is only created for an item with a **barcode**. A
+> barcode item came from Open Food Facts.
+
+So the only gap a model can fill is a **partial match with no ingredients** — a product OFF knew,
+with figures, and nothing about what is in it. And a partial match's photograph is already being
+sent, which makes this cost nothing except the reply it lengthens. Asking on every request would
+spend output tokens on a paragraph with nowhere to go.
+
+The field is therefore **absent from the schema and the instruction absent from the prompt** unless
+the request contains such a product. A full match never takes one either: its photograph was
+deliberately withheld, so anything the model offers for it is about some other food it was told
+about in text.
+
+**Bounded at 600 characters against the column's 4 000, and the bound is about the output budget
+rather than the column.** An ingredient paragraph is the longest thing a reply can hold, and a
+reply that runs out of room fails *entirely* — `done_reason: length` loses the calories along with
+the list.
+
+Which makes the reader's rule for this one field the **opposite** of every other text field it
+handles: an over-long list is **dropped, never truncated**. A name cut short is still recognisably
+that food; an ingredient list cut short is a claim that the food contains only its first few
+ingredients. The prompt tells the model the same thing — copy it or leave it out, never abridge —
+which a small model will not always obey, but the alternative is that it never does.
 
 ## Verified
 
-Tier 1: 340 API tests, 153 view-model tests, 104 documentation tests.
+Tier 1: 360 API tests, 161 view-model tests, 104 documentation tests.
 
 Tier 2 (emulator, API 36): a real barcode photograph through the chat, with the allergen line and
 the ingredient list drawn on the confirmation card.
 
 ## Left open
 
-- **The model does not read ingredients off a label** — above.
+- **A model-read list is only ever obtained for a partial barcode match.** A model-only item
+  (a plate of food) carries one to the card if the model volunteers it, but it is filed nowhere,
+  because nothing creates a catalog row for it. That is the rule working rather than a gap.
 - **Part three, per-ingredient rows**, which §9.10a already argues may never be worth building.
   Nothing here forecloses it: OFF's parsed `ingredients` array and its canonical taxonomy are
   still there to be requested if a real question ever needs them.
