@@ -128,6 +128,16 @@ public sealed class AuthSession(
     /// <see cref="Changed"/>: sign-in state has not changed, and the shell must not be swapped
     /// because someone chose a photograph.
     /// </remarks>
+    /// <summary>
+    /// Replaces the held account after a settings change, without raising <see cref="Changed"/>.
+    /// </summary>
+    /// <remarks>
+    /// Same reasoning as <see cref="NoteAvatarChanged"/>: sign-in state has not moved, and raising
+    /// Changed would swap the shell - and, since milestone 12, empty the chat transcript - for a
+    /// time zone edit.
+    /// </remarks>
+    public void NoteAccountChanged(MeResponse account) => CurrentUser = account;
+
     public void NoteAvatarChanged(DateTimeOffset? updatedUtc)
     {
         if (CurrentUser is { } user)

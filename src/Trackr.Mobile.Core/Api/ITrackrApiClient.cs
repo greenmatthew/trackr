@@ -109,6 +109,17 @@ public interface ITrackrApiClient
         int days,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Sets the zone this account's days are measured in, returning the updated account.
+    /// </summary>
+    /// <remarks>
+    /// Null on failure, and the caller must not redraw as though it had worked: a day quietly
+    /// running on the wrong clock is exactly what storing the zone server-side prevents.
+    /// </remarks>
+    Task<MeResponse?> SaveTimeZoneAsync(
+        SaveTimeZoneRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Each daily target against what has been eaten today.</summary>
     /// <remarks>
     /// Measured by the server, on the account's day. Null when it could not be asked.

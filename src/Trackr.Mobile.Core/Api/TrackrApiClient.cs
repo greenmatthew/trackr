@@ -426,6 +426,32 @@ public sealed class TrackrApiClient(
         }
     }
 
+    public async Task<MeResponse?> SaveTimeZoneAsync(
+        SaveTimeZoneRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.PutAsJsonAsync(
+                Endpoint("api/account/timezone"), request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Saving a time zone answered with {StatusCode}", (int)response.StatusCode);
+
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<MeResponse>(cancellationToken);
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Saving a time zone failed");
+
+            return null;
+        }
+    }
+
     public Task<IReadOnlyList<GoalProgressResponse>?> GetGoalProgressAsync(
         CancellationToken cancellationToken = default) =>
         ReadAsync<IReadOnlyList<GoalProgressResponse>>("api/goals/progress", "Goal progress", cancellationToken);

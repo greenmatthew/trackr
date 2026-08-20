@@ -45,6 +45,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IServerSettings, PreferencesServerSettings>();
         builder.Services.AddSingleton<INavigationService, ShellNavigationService>();
         builder.Services.AddSingleton<ILocalStorePath, AppDataLocalStorePath>();
+        builder.Services.AddSingleton<IDeviceTimeZone, DeviceTimeZone>();
         builder.Services.AddSingleton<IPhotoPicker, MediaPickerPhotoPicker>();
         builder.Services.AddSingleton<IImageDownsizer, GraphicsImageDownsizer>();
 

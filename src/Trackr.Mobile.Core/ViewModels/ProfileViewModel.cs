@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Platform;
 using Trackr.Shared.Auth;
@@ -25,9 +26,60 @@ public sealed partial class ProfileViewModel(
     IServerSettings serverSettings,
     AvatarStore avatars,
     IPhotoPicker photoPicker,
-    IImageDownsizer downsizer) : ObservableObject
+    IImageDownsizer downsizer,
+    ITrackrApiClient api,
+    IDeviceTimeZone deviceZone) : ObservableObject
 {
     public string Email => session.CurrentUser?.Email ?? "not signed in";
+
+    /// <summary>
+    /// Which zone this account's days are measured in.
+    /// </summary>
+    /// <remarks>
+    /// The account's, not the phone's, and the difference is the whole point: the server totals a
+    /// day and every client has to agree with it. Section 9.13.
+    /// </remarks>
+    public string TimeZoneDescription => session.CurrentUser?.TimeZoneId ?? "UTC";
+
+    /// <summary>The zone the phone is in, offered as the answer rather than asked for.</summary>
+    public string? DeviceTimeZoneId => deviceZone.IanaId;
+
+    /// <summary>
+    /// Whether offering the phone's zone would change anything.
+    /// </summary>
+    public bool CanUseDeviceTimeZone =>
+        DeviceTimeZoneId is not null
+        && !string.Equals(DeviceTimeZoneId, session.CurrentUser?.TimeZoneId, StringComparison.Ordinal);
+
+    [ObservableProperty]
+    public partial string? TimeZoneProblem { get; set; }
+
+    [RelayCommand]
+    private Task UseDeviceTimeZoneAsync() => SetTimeZoneAsync(DeviceTimeZoneId);
+
+    [RelayCommand]
+    private Task UseUtcAsync() => SetTimeZoneAsync(null);
+
+    private async Task SetTimeZoneAsync(string? id)
+    {
+        TimeZoneProblem = null;
+
+        var updated = await api.SaveTimeZoneAsync(new SaveTimeZoneRequest { TimeZoneId = id });
+
+        if (updated is null)
+        {
+            // Never redrawn as though it had worked. A day quietly running on the wrong clock is
+            // exactly the failure storing the zone server-side exists to prevent.
+            TimeZoneProblem = "That could not be saved, so your days are unchanged.";
+
+            return;
+        }
+
+        session.NoteAccountChanged(updated);
+
+        OnPropertyChanged(nameof(TimeZoneDescription));
+        OnPropertyChanged(nameof(CanUseDeviceTimeZone));
+    }
 
     public string Initials => Avatar.InitialsFrom(session.CurrentUser?.Email);
 

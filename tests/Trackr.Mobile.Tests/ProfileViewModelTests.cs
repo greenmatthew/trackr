@@ -163,6 +163,97 @@ public sealed class ProfileViewModelTests
         Assert.Equal("O", viewModel.Initials);
     }
 
+    private static IDeviceTimeZone DeviceZone(string? id)
+    {
+        var zone = Substitute.For<IDeviceTimeZone>();
+
+        zone.IanaId.Returns(id);
+
+        return zone;
+    }
+
+    /// <summary>The same fixture, with the phone claiming to be somewhere.</summary>
+    private static (ProfileViewModel Profile, ITrackrApiClient Api, AuthSession Session)
+        BuildWithZone(string deviceZoneId)
+    {
+        var api = Substitute.For<ITrackrApiClient>();
+        var tokenStore = Substitute.For<ITokenStore>();
+        var serverSettings = Substitute.For<IServerSettings>();
+
+        serverSettings.BaseUrl.Returns(new Uri("https://trackr.example.test/"));
+        tokenStore.ReadAsync().Returns(new StoredTokens("access", "refresh", DateTimeOffset.MaxValue));
+        api.GetMeAsync(Arg.Any<CancellationToken>()).Returns(MeResult.Ok(new MeResponse(
+            Guid.NewGuid(),
+            "owner@example.test",
+            TwoFactorEnabled: false)));
+
+        var cache = LocalStore.InMemory();
+        var session = new AuthSession(api, tokenStore, serverSettings, cache);
+        var avatars = new AvatarStore(api, session, cache);
+
+        var profile = new ProfileViewModel(
+            session,
+            serverSettings,
+            avatars,
+            Substitute.For<IPhotoPicker>(),
+            Substitute.For<IImageDownsizer>(),
+            api,
+            DeviceZone(deviceZoneId));
+
+        return (profile, api, session);
+    }
+
+    /// <summary>
+    /// The zone shown is the account's, not the phone's, and the difference is the whole point.
+    /// </summary>
+    /// <remarks>
+    /// The server totals a day and every client has to agree with it. The phone's zone is offered
+    /// as an answer rather than used as one - section 9.13.
+    /// </remarks>
+    [Fact]
+    public async Task The_phones_zone_is_offered_rather_than_assumed()
+    {
+        var (profile, api, session) = BuildWithZone("Europe/London");
+
+        await session.RestoreAsync();
+
+        Assert.Equal("UTC", profile.TimeZoneDescription);
+        Assert.Equal("Europe/London", profile.DeviceTimeZoneId);
+        Assert.True(profile.CanUseDeviceTimeZone);
+
+        api.SaveTimeZoneAsync(Arg.Any<SaveTimeZoneRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new MeResponse(Guid.NewGuid(), "a@example.test", false, null, "Europe/London"));
+
+        await profile.UseDeviceTimeZoneCommand.ExecuteAsync(null);
+
+        await api.Received(1).SaveTimeZoneAsync(
+            Arg.Is<SaveTimeZoneRequest>(request => request.TimeZoneId == "Europe/London"),
+            Arg.Any<CancellationToken>());
+
+        Assert.Equal("Europe/London", profile.TimeZoneDescription);
+        Assert.False(profile.CanUseDeviceTimeZone);
+    }
+
+    /// <remarks>
+    /// A day quietly running on the wrong clock is exactly what storing the zone on the server
+    /// prevents, so a failed save must not redraw as though it had worked.
+    /// </remarks>
+    [Fact]
+    public async Task A_zone_that_could_not_be_saved_does_not_look_saved()
+    {
+        var (profile, api, session) = BuildWithZone("Europe/London");
+
+        await session.RestoreAsync();
+
+        api.SaveTimeZoneAsync(Arg.Any<SaveTimeZoneRequest>(), Arg.Any<CancellationToken>())
+            .Returns((MeResponse?)null);
+
+        await profile.UseDeviceTimeZoneCommand.ExecuteAsync(null);
+
+        Assert.Equal("UTC", profile.TimeZoneDescription);
+        Assert.Contains("could not be saved", profile.TimeZoneProblem!, StringComparison.Ordinal);
+    }
+
     private static (
         ProfileViewModel ViewModel,
         ITrackrApiClient Api,
@@ -190,7 +281,8 @@ public sealed class ProfileViewModelTests
         session.RestoreAsync().GetAwaiter().GetResult();
 
         return (
-            new ProfileViewModel(session, serverSettings, avatars, picker, downsizer),
+            new ProfileViewModel(
+                session, serverSettings, avatars, picker, downsizer, api, DeviceZone(null)),
             api,
             picker,
             downsizer);

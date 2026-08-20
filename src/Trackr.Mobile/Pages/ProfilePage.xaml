@@ -98,6 +98,34 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- The zone belongs to the account, not to the phone. The server totals a day and
+                 every client has to agree with it, so this offers the phone's zone as an answer
+                 rather than using it. Section 9.13. -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+
+                    <Label Text="Your days are measured in" Style="{StaticResource FieldLabel}" />
+                    <Label Text="{Binding TimeZoneDescription}" Style="{StaticResource Body}" />
+
+                    <Button
+                        Text="{Binding DeviceTimeZoneId, StringFormat='Use this phone&apos;s zone ({0})'}"
+                        AutomationId="UseDeviceTimeZone"
+                        IsVisible="{Binding CanUseDeviceTimeZone}"
+                        Command="{Binding UseDeviceTimeZoneCommand}" />
+
+                    <Button
+                        Text="Use UTC"
+                        AutomationId="UseUtc"
+                        Command="{Binding UseUtcCommand}" />
+
+                    <Label
+                        Text="{Binding TimeZoneProblem}"
+                        Style="{StaticResource ErrorText}"
+                        IsVisible="{Binding TimeZoneProblem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+                </VerticalStackLayout>
+            </Border>
+
             <Label
                 Text="Changing your password and managing 2FA happen on the website."
                 Style="{StaticResource Caption}" />
