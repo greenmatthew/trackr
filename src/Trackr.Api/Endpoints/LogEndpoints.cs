@@ -42,11 +42,29 @@ public static class LogEndpoints
     /// </remarks>
     private const int MaxDaysInRange = 366;
 
+    /// <summary>
+    /// How far back the re-log list looks, in log items rather than in days.
+    /// </summary>
+    /// <remarks>
+    /// A bounded window rather than a grouped scan of all history: one index scan, one round trip,
+    /// and a cost that does not grow with how long the account has been keeping a log. The
+    /// consequence is worth stating rather than hiding - something eaten once six months ago will
+    /// not appear, which for "I had that again" is the right answer rather than a limitation.
+    /// </remarks>
+    private const int RecentScanLimit = 200;
+
+    /// <summary>How many distinct foods come back. A list to scroll, not a database to search.</summary>
+    private const int MaxRecentItems = 20;
+
     public static IEndpointRouteBuilder MapLogEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/log", ListLogAsync)
             .WithName("ListLog")
             .WithSummary("Log entries for a range of local days. Defaults to today.");
+
+        app.MapGet("/api/log/recent", ListRecentItemsAsync)
+            .WithName("ListRecentItems")
+            .WithSummary("Foods this account has logged before, newest first, ready to log again.");
 
         app.MapGet("/api/log/{id:guid}", GetLogEntryAsync)
             .WithName("GetLogEntry")
@@ -65,6 +83,144 @@ public static class LogEndpoints
             .WithSummary("Delete an entry, its items and its photos.");
 
         return app;
+    }
+
+    /// <summary>
+    /// The foods this account has logged before, most recently eaten first.
+    /// </summary>
+    /// <remarks>
+    /// Milestone 10's "I had that again", and it reads the <em>log</em> rather than the catalog on
+    /// purpose. The catalog holds scanned products; what people eat again is mostly home cooking,
+    /// which never gets a barcode and so never gets a catalog row. The log holds every item ever
+    /// confirmed, including the ones the model read off a plate.
+    /// <para>
+    /// <strong>Stored totals are divided back down to one serving here</strong>, because that is
+    /// what a save request wants and what makes a card read as "2 x 78 kcal" rather than as one
+    /// portion of something. Deliberately <em>not</em> read from the linked catalog item: nothing
+    /// may join through <c>LogItem.FoodItemId</c> for a number, which is the rule that stops a later
+    /// correction from rewriting what somebody already confirmed. The barcode is fetched through it,
+    /// which is provenance rather than a number, and is what lets re-logging a packaged product file
+    /// itself away exactly as the original did.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> ListRecentItemsAsync(
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        TrackrDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var scanned = await db.LogItems
+            .Where(item => item.LogEntry!.UserId == user.Id)
+            .OrderByDescending(item => item.LogEntry!.LoggedUtc)
+            .Take(RecentScanLimit)
+            .Select(item => new RecentRow(
+                item.LogEntry!.LoggedUtc,
+                item.Name,
+                item.Brand,
+                item.FoodItem != null ? item.FoodItem.Barcode : null,
+                item.Quantity,
+                item.ServingSize,
+                item.ServingUnit,
+                item.EnergyKcal,
+                item.FatG,
+                item.CarbohydrateG,
+                item.ProteinG,
+                item.Nutrients
+                    .Select(nutrient => new RecentNutrient(nutrient.NutrientKey, nutrient.Amount))
+                    .ToList()))
+            .ToListAsync(cancellationToken);
+
+        var recent = scanned
+            // Grouped in memory: the window is already bounded, DISTINCT ON has no LINQ
+            // translation, and doing it here keeps this one query rather than two.
+            .GroupBy(row => (row.Name, row.Brand ?? string.Empty), RecentKeyComparer.Instance)
+            .Select(group => ToRecentItem(group.First(), group.Count()))
+            .Take(MaxRecentItems)
+            .ToList();
+
+        return Results.Ok(recent);
+    }
+
+    private static RecentItemResponse ToRecentItem(RecentRow row, int timesLogged)
+    {
+        // Guarded, though the quantity is validated above zero on the way in: a stored zero would
+        // make this a division by zero on a route nobody would think to blame.
+        var quantity = row.Quantity > 0 ? row.Quantity : 1m;
+
+        return new RecentItemResponse(
+            row.LoggedUtc,
+            timesLogged,
+            new MealAnalysisItem(
+                Name: row.Name,
+                Brand: row.Brand,
+                Barcode: row.Barcode,
+                // Never the original photo. It belongs to the entry it was taken for, and a photo
+                // already attached elsewhere is refused - so carrying it would make every re-log
+                // a 400.
+                MealImageId: null,
+                Source: AnalyzedItemSource.PreviouslyLogged,
+                // The validator's complaints were about a reading a person has since confirmed.
+                Confidence: AnalysisConfidence.Normal,
+                Quantity: 1m,
+                ServingSize: row.ServingSize,
+                ServingUnit: row.ServingUnit,
+                EnergyKcal: PerServing(row.EnergyKcal, quantity),
+                FatG: PerServing(row.FatG, quantity),
+                CarbohydrateG: PerServing(row.CarbohydrateG, quantity),
+                ProteinG: PerServing(row.ProteinG, quantity),
+                Nutrients: row.Nutrients.ToDictionary(
+                    nutrient => nutrient.Key,
+                    nutrient => PerServing(nutrient.Amount, quantity),
+                    StringComparer.Ordinal),
+                Warnings: []));
+    }
+
+    private static decimal PerServing(decimal total, decimal quantity) =>
+        StoredPrecision.Amount(total / quantity);
+
+    private sealed record RecentNutrient(string Key, decimal Amount);
+
+    private sealed record RecentRow(
+        DateTimeOffset LoggedUtc,
+        string Name,
+        string? Brand,
+        string? Barcode,
+        decimal Quantity,
+        decimal? ServingSize,
+        string? ServingUnit,
+        decimal EnergyKcal,
+        decimal FatG,
+        decimal CarbohydrateG,
+        decimal ProteinG,
+        List<RecentNutrient> Nutrients);
+
+    /// <summary>
+    /// Two log items are the same food when their name and brand match, ignoring case.
+    /// </summary>
+    /// <remarks>
+    /// Grouping for a list somebody chooses from, which is a very different thing from matching text
+    /// to decide what a meal was: the worst a wrong group can do here is offer one row where it
+    /// should have offered two, and the user still sees the numbers on a card before anything is
+    /// saved.
+    /// </remarks>
+    private sealed class RecentKeyComparer : IEqualityComparer<(string Name, string Brand)>
+    {
+        public static readonly RecentKeyComparer Instance = new();
+
+        public bool Equals((string Name, string Brand) left, (string Name, string Brand) right) =>
+            string.Equals(left.Name, right.Name, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(left.Brand, right.Brand, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Name, string Brand) key) =>
+            HashCode.Combine(
+                key.Name.ToUpperInvariant(),
+                key.Brand.ToUpperInvariant());
     }
 
     /// <param name="from">First local day to include. Defaults to today.</param>

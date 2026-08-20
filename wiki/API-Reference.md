@@ -316,6 +316,12 @@ Record a meal: the entry, its items and any photos, in one request.
 
 **Responses:** `200`
 
+### `GET /api/log/recent`
+
+Foods this account has logged before, newest first, ready to log again.
+
+**Responses:** `200`
+
 ### `GET /api/log/{id}`
 
 One log entry, with its items and photo metadata.

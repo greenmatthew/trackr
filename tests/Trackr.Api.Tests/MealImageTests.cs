@@ -225,7 +225,11 @@ public sealed class MealImageTests(PostgresFixture postgres) : AuthTestBase(post
         Assert.Null(row.LogEntryId);
     }
 
-    private static async Task<MealImageResponse> UploadAsync(
+    /// <summary>Uploads a valid photo. Internal because the re-log tests need one to exist.</summary>
+    internal static Task<MealImageResponse> UploadAsync(HttpClient client) =>
+        UploadAsync(client, TinyPng, "image/png");
+
+    internal static async Task<MealImageResponse> UploadAsync(
         HttpClient client,
         byte[] content,
         string contentType)
