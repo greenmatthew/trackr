@@ -227,6 +227,32 @@ Promote a personal item to the shared catalog. One-way.
 
 **Responses:** `200`
 
+## Goals
+
+### `GET /api/goals`
+
+The caller's daily targets.
+
+**Responses:** `200`
+
+### `PUT /api/goals`
+
+Replace the whole set of targets.
+
+**Request body:** `application/json` → [`SaveGoalsRequest`](#savegoalsrequest)
+
+**Responses:** `200`
+
+### `GET /api/goals/progress`
+
+Each target against what has been eaten on a local day. Defaults to today.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `date` | query | no | string (date) |
+
+**Responses:** `200`
+
 ## Health
 
 ### `GET /api/health`
@@ -443,6 +469,10 @@ No properties.
 | --- | --- | --- |
 | `email` | string | yes |
 
+### `GoalKind`
+
+No properties.
+
 ### `LoginRequest`
 
 | Property | Type | Required |
@@ -507,6 +537,20 @@ No properties.
 | `dietFlags` | array of string | no |
 | `yield` | number or string (double), nullable | no |
 | `components` | array of [`SaveFoodComponentRequest`](#savefoodcomponentrequest) | no |
+
+### `SaveGoalRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `nutrientKey` | string | yes |
+| `target` | number or string (double) | no |
+| `kind` | [`GoalKind`](#goalkind) | no |
+
+### `SaveGoalsRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `goals` | array of [`SaveGoalRequest`](#savegoalrequest) | no |
 
 ### `SaveLogEntryRequest`
 

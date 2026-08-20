@@ -51,6 +51,8 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
 
     public DbSet<MealImage> MealImages => Set<MealImage>();
 
+    public DbSet<Goal> Goals => Set<Goal>();
+
     /// <summary>
     /// The data-protection key ring, which is what encrypts the session cookie and every
     /// Identity token. It lives in Postgres rather than on disk - see Program.cs.
@@ -251,6 +253,31 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
             component.ToTable(table => table.HasCheckConstraint(
                 "CK_FoodItemComponents_NotSelf",
                 "\"ParentFoodItemId\" <> \"ChildFoodItemId\""));
+        });
+
+        builder.Entity<Goal>(goal =>
+        {
+            goal.Property(g => g.Id).ValueGeneratedNever();
+            goal.Property(g => g.NutrientKey).HasMaxLength(60).IsRequired();
+            goal.Property(g => g.Target).HasPrecision(12, 4);
+            goal.Property(g => g.Kind).HasConversion<string>().HasMaxLength(16).IsRequired();
+
+            goal.HasOne(g => g.User)
+                .WithMany()
+                .HasForeignKey(g => g.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict, like every other reference to the nutrient table: removing a nutrient the
+            // vocabulary still describes should fail loudly rather than silently drop somebody's
+            // target.
+            goal.HasOne(g => g.Nutrient)
+                .WithMany()
+                .HasForeignKey(g => g.NutrientKey)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One target per nutrient per account. Two would be a contradiction rather than a
+            // refinement - "at least 100 g" and "at most 80 g" cannot both be satisfied.
+            goal.HasIndex(g => new { g.UserId, g.NutrientKey }).IsUnique();
         });
 
         builder.Entity<LogEntry>(entry =>
