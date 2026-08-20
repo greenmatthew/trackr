@@ -132,6 +132,9 @@ internal static class NutritionValidation
     /// Which field to report a bad barcode against. Defaults to the catalog's, because a log entry
     /// carries several items and has to say which one.
     /// </param>
+    /// <summary>What the <c>Barcode</c> column holds.</summary>
+    private const int MaxBarcodeLength = 32;
+
     public static string? NormaliseBarcode(string? barcode, ValidationErrors errors, string field = "barcode")
     {
         if (string.IsNullOrWhiteSpace(barcode))
@@ -144,6 +147,15 @@ internal static class NutritionValidation
         if (!trimmed.All(char.IsAsciiDigit))
         {
             errors.Add(field, "A barcode is digits only.");
+            return null;
+        }
+
+        // The column is varchar(32) and the StringLength attribute on the DTO is documentation -
+        // nothing calls AddValidation - so without this a long barcode reaches Postgres and comes
+        // back as a 500. The longest real one is 14 digits; 32 is already generous.
+        if (trimmed.Length > MaxBarcodeLength)
+        {
+            errors.Add(field, $"That barcode is too long ({MaxBarcodeLength} digits at most).");
             return null;
         }
 

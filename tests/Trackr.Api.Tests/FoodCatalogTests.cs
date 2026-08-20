@@ -11,6 +11,23 @@ namespace Trackr.Api.Tests;
 /// </summary>
 public sealed class FoodCatalogTests(PostgresFixture postgres) : AuthTestBase(postgres)
 {
+    /// <remarks>
+    /// The StringLength attributes on these DTOs are documentation - nothing calls AddValidation -
+    /// so before this an over-long barcode reached a varchar(32) column and came back as a 500.
+    /// </remarks>
+    [Fact]
+    public async Task A_barcode_too_long_for_its_column_is_refused()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/foods",
+            Payloads.Food(barcode: new string('7', 40)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("barcode", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// CLAUDE.md section 9.6's one sentence, made executable: "confirm you can store and read back
     /// a full multi-nutrient item, not just macros".
