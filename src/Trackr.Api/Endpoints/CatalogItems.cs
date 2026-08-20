@@ -59,6 +59,26 @@ internal static class CatalogItems
         };
 
     /// <summary>
+    /// Replaces what an item is made of.
+    /// </summary>
+    /// <remarks>
+    /// Wholesale, like the nutrient map: a merge would leave "this list was wrong, here is the
+    /// right one" inexpressible. The caller is expected to have run the values through
+    /// <c>NutritionValidation.NormaliseIngredients</c> first, which is where the rule about which
+    /// items may carry a list at all lives.
+    /// </remarks>
+    public static void ApplyIngredients(
+        FoodItem item,
+        string? ingredientsText,
+        List<string> allergens,
+        List<string> dietFlags)
+    {
+        item.IngredientsText = ingredientsText;
+        item.Allergens = allergens;
+        item.DietFlags = dietFlags;
+    }
+
+    /// <summary>
     /// Replaces an item's nutrition with the amounts supplied.
     /// </summary>
     /// <remarks>

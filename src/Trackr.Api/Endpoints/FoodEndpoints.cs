@@ -131,6 +131,11 @@ public static class FoodEndpoints
                 item.FatG,
                 item.CarbohydrateG,
                 item.ProteinG,
+                // Allergens travel with a list where the nutrient map does not: five short strings
+                // against several thousand amount rows, and "which of these contain nuts" is a
+                // question a list is asked and a nutrient breakdown is not.
+                item.Allergens,
+                item.DietFlags,
                 item.UpdatedUtc,
                 // One column rather than the ingredient list: non-null is what marks a recipe, and a
                 // list showing two hundred items has no use for what any of them are made of.
@@ -183,7 +188,8 @@ public static class FoodEndpoints
         }
 
         var errors = new ValidationErrors();
-        var barcode = Validate(request, catalog, errors);
+        var normalised = Validate(request, catalog, errors);
+        var barcode = normalised.Barcode;
 
         if (errors.Any)
         {
@@ -224,6 +230,9 @@ public static class FoodEndpoints
             owner: owner,
             editorId: user.Id,
             now: now);
+
+        CatalogItems.ApplyIngredients(
+            item, normalised.IngredientsText, normalised.Allergens, normalised.DietFlags);
 
         if (isRecipe)
         {
@@ -294,7 +303,8 @@ public static class FoodEndpoints
         }
 
         var errors = new ValidationErrors();
-        var barcode = Validate(request, catalog, errors);
+        var normalised = Validate(request, catalog, errors);
+        var barcode = normalised.Barcode;
 
         if (errors.Any)
         {
@@ -364,6 +374,9 @@ public static class FoodEndpoints
         item.ServingSize = StoredPrecision.Measure(request.ServingSize);
         item.ServingUnit = request.ServingUnit.Trim();
         item.Source = request.Source;
+
+        CatalogItems.ApplyIngredients(
+            item, normalised.IngredientsText, normalised.Allergens, normalised.DietFlags);
 
         var now = Timestamps.UtcNow();
 
@@ -676,7 +689,16 @@ public static class FoodEndpoints
                 : "You already have an item with that barcode.",
             statusCode: StatusCodes.Status409Conflict);
 
-    private static string? Validate(
+    /// <summary>
+    /// Everything a request has to get right, plus the fields that arrive needing tidying.
+    /// </summary>
+    private sealed record Normalised(
+        string? Barcode,
+        string? IngredientsText,
+        List<string> Allergens,
+        List<string> DietFlags);
+
+    private static Normalised Validate(
         SaveFoodItemRequest request,
         NutrientCatalog catalog,
         ValidationErrors errors)
@@ -725,7 +747,19 @@ public static class FoodEndpoints
             NutritionValidation.ValidateNutrients(request.Nutrients, catalog, "nutrients", errors);
         }
 
-        return NutritionValidation.NormaliseBarcode(request.Barcode, errors);
+        var barcode = NutritionValidation.NormaliseBarcode(request.Barcode, errors);
+
+        var (ingredients, allergens, dietFlags) = NutritionValidation.NormaliseIngredients(
+            request.IngredientsText,
+            request.Allergens,
+            request.DietFlags,
+            isRecipe: request.Components.Count > 0,
+            // The barcode as normalised rather than as sent: a rejected one is not something to
+            // hang an ingredient list on.
+            isSpecificProduct: barcode is not null || !string.IsNullOrWhiteSpace(request.Brand),
+            errors);
+
+        return new Normalised(barcode, ingredients, allergens, dietFlags);
     }
 
     /// <summary>
@@ -822,6 +856,9 @@ public static class FoodEndpoints
                 nutrient => nutrient.NutrientKey,
                 nutrient => nutrient.Amount,
                 StringComparer.Ordinal),
+            item.IngredientsText,
+            item.Allergens,
+            item.DietFlags,
             item.CreatedUtc,
             item.UpdatedUtc,
             item.UpdatedByUserId,

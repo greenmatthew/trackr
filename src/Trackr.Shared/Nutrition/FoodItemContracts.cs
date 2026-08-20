@@ -89,6 +89,29 @@ public sealed class SaveFoodItemRequest
     public Dictionary<string, decimal> Nutrients { get; set; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// What the product is made of, as printed on the package.
+    /// </summary>
+    /// <remarks>
+    /// Only accepted on an item carrying a brand or a barcode: an ingredient list describes one
+    /// formulation, and a generic item ("chicken breast") has none to describe. Refused on a recipe,
+    /// which derives its own from its components.
+    /// </remarks>
+    [StringLength(4000)]
+    public string? IngredientsText { get; set; }
+
+    /// <summary>
+    /// Allergens the product declares, as Open Food Facts tags: <c>en:milk</c>, <c>en:nuts</c>.
+    /// </summary>
+    /// <remarks>
+    /// Same rule as <see cref="IngredientsText"/> about which items may carry them. Empty means the
+    /// source said nothing, never "contains no allergens".
+    /// </remarks>
+    public List<string> Allergens { get; set; } = [];
+
+    /// <summary>What an ingredient analysis concluded: <c>en:palm-oil</c>, <c>en:non-vegan</c>.</summary>
+    public List<string> DietFlags { get; set; } = [];
+
+    /// <summary>
     /// How many servings one batch of the recipe makes. Required with <see cref="Components"/>, and
     /// refused without them.
     /// </summary>
@@ -164,6 +187,9 @@ public sealed record FoodItemResponse(
     decimal CarbohydrateG,
     decimal ProteinG,
     IReadOnlyDictionary<string, decimal> Nutrients,
+    string? IngredientsText,
+    IReadOnlyList<string> Allergens,
+    IReadOnlyList<string> DietFlags,
     DateTimeOffset CreatedUtc,
     DateTimeOffset UpdatedUtc,
     Guid? UpdatedByUserId,
@@ -198,5 +224,7 @@ public sealed record FoodItemSummaryResponse(
     decimal FatG,
     decimal CarbohydrateG,
     decimal ProteinG,
+    IReadOnlyList<string> Allergens,
+    IReadOnlyList<string> DietFlags,
     DateTimeOffset UpdatedUtc,
     decimal? Yield);

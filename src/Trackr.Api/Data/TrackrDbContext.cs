@@ -153,6 +153,15 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
             food.Property(f => f.ServingSize).HasPrecision(10, 3);
             food.Property(f => f.Source).HasConversion<string>().HasMaxLength(16).IsRequired();
 
+            // Long: OFF ingredient lists run to a paragraph, and a truncated one is worse than
+            // none because it reads as complete.
+            food.Property(f => f.IngredientsText).HasMaxLength(4000);
+
+            // text[] rather than a join table - the entity says why. Indexed with GIN, which is
+            // what makes "everything containing palm oil" a scan of an index rather than the table.
+            food.HasIndex(f => f.Allergens).HasMethod("gin");
+            food.HasIndex(f => f.DietFlags).HasMethod("gin");
+
             food.Property(f => f.EnergyKcal).HasPrecision(12, 4);
             food.Property(f => f.FatG).HasPrecision(12, 4);
             food.Property(f => f.CarbohydrateG).HasPrecision(12, 4);

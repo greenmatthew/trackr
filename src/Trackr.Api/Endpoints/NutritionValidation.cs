@@ -135,6 +135,123 @@ internal static class NutritionValidation
     /// <summary>What the <c>Barcode</c> column holds.</summary>
     private const int MaxBarcodeLength = 32;
 
+    /// <summary>What the <c>IngredientsText</c> column holds.</summary>
+    private const int MaxIngredientsLength = 4000;
+
+    /// <summary>Longer than any tag Open Food Facts publishes, and short of anything alarming.</summary>
+    private const int MaxTagLength = 64;
+
+    /// <summary>A sanity limit rather than a considered ceiling on how many allergens a food has.</summary>
+    private const int MaxTags = 50;
+
+    /// <summary>
+    /// Checks and tidies what a product is made of.
+    /// </summary>
+    /// <remarks>
+    /// <strong>An ingredient list is only true of a specific product</strong>, so it is accepted
+    /// only on an item carrying a brand or a barcode. "Chicken breast" has no formulation to
+    /// describe, and a shared catalog where any account may edit any global item is exactly the
+    /// wrong place for one account's guess at what a generic food contains.
+    /// <para>
+    /// A recipe is refused outright: it derives its own from its components, the same way it derives
+    /// its nutrition, so a stored list would be a second version of the same fact free to disagree
+    /// with the first.
+    /// </para>
+    /// </remarks>
+    /// <param name="isRecipe">Whether the item being saved has components.</param>
+    /// <param name="isSpecificProduct">Whether it carries a brand or a barcode.</param>
+    public static (string? Text, List<string> Allergens, List<string> DietFlags) NormaliseIngredients(
+        string? ingredientsText,
+        IReadOnlyCollection<string> allergens,
+        IReadOnlyCollection<string> dietFlags,
+        bool isRecipe,
+        bool isSpecificProduct,
+        ValidationErrors errors)
+    {
+        var text = string.IsNullOrWhiteSpace(ingredientsText) ? null : ingredientsText.Trim();
+        var anything = text is not null || allergens.Count > 0 || dietFlags.Count > 0;
+
+        if (anything && isRecipe)
+        {
+            errors.Add(
+                "ingredientsText",
+                "A recipe's ingredients come from the items it is made of, so it cannot be given a "
+                    + "list of its own.");
+
+            return (null, [], []);
+        }
+
+        if (anything && !isSpecificProduct)
+        {
+            errors.Add(
+                "ingredientsText",
+                "An ingredient list describes one brand's product, so it needs a brand or a barcode "
+                    + "to belong to.");
+
+            return (null, [], []);
+        }
+
+        if (text?.Length > MaxIngredientsLength)
+        {
+            errors.Add(
+                "ingredientsText",
+                $"That ingredient list is too long ({MaxIngredientsLength} characters at most).");
+
+            text = null;
+        }
+
+        return (text, NormaliseTags(allergens, "allergens", errors), NormaliseTags(dietFlags, "dietFlags", errors));
+    }
+
+    /// <summary>
+    /// Trims, lowercases and de-duplicates a tag list, keeping the order it arrived in.
+    /// </summary>
+    /// <remarks>
+    /// Lowercased because these are Open Food Facts identifiers rather than prose, and two spellings
+    /// of <c>en:milk</c> that differ only in case would be two allergens as far as a query is
+    /// concerned. Not validated against a vocabulary: OFF's taxonomy is theirs and grows without
+    /// asking, and refusing a tag this server has not heard of would drop a real allergen warning.
+    /// </remarks>
+    private static List<string> NormaliseTags(
+        IReadOnlyCollection<string> tags,
+        string field,
+        ValidationErrors errors)
+    {
+        if (tags.Count > MaxTags)
+        {
+            errors.Add(field, $"That is more than {MaxTags} tags, which is more than a food has.");
+
+            return [];
+        }
+
+        var kept = new List<string>(tags.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var tag in tags)
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                continue;
+            }
+
+            var trimmed = tag.Trim().ToLowerInvariant();
+
+            if (trimmed.Length > MaxTagLength)
+            {
+                errors.Add(field, $"A tag is at most {MaxTagLength} characters.");
+
+                return [];
+            }
+
+            if (seen.Add(trimmed))
+            {
+                kept.Add(trimmed);
+            }
+        }
+
+        return kept;
+    }
+
     public static string? NormaliseBarcode(string? barcode, ValidationErrors errors, string field = "barcode")
     {
         if (string.IsNullOrWhiteSpace(barcode))

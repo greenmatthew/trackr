@@ -75,6 +75,54 @@ public class FoodItem
     public FoodSource Source { get; set; } = FoodSource.Manual;
 
     /// <summary>
+    /// What the product is made of, as printed on the package.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Raw text, deliberately, and not the nutrient machinery.</strong> Nutrients are a
+    /// fixed server-owned vocabulary with units and a sort order; an ingredient list is open-ended
+    /// prose belonging to one brand's formulation, and modelling it as rows would be solving a
+    /// harder problem than anybody has asked for - CLAUDE.md section 7 says so directly.
+    /// <para>
+    /// <strong>Only true of a specific product.</strong> It is accepted on an item carrying a brand
+    /// or a barcode and refused on a generic one, because "chicken breast" has no formulation to
+    /// describe. A composite derives its own from its components rather than storing one.
+    /// </para>
+    /// </remarks>
+    public string? IngredientsText { get; set; }
+
+    /// <summary>
+    /// Allergens the product declares, as Open Food Facts tags - <c>en:milk</c>, <c>en:nuts</c>.
+    /// </summary>
+    /// <remarks>
+    /// A short closed vocabulary, which is what makes it worth storing structured when the
+    /// ingredient list next to it is not. "Does this contain nuts" is a question with consequences,
+    /// and answering it from prose is not something to attempt.
+    /// <para>
+    /// Stored as a Postgres <c>text[]</c> rather than a join table. The relational nutrient store
+    /// exists because a nutrient carries a unit, a display name and an order and the set grows; an
+    /// allergen tag carries none of that and the list is five entries long. A join table here would
+    /// be machinery with nothing to hold. Array containment is what queries it.
+    /// </para>
+    /// <para>
+    /// Open Food Facts' tags rather than a vocabulary of Trackr's own, because the taxonomy is
+    /// already maintained by somebody else and translating into a local set would be a mapping to
+    /// keep correct forever. Empty means "the source said nothing", never "contains no allergens" -
+    /// the same distinction the nutrient store draws.
+    /// </para>
+    /// </remarks>
+    public List<string> Allergens { get; set; } = [];
+
+    /// <summary>
+    /// What Open Food Facts' ingredient analysis concluded: <c>en:palm-oil</c>, <c>en:non-vegan</c>.
+    /// </summary>
+    /// <remarks>
+    /// Same storage and the same caveat as <see cref="Allergens"/>. These are inferences OFF drew
+    /// from the ingredient list rather than claims a label made, and OFF says so itself with tags
+    /// like <c>en:vegan-status-unknown</c>; they are carried as reported and not tidied up.
+    /// </remarks>
+    public List<string> DietFlags { get; set; } = [];
+
+    /// <summary>
     /// The four always-present nutrients, as columns.
     /// </summary>
     /// <remarks>
