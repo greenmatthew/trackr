@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using Trackr.Shared.Nutrition;
 
 namespace Trackr.Shared.Auth;
 
@@ -114,7 +115,29 @@ public sealed record MeResponse(
     /// Carried on the account rather than fetched separately because a client that wants to offer
     /// to change it needs to know what it currently is, and every client already asks for this.
     /// </remarks>
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+
+    /// <summary>
+    /// What to call the account holder, or null to fall back to the email address.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than only on the profile because it is drawn on every screen with an avatar on
+    /// it, and the phone renders those from its cached account before the server has answered.
+    /// </remarks>
+    string? DisplayName = null,
+
+    /// <summary>
+    /// Which unit to draw energy in.
+    /// </summary>
+    /// <remarks>
+    /// <strong>The API still reports kilocalories everywhere.</strong> This says how to show them,
+    /// which is why it travels with the account rather than changing what any route returns - see
+    /// <see cref="Nutrition.EnergyUnit"/>. Every total, target and snapshot stays in one unit.
+    /// </remarks>
+    EnergyUnit EnergyUnit = EnergyUnit.Kilocalories,
+
+    /// <summary>Which units to show and take body measurements in. Not nutrition - see the enum.</summary>
+    MeasurementSystem MeasurementSystem = MeasurementSystem.Metric);
 
 /// <summary>Choosing which zone an account's days are measured in.</summary>
 /// <remarks>

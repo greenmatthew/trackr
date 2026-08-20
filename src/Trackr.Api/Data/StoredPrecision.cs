@@ -24,4 +24,11 @@ public static class StoredPrecision
 
     /// <summary>A serving size or a quantity - <c>numeric(10,3)</c>.</summary>
     public static decimal Measure(decimal value) => decimal.Round(value, 3, MidpointRounding.AwayFromZero);
+
+    /// <summary>A height or a weight - <c>numeric(5,1)</c>.</summary>
+    /// <remarks>
+    /// One place, because that is what a bathroom scale and a tape measure offer, and because the
+    /// energy estimate these feed is accurate to the nearest few hundred kilocalories at best.
+    /// </remarks>
+    public static decimal Body(decimal value) => decimal.Round(value, 1, MidpointRounding.AwayFromZero);
 }

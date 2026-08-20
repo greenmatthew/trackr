@@ -32,8 +32,23 @@ public static class AccountEndpoints
     /// </summary>
     private const int RecoveryCodeCount = 10;
 
+    /// <summary>Long enough for a name, short enough not to be a paragraph in a greeting.</summary>
+    private const int MaxDisplayNameLength = 60;
+
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/account/profile", GetProfileAsync)
+            .WithName("GetProfile")
+            .WithSummary("The account's profile: name, units, body measurements and what they estimate.");
+
+        app.MapPut("/api/account/profile", SaveProfileAsync)
+            .WithName("SaveProfile")
+            .WithSummary("Set the display name and the units numbers are shown in.");
+
+        app.MapPut("/api/account/body", SaveBodyMetricsAsync)
+            .WithName("SaveBodyMetrics")
+            .WithSummary("Replace the body measurements. Sending nulls is how they are cleared.");
+
         app.MapPut("/api/account/timezone", SaveTimeZoneAsync)
             .WithName("SaveTimeZone")
             .WithSummary("Choose which zone this account's days are measured in.");
@@ -82,6 +97,180 @@ public static class AccountEndpoints
         return app;
     }
 
+    private static async Task<IResult> GetProfileAsync(
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        DayBoundary boundary)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        return Results.Ok(user.ToProfileResponse(boundary.TodayFor(user)));
+    }
+
+    /// <summary>
+    /// Sets the display name and the units numbers are shown in.
+    /// </summary>
+    /// <remarks>
+    /// <strong>The units are a display preference and change nothing the API returns.</strong>
+    /// Every total, target and snapshot stays in kilocalories, and the client converts on the way
+    /// to the screen - a stored number that changed meaning when a setting changed would rewrite
+    /// what last month's chart said.
+    /// </remarks>
+    private static async Task<IResult> SaveProfileAsync(
+        SaveProfileRequest request,
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        DayBoundary boundary)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var errors = new ValidationErrors();
+
+        var name = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim();
+
+        if (name is { Length: > MaxDisplayNameLength })
+        {
+            errors.Add("displayName", $"Keep it under {MaxDisplayNameLength} characters.");
+        }
+
+        // Checked rather than trusted to the deserialiser: the string form of an enum is rejected
+        // when it is not a member, but a raw number is not, and (EnergyUnit)7 would be stored as
+        // the text "7" and read back as nothing at all.
+        RequireDefined(request.EnergyUnit, "energyUnit", errors);
+        RequireDefined(request.MeasurementSystem, "measurementSystem", errors);
+
+        if (errors.Any)
+        {
+            return errors.Problem();
+        }
+
+        user.DisplayName = name;
+        user.EnergyUnit = request.EnergyUnit;
+        user.MeasurementSystem = request.MeasurementSystem;
+
+        var result = await userManager.UpdateAsync(user);
+
+        return result.Succeeded
+            ? Results.Ok(user.ToProfileResponse(boundary.TodayFor(user)))
+            : result.ToValidationProblem();
+    }
+
+    /// <summary>
+    /// Replaces the body measurements, and re-derives what they estimate.
+    /// </summary>
+    /// <remarks>
+    /// Wholesale, so that clearing one is a request rather than a missing feature: a merge cannot
+    /// tell "leave my weight alone" from "I no longer want a weight stored", and this is exactly
+    /// the data somebody may want gone.
+    /// <para>
+    /// The bounds are wide because they catch a slipped decimal point rather than an unusual body.
+    /// A birth date in the future is refused outright, since it is a typo with no reading that
+    /// makes sense; an age that is merely young is accepted and simply yields no estimate, because
+    /// the equation is not the right one for children and refusing the profile over it would be a
+    /// stranger answer than declining to guess.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> SaveBodyMetricsAsync(
+        SaveBodyMetricsRequest request,
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        DayBoundary boundary)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var today = boundary.TodayFor(user);
+        var errors = new ValidationErrors();
+
+        RequireDefined(request.Sex, "sex", errors);
+        RequireDefined(request.ActivityLevel, "activityLevel", errors);
+
+        RequireWithin(
+            request.HeightCm,
+            (decimal)BodyMetricLimits.MinHeightCm,
+            (decimal)BodyMetricLimits.MaxHeightCm,
+            "heightCm",
+            "a height in centimetres",
+            errors);
+
+        RequireWithin(
+            request.WeightKg,
+            (decimal)BodyMetricLimits.MinWeightKg,
+            (decimal)BodyMetricLimits.MaxWeightKg,
+            "weightKg",
+            "a weight in kilograms",
+            errors);
+
+        if (request.BirthDate is { } born)
+        {
+            if (born > today)
+            {
+                errors.Add("birthDate", "That date has not happened yet.");
+            }
+            else if (born < today.AddYears(-BodyMetricLimits.MaxAgeYears))
+            {
+                errors.Add("birthDate", "That is further back than a birth date goes. Check the year.");
+            }
+        }
+
+        if (errors.Any)
+        {
+            return errors.Problem();
+        }
+
+        user.Sex = request.Sex;
+        user.BirthDate = request.BirthDate;
+
+        // Rounded to what the column keeps, so the response to a write is what was written rather
+        // than what was sent - the same rule every stored amount in this codebase follows.
+        user.HeightCm = request.HeightCm is { } height ? StoredPrecision.Body(height) : null;
+        user.WeightKg = request.WeightKg is { } weight ? StoredPrecision.Body(weight) : null;
+
+        user.ActivityLevel = request.ActivityLevel;
+
+        var result = await userManager.UpdateAsync(user);
+
+        return result.Succeeded
+            ? Results.Ok(user.ToProfileResponse(today))
+            : result.ToValidationProblem();
+    }
+
+    private static void RequireDefined<TEnum>(TEnum value, string field, ValidationErrors errors)
+        where TEnum : struct, Enum
+    {
+        if (!Enum.IsDefined(value))
+        {
+            errors.Add(field, "That is not one of the choices.");
+        }
+    }
+
+    private static void RequireWithin(
+        decimal? value,
+        decimal minimum,
+        decimal maximum,
+        string field,
+        string description,
+        ValidationErrors errors)
+    {
+        if (value is { } amount && (amount < minimum || amount > maximum))
+        {
+            errors.Add(
+                field,
+                $"That is not {description} - it should be between {minimum:0} and {maximum:0}.");
+        }
+    }
+
     /// <summary>
     /// Sets the zone this account's days are measured in.
     /// </summary>
@@ -122,8 +311,7 @@ public static class AccountEndpoints
         var result = await userManager.UpdateAsync(user);
 
         return result.Succeeded
-            ? Results.Ok(new MeResponse(
-                user.Id, user.Email!, user.TwoFactorEnabled, user.AvatarUpdatedUtc, user.TimeZoneId))
+            ? Results.Ok(user.ToMeResponse())
             : Results.ValidationProblem(new Dictionary<string, string[]>
             {
                 ["timeZoneId"] = [.. result.Errors.Select(error => error.Description)]

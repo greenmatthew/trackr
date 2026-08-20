@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Identity;
+using Trackr.Shared.Auth;
+using Trackr.Shared.Nutrition;
 
 namespace Trackr.Api.Identity;
 
@@ -43,6 +45,52 @@ public class TrackrUser : IdentityUser<Guid>
     /// </para>
     /// </remarks>
     public string? TimeZoneId { get; set; }
+
+    /// <summary>
+    /// What to call the account holder, or null to fall back to the email address.
+    /// </summary>
+    /// <remarks>
+    /// Not an identifier and not unique. The account is keyed by email and logs in with it; this is
+    /// only what a greeting and a set of initials read from, and two people in one household may
+    /// perfectly well share a name.
+    /// </remarks>
+    public string? DisplayName { get; set; }
+
+    /// <summary>Which unit to <em>show</em> energy in. Nothing stored ever changes unit.</summary>
+    /// <remarks>
+    /// The whole of it is on the way to the screen. Totals, targets and the snapshots on log items
+    /// are kilocalories in Postgres and kilocalories on the wire, because a stored number that
+    /// changed meaning when a setting changed would rewrite history - see
+    /// <see cref="Shared.Nutrition.EnergyUnit"/>.
+    /// </remarks>
+    public EnergyUnit EnergyUnit { get; set; } = EnergyUnit.Kilocalories;
+
+    /// <summary>Which units body measurements are shown and typed in. Deliberately not nutrition.</summary>
+    public MeasurementSystem MeasurementSystem { get; set; } = MeasurementSystem.Metric;
+
+    /// <summary>
+    /// The optional body measurements, kept only so a calorie target can be suggested.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Columns on the account rather than a table of their own, and that is a decision with
+    /// an expiry date.</strong> One current weight is one value; a weight <em>history</em> is a
+    /// series, and the day somebody wants a chart of it, it becomes its own entity rather than a
+    /// wider user row. Section 9.14.
+    /// <para>
+    /// Always metric. <see cref="MeasurementSystem"/> decides how they are typed and drawn, and the
+    /// client converts - two units for one column is how a weight becomes ambiguous.
+    /// </para>
+    /// </remarks>
+    public BiologicalSex Sex { get; set; } = BiologicalSex.Unspecified;
+
+    /// <summary>The date rather than the age, which would be wrong within a year of being stored.</summary>
+    public DateOnly? BirthDate { get; set; }
+
+    public decimal? HeightCm { get; set; }
+
+    public decimal? WeightKg { get; set; }
+
+    public ActivityLevel ActivityLevel { get; set; } = ActivityLevel.Sedentary;
 
     /// <summary>
     /// When the profile picture last changed, or null if there is none.

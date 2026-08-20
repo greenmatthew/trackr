@@ -186,7 +186,7 @@ public static class AuthEndpoints
         // they chose two seconds ago is friction with no security value.
         await signInManager.SignInAsync(user, isPersistent: true);
 
-        return Results.Ok(new MeResponse(user.Id, user.Email!, TwoFactorEnabled: false));
+        return Results.Ok(user.ToMeResponse());
     }
 
     private static async Task<IResult> LoginAsync(
@@ -491,12 +491,7 @@ public static class AuthEndpoints
 
         // AvatarUpdatedUtc comes off the user row that was loaded anyway - no join, and no
         // image bytes. It is the marker a client caches its copy of the picture against.
-        return Results.Ok(new MeResponse(
-            user.Id,
-            user.Email!,
-            user.TwoFactorEnabled,
-            user.AvatarUpdatedUtc,
-            user.TimeZoneId));
+        return Results.Ok(user.ToMeResponse());
     }
 
     private static async Task<IResult> ForgotPasswordAsync(

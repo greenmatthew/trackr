@@ -62,11 +62,33 @@ Remove the profile picture, falling back to initials.
 
 **Responses:** `200`
 
+### `PUT /api/account/body`
+
+Replace the body measurements. Sending nulls is how they are cleared.
+
+**Request body:** `application/json` → [`SaveBodyMetricsRequest`](#savebodymetricsrequest)
+
+**Responses:** `200`
+
 ### `POST /api/account/password`
 
 Change the password, re-checking the current one first.
 
 **Request body:** `application/json` → [`ChangePasswordRequest`](#changepasswordrequest)
+
+**Responses:** `200`
+
+### `GET /api/account/profile`
+
+The account's profile: name, units, body measurements and what they estimate.
+
+**Responses:** `200`
+
+### `PUT /api/account/profile`
+
+Set the display name and the units numbers are shown in.
+
+**Request body:** `application/json` → [`SaveProfileRequest`](#saveprofilerequest)
 
 **Responses:** `200`
 
@@ -436,12 +458,20 @@ Totals per local day, plus the range's total and its average. Defaults to today.
 
 The request and response shapes above. These are the DTOs in `Trackr.Shared`, which the web app and the Android app reference directly rather than generating a client from this document.
 
+### `ActivityLevel`
+
+No properties.
+
 ### `AnalyzeMealRequest`
 
 | Property | Type | Required |
 | --- | --- | --- |
 | `text` | string, nullable | no |
 | `imageIds` | array of string (uuid) | no |
+
+### `BiologicalSex`
+
+No properties.
 
 ### `ChangePasswordRequest`
 
@@ -462,6 +492,10 @@ The request and response shapes above. These are the DTOs in `Trackr.Shared`, wh
 | Property | Type | Required |
 | --- | --- | --- |
 | `password` | string | yes |
+
+### `EnergyUnit`
+
+No properties.
 
 ### `FoodSource`
 
@@ -488,6 +522,10 @@ No properties.
 | `email` | string | yes |
 | `password` | string | yes |
 | `rememberMe` | boolean | no |
+
+### `MeasurementSystem`
+
+No properties.
 
 ### `RecoveryCodeLoginRequest`
 
@@ -516,6 +554,16 @@ No properties.
 | `email` | string | yes |
 | `code` | string | yes |
 | `newPassword` | string | yes |
+
+### `SaveBodyMetricsRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `sex` | [`BiologicalSex`](#biologicalsex) | no |
+| `birthDate` | string (date), nullable | no |
+| `heightCm` | number or string (double), nullable | no |
+| `weightKg` | number or string (double), nullable | no |
+| `activityLevel` | [`ActivityLevel`](#activitylevel) | no |
 
 ### `SaveFoodComponentRequest`
 
@@ -588,6 +636,14 @@ No properties.
 | `ingredientsText` | string, nullable | no |
 | `allergens` | array of string | no |
 | `dietFlags` | array of string | no |
+
+### `SaveProfileRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `displayName` | string, nullable | no |
+| `energyUnit` | [`EnergyUnit`](#energyunit) | no |
+| `measurementSystem` | [`MeasurementSystem`](#measurementsystem) | no |
 
 ### `SaveTimeZoneRequest`
 

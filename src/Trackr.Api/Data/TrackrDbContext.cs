@@ -65,12 +65,27 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
         // then refines the model it produced.
         base.OnModelCreating(builder);
 
-        builder.Entity<TrackrUser>()
+        builder.Entity<TrackrUser>(user =>
+        {
             // TrackrUser's constructor assigns a version 7 GUID. Without this, EF's
             // convention for Guid keys marks the property ValueGeneratedOnAdd and
             // substitutes its own value.
-            .Property(u => u.Id)
-            .ValueGeneratedNever();
+            user.Property(u => u.Id).ValueGeneratedNever();
+
+            user.Property(u => u.DisplayName).HasMaxLength(60);
+
+            // Stored as text like every other enum here, so a database dump reads as words and a
+            // new member of an enum cannot silently renumber the existing rows.
+            user.Property(u => u.EnergyUnit).HasConversion<string>().HasMaxLength(16).IsRequired();
+            user.Property(u => u.MeasurementSystem).HasConversion<string>().HasMaxLength(16).IsRequired();
+            user.Property(u => u.Sex).HasConversion<string>().HasMaxLength(16).IsRequired();
+            user.Property(u => u.ActivityLevel).HasConversion<string>().HasMaxLength(16).IsRequired();
+
+            // One decimal place is more than a bathroom scale or a tape measure offers, and the
+            // estimate they feed has an error bar in the hundreds of kilocalories.
+            user.Property(u => u.HeightCm).HasPrecision(5, 1);
+            user.Property(u => u.WeightKg).HasPrecision(5, 1);
+        });
 
         builder.Entity<UserAvatar>(avatar =>
         {
