@@ -93,6 +93,32 @@ public sealed class IngredientTests(PostgresFixture postgres) : AuthTestBase(pos
         Assert.Contains("ingredientsText", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A recipe cannot be given a list, so it derives one - from the items it is made of.
+    /// </summary>
+    [Fact]
+    public async Task A_recipe_is_made_of_its_ingredients()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        var flour = await FoodCatalogTests.CreateAsync(
+            client, Payloads.Food(name: "Flour", allergens: ["en:gluten"]));
+        var butter = await FoodCatalogTests.CreateAsync(
+            client, Payloads.Food(name: "Butter", allergens: ["en:milk"]));
+
+        var recipe = await FoodCatalogTests.CreateAsync(
+            client,
+            Payloads.Recipe(yield: 4m, components: [(flour, 2m), (butter, 1m)]));
+
+        var read = await client.GetFromJsonAsync<FoodItemResponse>($"/api/foods/{recipe.Id}");
+
+        Assert.Equal("Butter, Flour", read!.IngredientsText);
+
+        // Unioned, unlike a nutrient: an allergen in one ingredient is an allergen in the dish,
+        // whatever the others say.
+        Assert.Equal(["en:gluten", "en:milk"], read.Allergens);
+    }
+
     /// <remarks>
     /// These are Open Food Facts identifiers rather than prose, so two spellings differing only in
     /// case would be two allergens as far as a query is concerned.

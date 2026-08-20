@@ -209,6 +209,53 @@ public sealed class CompositeNutrition(TrackrDbContext db)
                 Amount = amount
             });
         }
+
+        MaterialiseIngredients(recipe, parts);
+    }
+
+    /// <summary>
+    /// Derives what a recipe is made of from the items it is made of.
+    /// </summary>
+    /// <remarks>
+    /// Milestone 10a's rule that an ingredient list belongs to one formulation is why a recipe may
+    /// not be given one: it has a real answer already, in its components. Materialised alongside the
+    /// nutrition, on the same write and for the same reason - nothing downstream should have to
+    /// learn that composites exist.
+    /// <para>
+    /// <strong>Allergens union rather than intersect, which is the opposite of the nutrient rule
+    /// above, and deliberately.</strong> A nutrient missing from one ingredient means "not
+    /// measured", so summing it would understate; an allergen present in one ingredient is present
+    /// in the dish, whatever the others say. The asymmetry is not an inconsistency: the safe
+    /// direction for "how much iron" is to say less, and the safe direction for "does this contain
+    /// nuts" is to say more.
+    /// </para>
+    /// <para>
+    /// The text is the ingredients' names rather than their own ingredient lists. Concatenating a
+    /// dozen paragraphs of small print would produce something nobody reads, and "Flour, Butter,
+    /// Sugar" is the true and useful answer to what a recipe is made of.
+    /// </para>
+    /// </remarks>
+    private static void MaterialiseIngredients(
+        FoodItem recipe,
+        IReadOnlyCollection<(FoodItem Child, decimal Quantity)> parts)
+    {
+        var names = parts
+            .Select(part => part.Child.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        recipe.IngredientsText = names.Count == 0 ? null : string.Join(", ", names);
+
+        recipe.Allergens = [.. parts
+            .SelectMany(part => part.Child.Allergens)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+
+        // Not unioned. "Contains palm oil" unions safely; "vegan" does not - one non-vegan
+        // ingredient makes the dish non-vegan, and a union would report both tags at once. Deriving
+        // that properly means understanding each tag's polarity, which is part three's problem.
+        recipe.DietFlags = [];
     }
 
     /// <summary>
