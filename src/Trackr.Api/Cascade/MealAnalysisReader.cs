@@ -58,6 +58,37 @@ public static class MealAnalysisReader
     /// <summary>A kilogram of butter is about 7 200 kcal, so a serving past this is worth a look.</summary>
     private const decimal ImplausibleEnergyKcal = 5_000m;
 
+    /// <summary>
+    /// A ceiling on what one item comes to once its count is applied.
+    /// </summary>
+    /// <remarks>
+    /// The per-serving check above cannot see this, and milestone 9 found out how that fails: a
+    /// reply gave a defensible 330 kcal serving and a quantity of 131 - the serving's gram weight
+    /// echoed back as a count - and the card offered a 43 230 kcal meal with nothing marked wrong,
+    /// because every number in it was fine on its own. Ten thousand kilocalories is several days of
+    /// food on one line, so it is a misread rather than a large portion.
+    /// </remarks>
+    private const decimal ImplausiblePortionEnergyKcal = 10_000m;
+
+    /// <summary>
+    /// The same ceiling for the reply as a whole, where no one item is absurd but the sum is.
+    /// </summary>
+    /// <remarks>
+    /// The misread that produces it is the same one, so ten plausible items that add to a week of
+    /// food deserve the same flag as one implausible item.
+    /// </remarks>
+    private const decimal ImplausibleMealEnergyKcal = 20_000m;
+
+    /// <summary>
+    /// A ceiling on what one item weighs once its count is applied, in grams.
+    /// </summary>
+    /// <remarks>
+    /// The energy ceiling above misses the low-calorie half of the same misread: 131 servings of
+    /// lettuce is 43 kcal and seventeen kilograms. Five kilograms of one food is a delivery rather
+    /// than a portion.
+    /// </remarks>
+    private const decimal ImplausiblePortionGrams = 5_000m;
+
     /// <summary>No single nutrient weighs a kilogram, whatever the serving turns out to be.</summary>
     private const decimal MaxNutrientGrams = 1_000m;
 
@@ -236,7 +267,53 @@ public static class MealAnalysisReader
                 note);
         }
 
-        return ModelReading.Read(read, note, warnings);
+        return ModelReading.Read(FlagImplausibleMeal(read), note, warnings);
+    }
+
+    /// <summary>
+    /// Flags every item when the reply as a whole adds up to something nobody ate.
+    /// </summary>
+    /// <remarks>
+    /// A per-item ceiling misses the meal assembled from ten individually plausible lines, and the
+    /// mistake behind one is the mistake behind the other - a gram weight or a package weight used
+    /// as a count. Every item is flagged rather than a chosen one, because it is the sum that is
+    /// wrong and this reader has no way to tell which line spoiled it.
+    /// </remarks>
+    private static List<ModelItem> FlagImplausibleMeal(List<ModelItem> items)
+    {
+        var total = 0m;
+
+        foreach (var item in items)
+        {
+            // Saturated per item, so one absurd line cannot overflow the running sum - and so an
+            // item the portion check already flagged does not drag the whole meal in behind it.
+            total += Math.Min(
+                Portion(item.EnergyKcal, item.Quantity) ?? ImplausibleMealEnergyKcal,
+                ImplausibleMealEnergyKcal);
+
+            if (total > ImplausibleMealEnergyKcal)
+            {
+                break;
+            }
+        }
+
+        if (total <= ImplausibleMealEnergyKcal)
+        {
+            return items;
+        }
+
+        var warning = string.Create(
+            CultureInfo.InvariantCulture,
+            $"These come to more than {ImplausibleMealEnergyKcal:0} kcal between them, which is a week of food rather than a meal. Please check the amounts.");
+
+        return
+        [
+            .. items.Select(item => item with
+            {
+                Confidence = AnalysisConfidence.Low,
+                Warnings = [.. item.Warnings, warning]
+            })
+        ];
     }
 
     private static bool HasEveryCoreField(JsonElement element) =>
@@ -285,6 +362,7 @@ public static class MealAnalysisReader
         var nutrients = ReadNutrients(element, catalog, name, servingSize, servingUnit, warnings);
 
         CheckEnergy(name, energyKcal, fatG, carbohydrateG, proteinG, warnings, ref confidence);
+        CheckPortion(name, energyKcal, quantity, servingSize, servingUnit, warnings, ref confidence);
         CheckMass(name, fatG, carbohydrateG, proteinG, nutrients, servingSize, servingUnit, warnings, ref confidence);
         CheckBreakdowns(name, fatG, carbohydrateG, nutrients, warnings, ref confidence);
 
@@ -550,6 +628,92 @@ public static class MealAnalysisReader
                 CultureInfo.InvariantCulture,
                 $"The calories for {name} ({energyKcal:0.#} kcal) do not match its fat, carbohydrate "
                     + $"and protein (about {predicted:0.#} kcal). Please check them."));
+    }
+
+    /// <summary>
+    /// Checks what the item actually adds up to: one serving multiplied by the count.
+    /// </summary>
+    /// <remarks>
+    /// Every other energy check here is about a single serving, and a quantity that is really a
+    /// gram weight slips past all of them - 330 kcal is a reasonable serving and 131 is a reasonable
+    /// count, and only their product is absurd.
+    /// <para>
+    /// Flags rather than clamps. The count is the most likely thing to be wrong, it is the one
+    /// figure on the card that is editable, and this method cannot tell what it should have been.
+    /// <see cref="MaxQuantity"/> already clamps counts that are absurd on their own; this catches
+    /// the ones that are only absurd next to the food they are counting.
+    /// </para>
+    /// </remarks>
+    private static void CheckPortion(
+        string name,
+        decimal energyKcal,
+        decimal quantity,
+        decimal? servingSize,
+        string? servingUnit,
+        List<string> warnings,
+        ref AnalysisConfidence confidence)
+    {
+        var total = Portion(energyKcal, quantity);
+
+        if (total > ImplausiblePortionEnergyKcal)
+        {
+            confidence = AnalysisConfidence.Low;
+
+            var described = total is { } value
+                ? string.Create(CultureInfo.InvariantCulture, $"{value:0} kcal")
+                : "more kilocalories than this server can count";
+
+            warnings.Add(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{quantity:0.###} x {name} comes to {described}, which is several days of food. The amount is the most likely thing to be wrong."));
+        }
+
+        // The other half of the same misread, and the half the energy ceiling cannot see: a
+        // hundred-odd servings of something barely caloric is a trivial number of kilocalories and
+        // an absurd number of kilograms.
+        if (servingSize is not { } size || !IsMassUnit(servingUnit))
+        {
+            return;
+        }
+
+        var weight = Portion(size, quantity);
+
+        if (weight <= ImplausiblePortionGrams)
+        {
+            return;
+        }
+
+        confidence = AnalysisConfidence.Low;
+
+        var weighed = weight is { } grams
+            ? string.Create(CultureInfo.InvariantCulture, $"{grams / 1000m:0.#} kg")
+            : "more than this server can weigh";
+
+        warnings.Add(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"{quantity:0.###} x {name} comes to {weighed} of food. The amount is the most likely thing to be wrong."));
+    }
+
+    /// <summary>
+    /// One item's total, or null when the two numbers are too large to multiply.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than an exception because the inputs are unconstrained JSON numbers: a decimal
+    /// holds 28 digits, a reply may carry more, and a check that throws on the worst input is worse
+    /// than no check at all. A null is treated as over every ceiling, which is what it is.
+    /// </remarks>
+    private static decimal? Portion(decimal energyKcal, decimal quantity)
+    {
+        try
+        {
+            return energyKcal * quantity;
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
