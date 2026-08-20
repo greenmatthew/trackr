@@ -149,13 +149,20 @@ tests.
 
 ## Left open
 
-- **A quantity the validator does not catch.** On the Open Food Facts run the model returned
+*(Amended: the first and second are fixed, in the branch recorded by
+[12-catalog-growth.md](12-catalog-growth.md). The fourth is what that milestone is.)*
+
+- **A quantity the validator does not catch.** **Fixed, and the first attempt was in the wrong
+  place** - the check was added to `MealAnalysisReader`, which judges what the model said, and this
+  item was a full Open Food Facts match whose figures had all been replaced. It now runs on the
+  assembled item, in `PortionCheck`. On the Open Food Facts run the model returned
   `Quantity: 131` — the serving's gram weight echoed as a count — giving a cheerful *43230 kcal*
   meal total with **no** low-confidence flag. The card did its job, in that the number is enormous
   and sits in an editable box, but this is a `MealAnalysisReader` gap rather than a client one: a
   quantity far above the plausible range, or a total energy far above a day's worth, should be a
   `Low` verdict. Worth fixing where the other cross-checks live.
-- **The transcript does not survive leaving the tab.** `ChatViewModel` is transient, so switching to
+- **The transcript does not survive leaving the tab.** **Fixed:** the view model is a singleton
+  and empties itself on a sign-out, the way `AvatarStore` already did. `ChatViewModel` is transient, so switching to
   Home and back is a new conversation. The right time to change that is milestone 14's offline
   queue, which is when a conversation gets somewhere to live that a phone call cannot destroy.
 - **No physical-phone run.** The device was locked for the whole session, so every claim here is

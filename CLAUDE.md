@@ -248,6 +248,11 @@ lives — read the relevant one before changing anything it covers.
   resilience pipeline is wrong for it, four message types rather than one with a flag, editable
   numbers bound as text, confirming as a copy with the edits applied upstream, photos uploaded on
   send but retried by id, camera capture and the permission it brings, and the 2560px re-encode.
+- [12-catalog-growth.md](docs/decisions/12-catalog-growth.md) — catalog growth: why a barcode is the
+  only key and a model's guess files nothing, why everything filed is personal rather than global
+  (and the earlier decision that already settled it), why a hit links but never updates, why
+  re-logging reads the log instead of the catalog, and why the portion check had to move out of the
+  reader and onto the assembled item.
 
 ---
 
@@ -539,11 +544,28 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
    **The two inherited rules landed where they had to:** a `Confidence: Low` item is drawn
    differently with its warnings visible without a tap, and the card lists only nutrients the source
    reported — never a "—" row for one nobody measured.
-   **Left open:** a quantity the validator does not catch (the model echoed a serving's gram weight
-   as a count and produced a 43 000 kcal meal with no `Low` flag — a `MealAnalysisReader` gap), the
-   transcript not surviving a tab switch, and no physical-phone run.
-10. **Catalog growth** — upsert items from OFF/AI into the catalog; let the user pick from
-    previously logged items for fast re-logging.
+   **Left open at the time, and closed since:** the quantity the validator missed and the transcript
+   dying on a tab switch are both fixed — see §9.10 and `12-catalog-growth.md` for the first, which
+   turned out to need fixing twice. No physical-phone run yet.
+10. ~~**Catalog growth**~~ ✅ — [12-catalog-growth.md](docs/decisions/12-catalog-growth.md). Both
+    halves, and both are smaller than the wording above suggests, on purpose.
+    **A barcode is the only key**: an item without one is logged exactly as before and files
+    nothing, because matching a model's read of "chicken breast" on its name is wrong whether it
+    hits (two different foods merged) or misses (a near-duplicate row every meal). **Everything
+    filed is personal** — a global item cannot be deleted, so automatic promotion is the one
+    irreversible thing the catalog does, and §7's no-duplicates rule is honoured instead by a hit
+    on a shared row inserting nothing. **A hit links and writes nothing**: tapping save consents to
+    logging a meal, not to editing the household's catalog.
+    **Re-logging reads the log rather than the catalog** — `GET /api/log/recent`, behind the chat's
+    `+` button. The catalog holds packaged products; what people eat again is mostly home cooking,
+    which never carries a barcode. A pre-model text match was designed and rejected: it would be
+    badged *from Open Food Facts* while skipping the stage that would have caught the error.
+    **Two bugs fixed on the way**, both found by running it rather than by reading it: a barcode
+    was never checked against its `varchar(32)` column, and a quantity nobody could have eaten was
+    still unflagged on a *matched* product, because the reader checks the model's figures and a
+    full match keeps only the model's count. That check now runs on the assembled item.
+    **Left open:** no lookup cache off the new rows (deliberate — it needs a staleness rule first),
+    and `PUT /api/log/{id}` files nothing.
     - **10a. Ingredients** — capture what a product is *made of*, not just its nutrition. Lettered
       rather than renumbered because §9.10 and §9.13 are referenced by name from code comments.
       **Three parts, in this order, and the value drops off sharply after the second.**
