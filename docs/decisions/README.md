@@ -25,6 +25,7 @@ the wiki at `wiki/` instead, where the self-hoster can read it too. See CLAUDE.m
 | 8 — Ollama | [10-ollama.md](10-ollama.md) |
 | 9 — Chat UI, cascade and confirm | [11-chat.md](11-chat.md) |
 | 10 — Catalog growth | [12-catalog-growth.md](12-catalog-growth.md) |
+| 10a — Ingredients | [13-ingredients.md](13-ingredients.md) |
 
 A decision that is later reversed stays in its original file, with a note pointing at the
 record that superseded it. Deleting it would hide the reasoning that made the reversal

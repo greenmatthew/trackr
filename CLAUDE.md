@@ -566,8 +566,20 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
     full match keeps only the model's count. That check now runs on the assembled item.
     **Left open:** no lookup cache off the new rows (deliberate — it needs a staleness rule first),
     and `PUT /api/log/{id}` files nothing.
-    - **10a. Ingredients** — capture what a product is *made of*, not just its nutrition. Lettered
-      rather than renumbered because §9.10 and §9.13 are referenced by name from code comments.
+    - ~~**10a. Ingredients**~~ ✅ (parts 1–2) — [13-ingredients.md](docs/decisions/13-ingredients.md).
+      Raw text on the item; allergens and diet flags as a Postgres `text[]` with GIN indexes, using
+      **Open Food Facts' own tags** rather than a local vocabulary, and validating against no
+      vocabulary at all — theirs grows without asking, and dropping an unknown tag would discard a
+      real allergen warning. **Empty means the source said nothing, never "contains no allergens".**
+      The brand-or-barcode rule is enforced and **a recipe derives its own**: allergens *union*
+      where nutrients intersect, because the safe direction for "how much iron" is to say less and
+      for "does this contain nuts" is to say more. Diet flags are not derived — "vegan" does not
+      union.
+      **Left open:** the model is not asked to read a list off a label (§9.10a's other half of part
+      one — a real change to the prompt, schema, reader and item shape, worth doing properly), and
+      part 3 remains unbuilt as intended.
+      Lettered rather than renumbered because §9.10 and §9.13 are referenced by name from code
+      comments.
       **Three parts, in this order, and the value drops off sharply after the second.**
       1. **Raw ingredient text — cheap, do this first.** Open Food Facts already returns
          `ingredients_text_en`, so for any barcode hit this is a field to map, not a feature to
