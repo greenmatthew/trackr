@@ -248,6 +248,154 @@ public sealed class StatsViewModelTests
         Assert.Null(home.Problem);
     }
 
+    /// <summary>
+    /// The chart scales to the taller of the target and the tallest day.
+    /// </summary>
+    /// <remarks>
+    /// Scaling to the tallest day alone would put the target line at the very top of a week that
+    /// never came near it, which reads as "target reached" - the opposite of what happened.
+    /// </remarks>
+    [Fact]
+    public async Task A_target_taller_than_every_day_still_fits_on_the_chart()
+    {
+        var (trends, api) = BuildTrends();
+
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Stats(
+                Day(energyKcal: 2_500m),
+                daysLogged: 2,
+                days: 2,
+                perDay:
+                [
+                    Day(energyKcal: 1_000m, day: new DateOnly(2026, 8, 18)),
+                    Day(energyKcal: 1_500m, day: new DateOnly(2026, 8, 19))
+                ]));
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns([new GoalResponse("energy_kcal", 2_000m, GoalKind.AtLeast)]);
+
+        await trends.RefreshCommand.ExecuteAsync(null);
+
+        Assert.True(trends.HasTarget);
+        Assert.Equal([0.5d, 0.75d], trends.Days.Select(bar => bar.Fraction));
+        Assert.Equal([1d, 1d], trends.Days.Select(bar => bar.TargetFraction));
+        Assert.Equal("Target: at least 2000 kcal a day", trends.TargetCaption);
+    }
+
+    /// <summary>
+    /// A ceiling passed and a floor reached read in opposite directions, on this screen too.
+    /// </summary>
+    /// <remarks>
+    /// The same vocabulary as Home deliberately: drawing a day over its calorie ceiling the same
+    /// way as a day that hit its protein target would congratulate somebody for going over.
+    /// </remarks>
+    [Fact]
+    public async Task A_day_past_a_ceiling_is_a_warning_and_a_day_that_reached_a_floor_is_not()
+    {
+        var (trends, api) = BuildTrends();
+
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Stats(
+                Day(energyKcal: 3_400m),
+                daysLogged: 2,
+                days: 2,
+                perDay:
+                [
+                    Day(energyKcal: 2_400m, day: new DateOnly(2026, 8, 18)),
+                    Day(energyKcal: 1_000m, day: new DateOnly(2026, 8, 19))
+                ]));
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns([new GoalResponse("energy_kcal", 2_000m, GoalKind.AtMost)]);
+
+        await trends.RefreshCommand.ExecuteAsync(null);
+
+        Assert.True(trends.Days[0].IsOver);
+        Assert.False(trends.Days[1].IsOver);
+
+        // A ceiling is never "done": staying under one all day is not an achievement to draw, and
+        // the day is not over.
+        Assert.All(trends.Days, bar => Assert.False(bar.IsDone));
+
+        Assert.Equal("Target: at most 2000 kcal a day", trends.TargetCaption);
+    }
+
+    /// <remarks>
+    /// Nothing eaten sits under every ceiling. Drawing a blank day as a day within target would be
+    /// scoring a day nobody logged.
+    /// </remarks>
+    [Fact]
+    public async Task A_day_with_nothing_on_it_is_neither_over_nor_done()
+    {
+        var (trends, api) = BuildTrends();
+
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Stats(
+                Day(energyKcal: 1_000m),
+                daysLogged: 1,
+                days: 2,
+                perDay:
+                [
+                    DayTotals.Empty(new DateOnly(2026, 8, 18)),
+                    Day(energyKcal: 1_000m, day: new DateOnly(2026, 8, 19))
+                ]));
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns([new GoalResponse("energy_kcal", 500m, GoalKind.AtMost)]);
+
+        await trends.RefreshCommand.ExecuteAsync(null);
+
+        Assert.False(trends.Days[0].IsOver);
+        Assert.False(trends.Days[0].IsDone);
+        Assert.True(trends.Days[1].IsOver);
+    }
+
+    /// <remarks>
+    /// A target for sodium has nothing to scale a chart of kilocalories against, and an account
+    /// with no energy target gets the chart exactly as it drew before targets existed.
+    /// </remarks>
+    [Fact]
+    public async Task A_target_for_another_nutrient_does_not_become_the_chart_ceiling()
+    {
+        var (trends, api) = BuildTrends();
+
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Stats(Day(energyKcal: 1_000m)));
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns([new GoalResponse("sodium", 2_300m, GoalKind.AtMost)]);
+
+        await trends.RefreshCommand.ExecuteAsync(null);
+
+        Assert.False(trends.HasTarget);
+        Assert.All(trends.Days, bar => Assert.Equal(0d, bar.TargetFraction));
+    }
+
+    /// <remarks>
+    /// Null is "could not ask", not "there are none". The chart draws as it did before targets
+    /// existed rather than asserting the account has no target.
+    /// </remarks>
+    [Fact]
+    public async Task An_unreachable_goals_route_leaves_the_chart_unscaled_rather_than_targetless()
+    {
+        var (trends, api) = BuildTrends();
+
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Stats(
+                Day(energyKcal: 2_000m),
+                daysLogged: 1,
+                days: 1,
+                perDay: [Day(energyKcal: 2_000m, day: new DateOnly(2026, 8, 19))]));
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<GoalResponse>?)null);
+
+        await trends.RefreshCommand.ExecuteAsync(null);
+
+        Assert.False(trends.HasTarget);
+        Assert.Equal(1d, Assert.Single(trends.Days).Fraction);
+    }
+
     private static (HomeViewModel Home, ITrackrApiClient Api) BuildHome()
     {
         var api = WithCatalog();

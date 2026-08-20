@@ -70,7 +70,49 @@
                                     VerticalOptions="End"
                                     HeightRequest="{Binding Fraction, Converter={StaticResource BarHeight}}"
                                     IsVisible="{Binding HasAnything}"
-                                    Color="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+                                    Color="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}">
+
+                                    <!-- The same vocabulary as the targets on Home: a ceiling passed
+                                         is a warning, a floor reached is done, and a day still short
+                                         of a floor is neither. -->
+                                    <BoxView.Triggers>
+                                        <DataTrigger
+                                            TargetType="BoxView"
+                                            Binding="{Binding IsDone}"
+                                            Value="True">
+                                            <Setter
+                                                Property="Color"
+                                                Value="{AppThemeBinding Light={StaticResource SuccessOnLight}, Dark={StaticResource Success}}" />
+                                        </DataTrigger>
+                                        <DataTrigger
+                                            TargetType="BoxView"
+                                            Binding="{Binding IsOver}"
+                                            Value="True">
+                                            <Setter
+                                                Property="Color"
+                                                Value="{AppThemeBinding Light={StaticResource WarningOnLight}, Dark={StaticResource Warning}}" />
+                                        </DataTrigger>
+                                    </BoxView.Triggers>
+
+                                </BoxView>
+
+                                <!-- The target line, drawn per column so that it crosses the whole
+                                     chart without the horizontal list needing an overlay. A
+                                     transparent block of exactly the target's height, with the line
+                                     itself sitting on top of it. -->
+                                <Grid
+                                    VerticalOptions="End"
+                                    HeightRequest="{Binding TargetFraction, Converter={StaticResource BarHeight}}"
+                                    IsVisible="{Binding HasTarget}"
+                                    InputTransparent="True">
+
+                                    <BoxView
+                                        VerticalOptions="Start"
+                                        HeightRequest="1"
+                                        Opacity="0.7"
+                                        Color="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+                                </Grid>
 
                                 <Label
                                     Grid.Row="1"
@@ -85,6 +127,15 @@
 
                 </CollectionView>
             </Border>
+
+            <!-- Which way the line reads. The same picture is a good week or a bad one depending
+                 on whether the target is a floor or a ceiling, so the line is never left to speak
+                 for itself. -->
+            <Label
+                Text="{Binding TargetCaption}"
+                Style="{StaticResource Caption}"
+                HorizontalOptions="Center"
+                IsVisible="{Binding HasTarget}" />
 
             <Label
                 Text="An average day"

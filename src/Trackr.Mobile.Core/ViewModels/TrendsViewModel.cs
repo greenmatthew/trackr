@@ -40,6 +40,33 @@ public sealed partial class TrendsViewModel(ITrackrApiClient api, NutrientCatalo
     [ObservableProperty]
     public partial int SelectedRange { get; set; }
 
+    /// <summary>
+    /// The daily energy target the chart is drawn against, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Energy alone, out of the whole set of targets. This is a chart of one number, and the bars
+    /// are kilocalories - a target for sodium has nothing to scale against here.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTarget))]
+    [NotifyPropertyChangedFor(nameof(TargetCaption))]
+    public partial GoalResponse? EnergyTarget { get; set; }
+
+    public bool HasTarget => EnergyTarget is not null;
+
+    /// <summary>
+    /// Says which way the target reads, because the line means opposite things either way.
+    /// </summary>
+    /// <remarks>
+    /// A line drawn without saying whether it is a floor or a ceiling would leave the bars above it
+    /// ambiguous - the same picture is a good week or a bad one depending on which it was.
+    /// </remarks>
+    public string TargetCaption => EnergyTarget is null
+        ? string.Empty
+        : EnergyTarget.Kind is GoalKind.AtMost
+            ? $"Target: at most {NutrientRows.Format(EnergyTarget.Target)} kcal a day"
+            : $"Target: at least {NutrientRows.Format(EnergyTarget.Target)} kcal a day";
+
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
 
@@ -92,15 +119,25 @@ public sealed partial class TrendsViewModel(ITrackrApiClient api, NutrientCatalo
 
             Stats = stats;
 
-            // Scaled against the biggest day rather than against a goal, because goals are
-            // milestone 12 and a bar chart with no ceiling has to pick one.
+            // The targets themselves rather than progress against them: progress is measured on one
+            // day, and this is a chart of thirty. Null when the server could not be asked, which
+            // draws the chart the way it drew before there were targets rather than claiming there
+            // are none.
+            EnergyTarget = (await api.GetGoalsAsync())
+                ?.FirstOrDefault(goal => goal.NutrientKey == CoreNutrients.EnergyKcal);
+
             var tallest = stats.Days.Count == 0 ? 0m : stats.Days.Max(day => day.EnergyKcal);
+
+            // The taller of the two, so both stay on the chart. Scaling to the target alone hides
+            // by how much a day went over; scaling to the tallest day alone puts the target line at
+            // the very top of a week that never came near it, which reads as "target reached".
+            var ceiling = EnergyTarget is null ? tallest : Math.Max(tallest, EnergyTarget.Target);
 
             Days.Clear();
 
             foreach (var day in stats.Days)
             {
-                Days.Add(new DayBar(day, tallest));
+                Days.Add(new DayBar(day, ceiling, EnergyTarget));
             }
 
             Nutrients.Clear();
@@ -137,18 +174,39 @@ public sealed partial class TrendsViewModel(ITrackrApiClient api, NutrientCatalo
 /// this project has no charting package - two dozen scaled rectangles is a smaller thing to own
 /// than a dependency, and "basic" is what the brief asked for.
 /// </remarks>
-/// <param name="Fraction">Zero to one, against the tallest day in the range.</param>
-public sealed record DayBar(DateOnly Day, decimal EnergyKcal, double Fraction, string Label)
+/// <param name="Fraction">Zero to one, against the chart's ceiling.</param>
+/// <param name="TargetFraction">
+/// Where the target line sits, on the same scale. Zero when there is no target - the same value
+/// every bar in a range carries, because the line is one line across the chart.
+/// </param>
+/// <param name="IsOver">Past a ceiling. The one combination that is bad news.</param>
+/// <param name="IsDone">A floor reached. Named as on Home, because it means the same thing.</param>
+public sealed record DayBar(
+    DateOnly Day,
+    decimal EnergyKcal,
+    double Fraction,
+    string Label,
+    double TargetFraction = 0d,
+    bool IsOver = false,
+    bool IsDone = false)
 {
-    public DayBar(DayTotals totals, decimal tallest)
+    public DayBar(DayTotals totals, decimal ceiling, GoalResponse? target = null)
         : this(
             totals.Day,
             totals.EnergyKcal,
-            tallest <= 0 ? 0d : (double)(totals.EnergyKcal / tallest),
-            totals.Day.ToString("d MMM"))
+            ceiling <= 0 ? 0d : (double)(totals.EnergyKcal / ceiling),
+            totals.Day.ToString("d MMM"),
+            ceiling <= 0 || target is null ? 0d : (double)(target.Target / ceiling),
+            // A day nobody logged is neither, whichever way the target reads. Nothing eaten sits
+            // under every ceiling, and drawing that as a day within target would be scoring a blank.
+            target is { Kind: GoalKind.AtMost } && totals.HasAnything && totals.EnergyKcal > target.Target,
+            target is { Kind: GoalKind.AtLeast } && totals.HasAnything && totals.EnergyKcal >= target.Target)
     {
     }
 
     /// <summary>Whether anything was logged, so a blank day can be drawn as a gap rather than a floor.</summary>
     public bool HasAnything => EnergyKcal > 0m;
+
+    /// <summary>Whether this column draws part of the target line.</summary>
+    public bool HasTarget => TargetFraction > 0d;
 }
