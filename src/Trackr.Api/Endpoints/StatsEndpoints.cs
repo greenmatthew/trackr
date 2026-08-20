@@ -44,13 +44,25 @@ public static class StatsEndpoints
 
     /// <param name="from">First local day to include. Defaults to today.</param>
     /// <param name="to">Last local day, inclusive. Defaults to <paramref name="from"/>.</param>
+    /// <param name="days">
+    /// A rolling window instead: the last N local days, ending today.
+    /// </param>
+    /// <remarks>
+    /// <strong><paramref name="days"/> exists so a client never has to know what day it is.</strong>
+    /// The server owns the day boundary because it follows the account's time zone rather than the
+    /// caller's, and a phone computing "seven days back from today" gets a different week whenever
+    /// the two are on opposite sides of midnight - which is not a rare case, it is most of every
+    /// evening. Found on the emulator: Home showed the 19th while Trends charted the 14th to the
+    /// 20th, and both were faithfully reporting a different idea of today.
+    /// </remarks>
     private static async Task<IResult> GetStatsAsync(
         DateOnly? from,
         DateOnly? to,
+        int? days,
         ClaimsPrincipal principal,
         UserManager<TrackrUser> userManager,
         TrackrDbContext db,
-        DayBoundary days,
+        DayBoundary boundary,
         CancellationToken cancellationToken)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -59,8 +71,26 @@ public static class StatsEndpoints
             return Results.Unauthorized();
         }
 
-        var firstDay = from ?? days.TodayFor(user);
-        var lastDay = to ?? firstDay;
+        if (days is not null && (from is not null || to is not null))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["days"] = ["Ask for a rolling window or for an explicit range, not both."]
+            });
+        }
+
+        if (days is < 1)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["days"] = ["A window has to be at least one day long."]
+            });
+        }
+
+        var today = boundary.TodayFor(user);
+
+        var lastDay = days is not null ? today : to ?? from ?? today;
+        var firstDay = days is { } window ? today.AddDays(-(window - 1)) : from ?? today;
 
         if (lastDay < firstDay)
         {
@@ -78,8 +108,8 @@ public static class StatsEndpoints
             });
         }
 
-        var (fromUtc, toUtc) = days.RangeFor(user, firstDay, lastDay);
-        var zone = days.ZoneFor(user);
+        var (fromUtc, toUtc) = boundary.RangeFor(user, firstDay, lastDay);
+        var zone = boundary.ZoneFor(user);
 
         // Item rows with their entry's timestamp and their nutrient map. Grouped by local day in
         // memory rather than in SQL: which day an instant belongs to is a question about a time

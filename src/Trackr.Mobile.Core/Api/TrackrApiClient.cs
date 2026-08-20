@@ -426,15 +426,21 @@ public sealed class TrackrApiClient(
         }
     }
 
-    public async Task<StatsResponse?> GetStatsAsync(
+    public Task<StatsResponse?> GetStatsAsync(
         DateOnly? from = null,
         DateOnly? to = null,
-        CancellationToken cancellationToken = default)
-    {
-        var query = from is null
-            ? string.Empty
-            : $"?from={from:yyyy-MM-dd}&to={to ?? from:yyyy-MM-dd}";
+        CancellationToken cancellationToken = default) =>
+        StatsAsync(
+            from is null ? string.Empty : $"?from={from:yyyy-MM-dd}&to={to ?? from:yyyy-MM-dd}",
+            cancellationToken);
 
+    public Task<StatsResponse?> GetRecentStatsAsync(
+        int days,
+        CancellationToken cancellationToken = default) =>
+        StatsAsync($"?days={days}", cancellationToken);
+
+    private async Task<StatsResponse?> StatsAsync(string query, CancellationToken cancellationToken)
+    {
         try
         {
             using var response = await http.GetAsync(Endpoint($"api/stats{query}"), cancellationToken);

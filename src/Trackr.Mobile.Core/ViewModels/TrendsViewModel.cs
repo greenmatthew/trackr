@@ -15,10 +15,8 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// trends, not analytics. What matters is that they exist and are honest about the days nobody
 /// logged.
 /// </remarks>
-public sealed partial class TrendsViewModel(
-    ITrackrApiClient api,
-    NutrientCatalogCache nutrients,
-    TimeProvider time) : ObservableObject
+public sealed partial class TrendsViewModel(ITrackrApiClient api, NutrientCatalogCache nutrients)
+    : ObservableObject
 {
     /// <summary>The two ranges offered, in days back from today inclusive.</summary>
     private static readonly (string Label, int Days)[] Ranges =
@@ -78,9 +76,12 @@ public sealed partial class TrendsViewModel(
             var catalog = await nutrients.EnsureLoadedAsync();
 
             var days = Ranges[Math.Clamp(SelectedRange, 0, Ranges.Length - 1)].Days;
-            var today = DateOnly.FromDateTime(time.GetUtcNow().Date);
 
-            var stats = await api.GetStatsAsync(today.AddDays(-(days - 1)), today);
+            // A window rather than two dates. The phone must not name a day: the server's idea of
+            // today follows the account's time zone, and the two disagree for most of every evening
+            // - which on the emulator showed up as Home reporting the 19th while this charted the
+            // 14th to the 20th, both of them faithful to a different clock.
+            var stats = await api.GetRecentStatsAsync(days);
 
             if (stats is null)
             {

@@ -78,20 +78,27 @@ public sealed class StatsViewModelTests
         Assert.Empty(home.Nutrients);
     }
 
+    /// <summary>
+    /// A window, never a pair of dates the phone worked out.
+    /// </summary>
+    /// <remarks>
+    /// The server's today follows the account's time zone, and the phone's does not. They disagree
+    /// for most of every evening - which on the emulator showed up as Home reporting the 19th while
+    /// Trends charted the 14th to the 20th, each faithful to a different clock.
+    /// </remarks>
     [Fact]
-    public async Task A_week_is_asked_for_as_seven_days_ending_today()
+    public async Task A_week_is_asked_for_without_the_phone_working_out_which_week()
     {
         var (trends, api) = BuildTrends();
 
-        api.GetStatsAsync(Arg.Any<DateOnly?>(), Arg.Any<DateOnly?>(), Arg.Any<CancellationToken>())
-            .Returns(Stats(Day()));
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Stats(Day()));
 
         await trends.RefreshCommand.ExecuteAsync(null);
 
-        await api.Received().GetStatsAsync(
-            new DateOnly(2026, 8, 13),
-            new DateOnly(2026, 8, 19),
-            Arg.Any<CancellationToken>());
+        await api.Received().GetRecentStatsAsync(7, Arg.Any<CancellationToken>());
+
+        await api.DidNotReceive().GetStatsAsync(
+            Arg.Any<DateOnly?>(), Arg.Any<DateOnly?>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -106,7 +113,7 @@ public sealed class StatsViewModelTests
     {
         var (trends, api) = BuildTrends();
 
-        api.GetStatsAsync(Arg.Any<DateOnly?>(), Arg.Any<DateOnly?>(), Arg.Any<CancellationToken>())
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(Stats(
                 Day(energyKcal: 6_000m),
                 daysLogged: 3,
@@ -128,7 +135,7 @@ public sealed class StatsViewModelTests
     {
         var (trends, api) = BuildTrends();
 
-        api.GetStatsAsync(Arg.Any<DateOnly?>(), Arg.Any<DateOnly?>(), Arg.Any<CancellationToken>())
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(Stats(
                 Day(energyKcal: 3_000m),
                 daysLogged: 2,
@@ -158,7 +165,7 @@ public sealed class StatsViewModelTests
     {
         var api = WithCatalog();
 
-        return (new TrendsViewModel(api, new NutrientCatalogCache(api), Clock), api);
+        return (new TrendsViewModel(api, new NutrientCatalogCache(api)), api);
     }
 
     private static ITrackrApiClient WithCatalog()

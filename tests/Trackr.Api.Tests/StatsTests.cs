@@ -163,6 +163,56 @@ public sealed class StatsTests(PostgresFixture postgres) : AuthTestBase(postgres
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    /// <summary>
+    /// A rolling window, so a client never has to know what day it is.
+    /// </summary>
+    /// <remarks>
+    /// The day boundary follows the account's time zone, and a phone working out "seven days back
+    /// from today" charts a different week whenever the two are on opposite sides of midnight -
+    /// which is most of every evening, and which the emulator duly showed.
+    /// </remarks>
+    [Fact]
+    public async Task A_window_of_days_ends_on_the_servers_today()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        await LogOnAsync(client, today, energyKcal: 1_000m);
+        await LogOnAsync(client, today.AddDays(-6), energyKcal: 2_000m);
+        await LogOnAsync(client, today.AddDays(-7), energyKcal: 4_000m);
+
+        var stats = (await client.GetFromJsonAsync<StatsResponse>("/api/stats?days=7"))!;
+
+        Assert.Equal(7, stats.Days.Count);
+        Assert.Equal(today, stats.To);
+
+        // The eighth day back falls outside the window, which is the point of the window.
+        Assert.Equal(3_000m, stats.Total.EnergyKcal);
+    }
+
+    [Fact]
+    public async Task A_window_and_a_range_cannot_both_be_asked_for()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        using var response = await client.GetAsync($"/api/stats?days=7&from={today:yyyy-MM-dd}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_window_of_no_days_is_refused()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        using var response = await client.GetAsync("/api/stats?days=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private static async Task LogAsync(HttpClient client, SaveLogEntryRequest request)
     {
         using var response = await client.PostAsJsonAsync("/api/log", request);

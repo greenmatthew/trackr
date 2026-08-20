@@ -394,6 +394,7 @@ Totals per local day, plus the range's total and its average. Defaults to today.
 | --- | --- | --- | --- |
 | `from` | query | no | string (date) |
 | `to` | query | no | string (date) |
+| `days` | query | no | integer or string (int32) |
 
 **Responses:** `200`
 

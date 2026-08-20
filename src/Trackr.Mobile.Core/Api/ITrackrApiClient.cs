@@ -97,6 +97,19 @@ public interface ITrackrApiClient
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The last <paramref name="days"/> local days, ending on the account's today.
+    /// </summary>
+    /// <remarks>
+    /// A window rather than a pair of dates, so the phone never has to know what day it is. The
+    /// server owns the day boundary because it follows the account's time zone, and a phone
+    /// computing "seven days back from today" charts a different week whenever the two are on
+    /// opposite sides of midnight - which is most of every evening.
+    /// </remarks>
+    Task<StatsResponse?> GetRecentStatsAsync(
+        int days,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Foods this account has logged before, most recently eaten first.
     /// </summary>
     /// <remarks>
