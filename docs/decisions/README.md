@@ -29,6 +29,7 @@ the wiki at `wiki/` instead, where the self-hoster can read it too. See CLAUDE.m
 | 11 — Stats views | [14-stats.md](14-stats.md) |
 | 12 — Goals | [15-goals.md](15-goals.md) |
 | 13 (part) — Per-user time zone | [16-time-zone.md](16-time-zone.md) |
+| 13 — The rest of the profile | [17-profile.md](17-profile.md) |
 
 A decision that is later reversed stays in its original file, with a note pointing at the
 record that superseded it. Deleting it would hide the reasoning that made the reversal

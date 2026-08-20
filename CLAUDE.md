@@ -375,6 +375,11 @@ migration and leaves most rows full of nulls. Instead:
 - Either way, **keep calories and protein/carbs/fat as first-class always-present fields** too
   — they drive the dashboard and goals math, and shouldn't need a join or a parse.
 - Every nutrient carries an explicit **unit**; never assume grams (vitamins are often mg or µg).
+- **A user's unit preference is a display choice and must never reach storage.** The API stores and
+  reports kilocalories and grams whatever an account prefers; the client converts on the way to the
+  screen and back. A stored figure that changed meaning when a setting changed would rewrite what
+  last month's chart said, which is the same thing the snapshot on a `LogItem` exists to prevent.
+  [17-profile.md](docs/decisions/17-profile.md).
 - Nutrients are frequently **unknown**. Store null/absent, distinguish "known to be zero" from
   "not measured," and show missing micros gracefully rather than as 0.
 - Keep the set **data-driven**, so adding "selenium" later is a data change, not a code change.
@@ -641,13 +646,28 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
     reporting one met on the strength of food nobody described would be the dishonest answer. The
     editor is a settings form, which §10 permits, on a route off Home rather than a fourth tab.
     **No targets is a perfectly good state** and draws nothing.
-    **Left open:** nothing suggests a target (needs §9.13's body metrics; a hand-typed one always
-    works), targets are per-day only, and Trends does not draw them.
-13. **User profile (LATE, potential)** — per-account settings beyond credentials: display name,
-    **time zone**, unit preferences (metric/imperial, kcal vs kJ), and optional body metrics.
-    Also the natural home for the account self-service milestone 2 left out — changing the
-    account email, exporting the account's data, deleting the account. Two parts are
-    load-bearing rather than cosmetic, so respect them earlier even though the milestone is late:
+    **Left open at the time, and two of the three closed since** by §9.13: a target can now be
+    suggested from body measurements (offered, never applied — a hand-typed one always works), and
+    Trends draws the energy target. Targets are still per-day only.
+13. ~~**User profile**~~ ✅ — [17-profile.md](docs/decisions/17-profile.md), and the time-zone
+    half early in [16-time-zone.md](docs/decisions/16-time-zone.md). Display name, unit
+    preferences, body metrics, and the account self-service milestone 2 left out.
+    **Units are a display preference and change nothing the API returns** — every total, target and
+    snapshot stays kilocalories, the client converts on the way to the screen, and nothing rounds on
+    the way out so an untouched figure round-trips exactly. **Imperial governs height and weight
+    only**: nutrition labels are metric everywhere, so ounces of protein would be a number on no
+    package. One read and three writes rather than a patch, because *clearing* a measurement has to
+    stay expressible. The estimate is Mifflin-St Jeor on the server (milestone 11's reason: one
+    answer) and is **declined rather than guessed** whenever an input is missing; `BiologicalSex` is
+    documented as the coefficient the equation has two of. **Changing an address is two steps** —
+    the address is the login and the only route back in through a reset — and confirming needs the
+    session as well as the link. The export describes what is *stored* and **lists photographs
+    rather than embedding them**. Deleting takes the account's own data and leaves the server's;
+    invite foreign keys became `SetNull` so the record of who invited whom survives the person,
+    while an unredeemed invite is revoked on the way out.
+    **Left open:** no physical-phone run, no import to match the export, weight is a value rather
+    than a series (§9.14), and the estimate suggests energy only.
+    Original wording, and the two parts it called load-bearing rather than cosmetic:
     - ~~**Time zone decides what "today" means.**~~ ✅ **Built early, as this entry asked** —
       [16-time-zone.md](docs/decisions/16-time-zone.md). The claim held: `ZoneFor` stopped returning
       UTC and the log range, the stats views and the goal progress all followed, with no other call
@@ -662,11 +682,15 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
       is one change rather than a rewrite of every aggregate. The phone knows its own zone,
       which is a tempting shortcut — but the *server* aggregates, so the zone must be stored per
       user rather than sent per request.
-    - **Body metrics feed the goal maths.** Goals can suggest a calorie target from BMR/TDEE
+    - ~~**Body metrics feed the goal maths.**~~ ✅ They do: *Start from that* on the targets
+      screen fills the energy row from the estimate, and a hand-typed target still works with or
+      without any measurements. Original wording:
+      **Body metrics feed the goal maths.** Goals can suggest a calorie target from BMR/TDEE
       instead of asking the user to invent a number. Goals must still accept a hand-typed
       target, so this is never a hard dependency.
 14. **Polish** — offline/queued logging when the phone has no connection, edit/delete entries,
-    richer charts, per-nutrient detail views, export, an admin page on the web app.
+    richer charts, per-nutrient detail views, a weight history to chart, an admin page on the web
+    app. (Exporting an account's data landed in §9.13; an *import* to match it has not.)
 
 ---
 
