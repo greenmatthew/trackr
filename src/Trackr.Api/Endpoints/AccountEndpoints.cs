@@ -34,6 +34,10 @@ public static class AccountEndpoints
 
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapPut("/api/account/timezone", SaveTimeZoneAsync)
+            .WithName("SaveTimeZone")
+            .WithSummary("Choose which zone this account's days are measured in.");
+
         app.MapPost("/api/account/password", ChangePasswordAsync)
             .RequireRateLimiting(RateLimitPolicies.Sensitive)
             .WithName("ChangePassword")
@@ -76,6 +80,54 @@ public static class AccountEndpoints
             .WithSummary("Remove the profile picture, falling back to initials.");
 
         return app;
+    }
+
+    /// <summary>
+    /// Sets the zone this account's days are measured in.
+    /// </summary>
+    /// <remarks>
+    /// Stored on the account rather than sent with each request, because the server aggregates -
+    /// CLAUDE.md section 9.13. A total has to agree with itself between the chat, the stats views
+    /// and the goals, and one client being in an airport must not move somebody's midnight.
+    /// <para>
+    /// Validated here, against this server's own zone database, which is the only one that
+    /// matters: a zone the phone knows and the server does not would silently become UTC, and the
+    /// day would quietly run on the wrong clock.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> SaveTimeZoneAsync(
+        SaveTimeZoneRequest request,
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var id = string.IsNullOrWhiteSpace(request.TimeZoneId) ? null : request.TimeZoneId.Trim();
+
+        if (!DayBoundary.IsKnownZone(id))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["timeZoneId"] = ["This server does not recognise that time zone."]
+            });
+        }
+
+        user.TimeZoneId = id;
+
+        var result = await userManager.UpdateAsync(user);
+
+        return result.Succeeded
+            ? Results.Ok(new MeResponse(
+                user.Id, user.Email!, user.TwoFactorEnabled, user.AvatarUpdatedUtc, user.TimeZoneId))
+            : Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["timeZoneId"] = [.. result.Errors.Select(error => error.Description)]
+            });
     }
 
     private static async Task<IResult> ChangePasswordAsync(

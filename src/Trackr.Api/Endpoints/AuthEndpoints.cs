@@ -495,7 +495,8 @@ public static class AuthEndpoints
             user.Id,
             user.Email!,
             user.TwoFactorEnabled,
-            user.AvatarUpdatedUtc));
+            user.AvatarUpdatedUtc,
+            user.TimeZoneId));
     }
 
     private static async Task<IResult> ForgotPasswordAsync(

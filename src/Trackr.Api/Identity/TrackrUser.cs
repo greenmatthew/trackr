@@ -29,6 +29,22 @@ public class TrackrUser : IdentityUser<Guid>
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
+    /// The IANA zone the account's days are measured in - "Europe/London". Null means UTC.
+    /// </summary>
+    /// <remarks>
+    /// <strong>On the user rather than sent with each request, and CLAUDE.md section 9.13 says why:
+    /// the server aggregates.</strong> The phone knows its own zone, which is the tempting
+    /// shortcut, but a total is computed here and has to agree with itself between the chat, the
+    /// stats views, the goals and whatever asks next. One of those clients being in an airport
+    /// must not move somebody's midnight.
+    /// <para>
+    /// Nullable rather than defaulted to a string, so "never set" stays distinguishable from
+    /// "deliberately UTC". <see cref="Time.DayBoundary"/> is the only thing that reads it.
+    /// </para>
+    /// </remarks>
+    public string? TimeZoneId { get; set; }
+
+    /// <summary>
     /// When the profile picture last changed, or null if there is none.
     /// </summary>
     /// <remarks>

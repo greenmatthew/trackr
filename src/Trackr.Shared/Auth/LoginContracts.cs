@@ -105,4 +105,31 @@ public sealed record MeResponse(
     Guid UserId,
     string Email,
     bool TwoFactorEnabled,
-    DateTimeOffset? AvatarUpdatedUtc = null);
+    DateTimeOffset? AvatarUpdatedUtc = null,
+
+    /// <summary>
+    /// The IANA zone this account's days are measured in, or null for UTC.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the account rather than fetched separately because a client that wants to offer
+    /// to change it needs to know what it currently is, and every client already asks for this.
+    /// </remarks>
+    string? TimeZoneId = null);
+
+/// <summary>Choosing which zone an account's days are measured in.</summary>
+/// <remarks>
+/// Its own request rather than part of a general profile update, because milestone 13's other
+/// settings do not exist yet and a partial update shape would have to be redesigned when they do.
+/// </remarks>
+public sealed class SaveTimeZoneRequest
+{
+    /// <summary>
+    /// An IANA zone id - "Europe/London", "America/New_York" - or null for UTC.
+    /// </summary>
+    /// <remarks>
+    /// Validated against the server's own zone database, which is the only thing that matters:
+    /// a zone the client knows and the server does not would silently become UTC.
+    /// </remarks>
+    [StringLength(100)]
+    public string? TimeZoneId { get; set; }
+}

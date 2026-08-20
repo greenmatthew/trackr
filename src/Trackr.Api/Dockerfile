@@ -25,6 +25,15 @@ RUN dotnet publish src/Trackr.Api/Trackr.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 WORKDIR /app
 
+# The time zone database, which the alpine runtime image does not ship. Without it
+# TimeZoneInfo.FindSystemTimeZoneById throws for every named zone, so a per-user time zone -
+# milestone 13, and what decides which calendar day a meal belongs to - would fail on the
+# deployed server while working on every developer machine. About 2 MB.
+#
+# InvariantGlobalization stays on: it governs ICU and culture data, not tzdata, so the two are
+# unrelated despite both sounding like "locale support".
+RUN apk add --no-cache tzdata
+
 COPY --from=build /app/publish .
 
 # Plain HTTP: TLS is terminated by nginx and by the user's reverse proxy upstream.

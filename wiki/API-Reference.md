@@ -70,6 +70,14 @@ Change the password, re-checking the current one first.
 
 **Responses:** `200`
 
+### `PUT /api/account/timezone`
+
+Choose which zone this account's days are measured in.
+
+**Request body:** `application/json` → [`SaveTimeZoneRequest`](#savetimezonerequest)
+
+**Responses:** `200`
+
 ## Analyze
 
 ### `POST /api/analyze`
@@ -580,6 +588,12 @@ No properties.
 | `ingredientsText` | string, nullable | no |
 | `allergens` | array of string | no |
 | `dietFlags` | array of string | no |
+
+### `SaveTimeZoneRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `timeZoneId` | string, nullable | no |
 
 ### `TokenRequest`
 

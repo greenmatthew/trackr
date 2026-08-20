@@ -24,22 +24,50 @@ namespace Trackr.Api.Time;
 public sealed class DayBoundary(TimeProvider time)
 {
     /// <summary>
-    /// The zone a user's days are measured in. UTC, for now.
+    /// The zone a user's days are measured in, falling back to UTC.
     /// </summary>
     /// <remarks>
-    /// This is the one place both a server-wide setting and milestone 13's
-    /// <c>TrackrUser.TimeZoneId</c> will land. There is deliberately no configuration knob yet:
-    /// section 9.13 permits "UTC or a single configured server zone", and a
-    /// <c>TRACKR_TIMEZONE</c> variable would oblige <c>wiki/Configuration.md</c> and
-    /// <c>docker/.env.example</c> - both enforced by Trackr.Docs.Tests - for a setting nothing can
-    /// visibly use until the stats views exist.
+    /// The single place that answers "which day is this instant in", which is what made milestone
+    /// 13's per-user zone one change here rather than a rewrite of every aggregate. Everything that
+    /// totals a day - the log range, the stats views, the goal progress - goes through this.
     /// <para>
-    /// One thing for milestone 13 to check rather than discover: this project sets
-    /// <c>InvariantGlobalization</c>, and resolving a named zone needs the tz database to be
-    /// present in the runtime image. <see cref="TimeZoneInfo.Utc"/> needs neither.
+    /// <strong>An unrecognised zone falls back to UTC rather than throwing.</strong> The value
+    /// arrives from a client and the tz database moves underneath a deployment: a zone that is
+    /// renamed or dropped between releases must not turn every request for a total into a 500. It
+    /// is validated when it is set, which is where a person is present to be told.
+    /// </para>
+    /// <para>
+    /// The runtime image installs <c>tzdata</c> for this. The alpine base does not ship it, and
+    /// without it every named zone throws - on the deployed server only, while working on every
+    /// developer machine. <c>InvariantGlobalization</c> is unrelated: it governs ICU and culture
+    /// data rather than the zone database, despite both sounding like locale support.
     /// </para>
     /// </remarks>
-    public TimeZoneInfo ZoneFor(TrackrUser user) => TimeZoneInfo.Utc;
+    public TimeZoneInfo ZoneFor(TrackrUser user) => Resolve(user.TimeZoneId);
+
+    /// <summary>
+    /// Whether this server can make sense of a zone id.
+    /// </summary>
+    /// <remarks>
+    /// Asked at the moment a zone is chosen rather than at the moment a total is wanted, so a
+    /// mistyped zone is a message on a settings screen instead of a day that quietly runs on the
+    /// wrong clock.
+    /// </remarks>
+    public static bool IsKnownZone(string? id) => id is null || Find(id) is not null;
+
+    private static TimeZoneInfo Resolve(string? id) => (id is null ? null : Find(id)) ?? TimeZoneInfo.Utc;
+
+    private static TimeZoneInfo? Find(string id)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(id);
+        }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>The calendar day it currently is, for this user.</summary>
     public DateOnly TodayFor(TrackrUser user) =>
