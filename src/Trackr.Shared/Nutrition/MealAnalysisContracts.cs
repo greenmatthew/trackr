@@ -70,7 +70,17 @@ public enum AnalyzedItemSource
     DatabaseAndModel,
 
     /// <summary>The model alone, from a photo or from what the user typed. An estimate.</summary>
-    Model
+    Model,
+
+    /// <summary>
+    /// Copied from something this account logged before and confirmed at the time.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="Database"/>, which would badge it with trust it has not earned:
+    /// these numbers are as good as whatever produced them the first time, which may well have been
+    /// the model. What it does say is that a person has already looked at them once.
+    /// </remarks>
+    PreviouslyLogged
 }
 
 /// <summary>How much the server thinks an item's numbers hold together.</summary>

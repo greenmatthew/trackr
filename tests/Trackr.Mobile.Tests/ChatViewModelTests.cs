@@ -464,6 +464,22 @@ public sealed class ChatViewModelTests
     }
 
     /// <remarks>
+    /// SourceDescription ends in a catch-all arm reading "estimated", so a new source silently
+    /// becomes an estimate rather than failing to compile. This is the test that notices.
+    /// </remarks>
+    [Theory]
+    [InlineData(AnalyzedItemSource.Database, "from Open Food Facts")]
+    [InlineData(AnalyzedItemSource.DatabaseAndModel, "Open Food Facts, gaps estimated")]
+    [InlineData(AnalyzedItemSource.PreviouslyLogged, "logged before")]
+    [InlineData(AnalyzedItemSource.Model, "estimated")]
+    public void Every_source_says_where_its_numbers_came_from(AnalyzedItemSource source, string expected)
+    {
+        var item = new ConfirmableItem(Analysed() with { Source = source }, nutrientCatalog: null);
+
+        Assert.Equal(expected, item.SourceDescription);
+    }
+
+    /// <remarks>
     /// The barcode is never drawn - section 1 keeps it invisible - but it has to survive the trip
     /// from the analysis to the save, because it is the key the server files the item away under.
     /// </remarks>

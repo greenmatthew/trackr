@@ -130,3 +130,24 @@ public sealed record LogItemResponse(
     decimal CarbohydrateG,
     decimal ProteinG,
     IReadOnlyDictionary<string, decimal> Nutrients);
+
+/// <summary>One food this account has logged before, ready to be logged again.</summary>
+/// <remarks>
+/// <strong>It carries a <see cref="MealAnalysisItem"/> rather than a shape of its own</strong>, and
+/// that is the whole design. The chat already renders one, already lets the user correct one and
+/// already confirms one into <c>POST /api/log</c>; a flat DTO plus a mapper would be a second place
+/// for a number to change between what was stored and what is offered back, which is the thing
+/// milestone 9 went out of its way to avoid.
+/// <para>
+/// The values on it are <em>per serving</em>, recovered by dividing the stored totals by the
+/// quantity they were stored with. That division is rounded to what the column keeps, so three
+/// servings of 100 kcal come back as 99.9999 rather than 100 - a tenth of a kilocalorie across a
+/// meal, and the price of storing totals, which is a trade CLAUDE.md section 7 already made.
+/// </para>
+/// </remarks>
+/// <param name="LastLoggedUtc">When it was last eaten, not when the row was written.</param>
+/// <param name="TimesLogged">How many of the recent entries scanned held this food.</param>
+public sealed record RecentItemResponse(
+    DateTimeOffset LastLoggedUtc,
+    int TimesLogged,
+    MealAnalysisItem Item);

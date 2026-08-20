@@ -73,6 +73,7 @@ public sealed partial class ConfirmableItem : ObservableObject
     {
         AnalyzedItemSource.Database => "from Open Food Facts",
         AnalyzedItemSource.DatabaseAndModel => "Open Food Facts, gaps estimated",
+        AnalyzedItemSource.PreviouslyLogged => "logged before",
         _ => "estimated"
     };
 
