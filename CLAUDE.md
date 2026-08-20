@@ -611,10 +611,20 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
       - Keep it to parts 1 and 2 unless a real question needs part 3. "Which of my regular foods
         contain palm oil" is answerable from part 2; "how much sunflower lecithin did I eat in
         March" is what part 3 buys, and is a question nobody has actually asked.
-11. **Stats views (REQUIRED)** — the output surface from §1, a tab in the app. "Today so far"
-    running totals (calories + full nutrient breakdown, updating as entries are confirmed),
-    then week/month summaries with basic trend charts. Aggregations read from the nutrient
-    snapshots on LogItems. Core, not polish — build it before goals.
+11. ~~**Stats views**~~ ✅ — [14-stats.md](docs/decisions/14-stats.md). Home is today's totals,
+    Trends is the week and the month with a bar per day. One route, `GET /api/stats`, because the
+    three views differ only in how many days were asked for.
+    **The day boundary belongs to the server, and this milestone had to enforce that twice.**
+    Grouping into local days happens in memory rather than with `date_trunc`, so there is only one
+    answer to "which day is this instant in" — and **a client may not name a day at all**: Trends
+    computed its range from the phone's clock, which put Home on the 19th and the chart on the
+    20th, both faithful to different clocks. `?days=N` removes the phone's clock from the question
+    rather than correcting for it, which matters because a correction would have to be redone when
+    §9.13 lands. Home's heading had the same bug and now comes from the same answer as its numbers.
+    Summed from snapshots and never through `FoodItemId`; empty days come back as days; a nutrient
+    nobody reported stays absent. The average divides by **days logged**, not by the length of the
+    range, and the screen says so. The chart is scaled rectangles rather than a package.
+    **Left open:** the zone is still UTC (§9.13), and nothing compares a number to a target yet.
 12. **Goals (LATE)** — calorie / macro / specific-nutrient targets and progress against them,
     layered on top of the stats views.
 13. **User profile (LATE, potential)** — per-account settings beyond credentials: display name,
