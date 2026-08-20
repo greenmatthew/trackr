@@ -384,6 +384,19 @@ Every nutrient the server can record, in nutrition-label order.
 
 **Responses:** `200`
 
+## Stats
+
+### `GET /api/stats`
+
+Totals per local day, plus the range's total and its average. Defaults to today.
+
+| Parameter | In | Required | Type |
+| --- | --- | --- | --- |
+| `from` | query | no | string (date) |
+| `to` | query | no | string (date) |
+
+**Responses:** `200`
+
 ## Schemas
 
 The request and response shapes above. These are the DTOs in `Trackr.Shared`, which the web app and the Android app reference directly rather than generating a client from this document.

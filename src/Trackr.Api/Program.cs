@@ -285,6 +285,7 @@ app.MapNutrientEndpoints();
 app.MapFoodEndpoints();
 app.MapImageEndpoints();
 app.MapLogEndpoints();
+app.MapStatsEndpoints();
 app.MapLookupEndpoints();
 app.MapAnalyzeEndpoints();
 
