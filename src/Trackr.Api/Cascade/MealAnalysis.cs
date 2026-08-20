@@ -138,4 +138,5 @@ public sealed record ModelItem(
     decimal ProteinG,
     IReadOnlyDictionary<string, decimal> Nutrients,
     AnalysisConfidence Confidence,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    string? IngredientsText = null);

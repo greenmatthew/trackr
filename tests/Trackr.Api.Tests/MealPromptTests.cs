@@ -339,4 +339,80 @@ public sealed class MealPromptTests
             .GetField(unit.ToString())!
             .GetCustomAttribute<JsonStringEnumMemberNameAttribute>()!
             .Name;
+
+    /// <summary>
+    /// The ingredient field is only offered where it could actually land somewhere.
+    /// </summary>
+    /// <remarks>
+    /// A list is filed onto a catalog row, a row is only created for an item with a barcode, and a
+    /// barcode item came from Open Food Facts - so the only gap the model can fill is a product OFF
+    /// knew but had no ingredients for. Asking otherwise spends output tokens on a paragraph with
+    /// nowhere to go, and lengthens the one reply that fails entirely if it runs out of room.
+    /// </remarks>
+    [Fact]
+    public void An_ingredient_list_is_not_asked_for_when_nothing_could_use_one()
+    {
+        var schema = MealPrompt.Schema(_catalog, Request());
+
+        Assert.False(ItemProperties(schema).ContainsKey("ingredientsText"));
+    }
+
+    [Fact]
+    public void A_partial_match_with_no_ingredients_is_asked_for_them()
+    {
+        var schema = MealPrompt.Schema(_catalog, Request(Partial(ingredients: null)));
+
+        Assert.True(ItemProperties(schema).ContainsKey("ingredientsText"));
+        Assert.Contains("INGREDIENTS", MealPrompt.SystemMessage(_catalog, Request(Partial(ingredients: null))), StringComparison.Ordinal);
+    }
+
+    /// <remarks>
+    /// Open Food Facts already has the manufacturer's own words, so asking the model to read them
+    /// again off a photograph is tokens spent to get the same list back in a worse copy.
+    /// </remarks>
+    [Fact]
+    public void A_partial_match_that_already_has_ingredients_is_not_asked_again()
+    {
+        var schema = MealPrompt.Schema(_catalog, Request(Partial(ingredients: "Oats, sugar.")));
+
+        Assert.False(ItemProperties(schema).ContainsKey("ingredientsText"));
+    }
+
+    /// <remarks>
+    /// A full match's photograph is never sent, so the model has no label to read.
+    /// </remarks>
+    [Fact]
+    public void A_full_match_is_never_asked_for_an_ingredient_list()
+    {
+        var schema = MealPrompt.Schema(_catalog, Request(Complete()));
+
+        Assert.False(ItemProperties(schema).ContainsKey("ingredientsText"));
+    }
+
+    private static JsonObject ItemProperties(JsonObject schema) =>
+        schema["properties"]!["items"]!["items"]!["properties"]!.AsObject();
+
+    private static MealAnalysisRequest Request(params KnownProduct[] known) =>
+        new("a meal", known, [], []);
+
+    private static KnownProduct Partial(string? ingredients) =>
+        new("p1", Guid.NewGuid(), Complete: false, Draft(ingredients));
+
+    private static KnownProduct Complete() =>
+        new("p1", Guid.NewGuid(), Complete: true, Draft(null));
+
+    private static ProductDraft Draft(string? ingredients) =>
+        new(
+            "3017620422003",
+            "Stub spread",
+            "Stub",
+            100m,
+            "g",
+            ServingBasis.ReferenceQuantityAsServing,
+            539m,
+            30.9m,
+            57.5m,
+            6.3m,
+            new Dictionary<string, decimal>(StringComparer.Ordinal),
+            IngredientsText: ingredients);
 }

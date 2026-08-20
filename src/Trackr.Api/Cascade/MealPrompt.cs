@@ -62,6 +62,18 @@ public static class MealPrompt
 
     private const int MaxNoteLength = 300;
 
+    /// <summary>
+    /// How much ingredient list the model is allowed to copy.
+    /// </summary>
+    /// <remarks>
+    /// Far below the column's 4 000, and the reason is the output budget rather than the column. An
+    /// ingredient paragraph is the longest thing a reply can contain, and a reply that runs out of
+    /// room fails <em>entirely</em> - <c>done_reason: length</c> loses the calories along with the
+    /// list. Six hundred characters covers the great majority of real labels while leaving the rest
+    /// of the reply room to finish.
+    /// </remarks>
+    private const int MaxIngredientsLength = 600;
+
     /// <summary>A kilogram of butter is about 7 200 kcal, so nothing real reaches this.</summary>
     private const int MaxEnergyKcal = 20_000;
 
@@ -190,6 +202,16 @@ public static class MealPrompt
             }
         };
 
+        // Only asked for when it can actually land somewhere, which is narrower than it sounds. An
+        // ingredient list is filed onto a catalog row, a row is only created for an item with a
+        // barcode, and a barcode item came from Open Food Facts - so the only gap the model can
+        // fill is a product OFF knew but had no ingredients for. Asking otherwise would spend
+        // output tokens, and risk the truncation above, for a paragraph with nowhere to go.
+        if (WantsIngredients(request))
+        {
+            item["properties"]!["ingredientsText"] = Text(0, MaxIngredientsLength);
+        }
+
         return new JsonObject
         {
             ["type"] = "object",
@@ -219,6 +241,50 @@ public static class MealPrompt
             return schema;
         }
     }
+
+    /// <summary>
+    /// The ingredient-list instruction, present only when the field is.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Copy or omit, never abridge.</strong> The field is bounded, so a list that does not
+    /// fit would otherwise come back cut off mid-word - and a partial ingredient list is worse than
+    /// none, because it reads as complete. A small model will not always obey this; what makes the
+    /// instruction worth giving is that the alternative is to obey it never.
+    /// </remarks>
+    private static void AppendIngredientInstructions(StringBuilder prompt, MealAnalysisRequest request)
+    {
+        if (!WantsIngredients(request))
+        {
+            return;
+        }
+
+        prompt.AppendLine(
+            """
+            INGREDIENTS
+            If a package in the photograph prints an ingredient list, copy it into ingredientsText
+            exactly as printed, including any "contains" line. Do not translate it, reorder it,
+            summarise it or tidy up its punctuation.
+
+            If it will not fit, leave the field out altogether. A list cut off part way reads as a
+            complete one, which is worse than having none.
+
+            Leave it out for anything not sold in a package. A plate of food has no ingredient list.
+            """);
+
+        prompt.AppendLine();
+    }
+
+    /// <summary>
+    /// Whether any product in this request is one the model could supply an ingredient list for.
+    /// </summary>
+    /// <remarks>
+    /// A fully matched product's photograph is never sent, so the model could not read a label it
+    /// has not seen. A partial match's photograph is already going, which is what makes this free
+    /// apart from the reply it lengthens.
+    /// </remarks>
+    private static bool WantsIngredients(MealAnalysisRequest request) =>
+        request.KnownProducts.Any(product =>
+            !product.Complete && string.IsNullOrWhiteSpace(product.Draft.IngredientsText));
 
     /// <summary>The instructions, assembled for this particular request.</summary>
     public static string SystemMessage(NutrientCatalog catalog, MealAnalysisRequest request)
@@ -276,6 +342,7 @@ public static class MealPrompt
         }
 
         prompt.AppendLine();
+        AppendIngredientInstructions(prompt, request);
         AppendKnownProducts(prompt, catalog, request);
         AppendEarlierProblems(prompt, request);
 

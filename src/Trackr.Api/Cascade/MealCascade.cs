@@ -252,10 +252,12 @@ public sealed class MealCascade(
             // keeps them, because there its figures partly survived.
             Warnings: complete ? [] : item?.Warnings ?? [],
 
-            // Always the database's, never the model's, and on a partial match too. What a product
-            // contains is a fact about a formulation, and OFF has the manufacturer's own words for
-            // it where it has anything at all.
-            IngredientsText: draft.IngredientsText,
+            // The database's words where it has any, because they are the manufacturer's. Where it
+            // has none, a partial match's photograph was sent anyway and the model may have read
+            // the label - which is the one gap milestone 10a's part one left open. A full match is
+            // never topped up this way: its photograph was withheld, so anything the model offered
+            // for it is about some other food.
+            IngredientsText: draft.IngredientsText ?? (complete ? null : item?.IngredientsText),
             Allergens: draft.Allergens,
             DietFlags: draft.DietFlags);
     }
@@ -276,7 +278,12 @@ public sealed class MealCascade(
             CarbohydrateG: item.CarbohydrateG,
             ProteinG: item.ProteinG,
             Nutrients: item.Nutrients,
-            Warnings: item.Warnings);
+            Warnings: item.Warnings,
+
+            // Shown, but filed nowhere: an item with no barcode creates no catalog row for it to
+            // live on. The prompt only asks for one when a partial match could use it, so this is
+            // the model volunteering rather than being asked.
+            IngredientsText: item.IngredientsText);
 
     /// <summary>
     /// Drops repeats while keeping the order.

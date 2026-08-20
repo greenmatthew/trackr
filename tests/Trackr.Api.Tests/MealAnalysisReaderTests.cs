@@ -450,6 +450,33 @@ public sealed class MealAnalysisReaderTests
     /// <remarks>
     /// An ordinary meal of several courses must not trip the meal ceiling, or the flag stops
     /// meaning anything.
+    /// <summary>Milestone 10a: a list the model copied off a label.</summary>
+    [Fact]
+    public void An_ingredient_list_is_kept_as_the_model_copied_it()
+    {
+        var reading = Read(Reply(
+            """{"productRef":"none","name":"Toast","quantity":1,"energyKcal":80,"fatG":1,"carbohydrateG":15,"proteinG":3,"ingredientsText":"Wholemeal flour, water, yeast, salt."}"""));
+
+        Assert.Equal("Wholemeal flour, water, yeast, salt.", Assert.Single(reading.Items).IngredientsText);
+    }
+
+    /// <remarks>
+    /// The opposite of what every other text field here does, and deliberately: a name cut short is
+    /// still recognisably that food, while an ingredient list cut short is a claim that the food
+    /// contains only its first few ingredients.
+    /// </remarks>
+    [Fact]
+    public void An_ingredient_list_too_long_to_be_complete_is_dropped_rather_than_truncated()
+    {
+        var reading = Read(Reply(
+            $$"""{"productRef":"none","name":"Toast","quantity":1,"energyKcal":80,"fatG":1,"carbohydrateG":15,"proteinG":3,"ingredientsText":"{{new string('x', 700)}}"}"""));
+
+        var item = Assert.Single(reading.Items);
+
+        Assert.Null(item.IngredientsText);
+        Assert.Contains(item.Warnings, warning => warning.Contains("too long", StringComparison.Ordinal));
+    }
+
     private ModelReading Read(string content, string? doneReason = "stop") =>
         MealAnalysisReader.Read(content, doneReason, _catalog, Products);
 

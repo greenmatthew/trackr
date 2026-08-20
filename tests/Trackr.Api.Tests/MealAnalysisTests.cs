@@ -221,6 +221,55 @@ public sealed class MealAnalysisTests(PostgresFixture postgres) : AuthTestBase(p
     }
 
     /// <summary>
+    /// The gap milestone 10a part one left: Open Food Facts knew the product but not what is in it.
+    /// </summary>
+    /// <remarks>
+    /// A partial match's photograph is sent anyway, so the label is in front of the model already.
+    /// This is the only place a model-read ingredient list reaches a catalog row, because a row is
+    /// only ever created for an item with a barcode.
+    /// </remarks>
+    [Fact]
+    public async Task A_partial_match_takes_the_models_ingredient_list()
+    {
+        using var client = await SignedInClientAsync(
+            StubLookup.Partial(),
+            StubAnalyzer.Reading(productRef: "p1", ingredients: "Hazelnuts, sugar, palm oil."));
+
+        var id = await UploadAsync(client, RenderBarcode(Barcode));
+
+        var response = await client.PostAsJsonAsync(
+            "/api/analyze", new AnalyzeMealRequest { ImageIds = [id] });
+
+        var analysis = await response.Content.ReadFromJsonAsync<MealAnalysisResult>();
+
+        var item = Assert.Single(analysis!.Items);
+
+        Assert.Equal(AnalyzedItemSource.DatabaseAndModel, item.Source);
+        Assert.Equal("Hazelnuts, sugar, palm oil.", item.IngredientsText);
+    }
+
+    /// <remarks>
+    /// A full match's photograph is withheld, so anything the model offered for it is about some
+    /// other food it was told about in text.
+    /// </remarks>
+    [Fact]
+    public async Task A_full_match_never_takes_the_models_ingredient_list()
+    {
+        using var client = await SignedInClientAsync(
+            StubLookup.Matched(),
+            StubAnalyzer.Reading(productRef: "p1", ingredients: "Something the model made up."));
+
+        var id = await UploadAsync(client, RenderBarcode(Barcode));
+
+        var response = await client.PostAsJsonAsync(
+            "/api/analyze", new AnalyzeMealRequest { ImageIds = [id] });
+
+        var analysis = await response.Content.ReadFromJsonAsync<MealAnalysisResult>();
+
+        Assert.Null(Assert.Single(analysis!.Items).IngredientsText);
+    }
+
+    /// <summary>
     /// The one complaint about a matched product that must survive: the quantity is the only
     /// number the model still contributes.
     /// </summary>
@@ -375,6 +424,25 @@ public sealed class MealAnalysisTests(PostgresFixture postgres) : AuthTestBase(p
                     ["sugars"] = 56.3m
                 })));
 
+        /// <summary>
+        /// Found, with figures, but nothing about what is in it - the gap the model can fill.
+        /// </summary>
+        public static StubLookup Partial() =>
+            new(ProductLookupResult.Partial(
+                new ProductDraft(
+                    Barcode: Barcode,
+                    Name: "Stub spread",
+                    Brand: "Stub",
+                    ServingSize: 100m,
+                    ServingUnit: "g",
+                    ServingBasis: ServingBasis.ReferenceQuantityAsServing,
+                    EnergyKcal: 539m,
+                    FatG: 30.9m,
+                    CarbohydrateG: 57.5m,
+                    ProteinG: null,
+                    Nutrients: new Dictionary<string, decimal>(StringComparer.Ordinal)),
+                ["The food database did not have the protein."]));
+
         public static StubLookup Failing(string reason) => new(ProductLookupResult.Failed(reason));
     }
 
@@ -389,7 +457,8 @@ public sealed class MealAnalysisTests(PostgresFixture postgres) : AuthTestBase(p
             string? productRef = null,
             decimal energyKcal = 80m,
             string? warning = null,
-            decimal quantity = 1m) =>
+            decimal quantity = 1m,
+            string? ingredients = null) =>
             new(ModelReading.Read([
                 new ModelItem(
                     ProductReference: productRef,
@@ -404,7 +473,8 @@ public sealed class MealAnalysisTests(PostgresFixture postgres) : AuthTestBase(p
                     ProteinG: 3m,
                     Nutrients: new Dictionary<string, decimal>(StringComparer.Ordinal),
                     Confidence: AnalysisConfidence.Normal,
-                    Warnings: warning is null ? [] : [warning])
+                    Warnings: warning is null ? [] : [warning],
+                    IngredientsText: ingredients)
             ]));
 
         public static StubAnalyzer Failing(string reason) => new(ModelReading.Failed(reason));

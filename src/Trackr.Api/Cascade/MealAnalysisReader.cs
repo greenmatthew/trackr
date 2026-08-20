@@ -107,6 +107,15 @@ public static class MealAnalysisReader
 
     private const int MaxUnitLength = 32;
 
+    /// <summary>
+    /// What the prompt allows the model to copy, matched here so the two cannot drift.
+    /// </summary>
+    /// <remarks>
+    /// Truncating rather than dropping would be wrong for this one field: a shortened ingredient
+    /// list reads as a complete one. Anything over the bound is discarded outright.
+    /// </remarks>
+    private const int MaxIngredientsLength = 600;
+
     /// <summary>Ollama's <c>done_reason</c> when generation hit the output cap.</summary>
     private const string TruncatedReason = "length";
 
@@ -312,9 +321,39 @@ public static class MealAnalysisReader
             ProteinG: proteinG,
             Nutrients: nutrients,
             Confidence: confidence,
-            Warnings: warnings);
+            Warnings: warnings,
+            IngredientsText: ReadIngredients(element, name, warnings));
 
         return true;
+    }
+
+    /// <summary>
+    /// The ingredient list the model copied off a label, if it copied one that fits.
+    /// </summary>
+    /// <remarks>
+    /// Dropped rather than truncated when it is too long, which is the opposite of what every
+    /// other text field here does. A name cut short is still recognisably that food; an ingredient
+    /// list cut short is a claim that the food contains only its first few ingredients.
+    /// </remarks>
+    private static string? ReadIngredients(JsonElement element, string name, List<string> warnings)
+    {
+        var text = Text(element, "ingredientsText");
+
+        if (text is null)
+        {
+            return null;
+        }
+
+        if (text.Length <= MaxIngredientsLength)
+        {
+            return text;
+        }
+
+        warnings.Add(
+            $"The ingredient list the local model read for {name} was too long to be sure it was "
+                + "complete, so it was left out.");
+
+        return null;
     }
 
     private static string? ReadProductReference(
