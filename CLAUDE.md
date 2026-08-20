@@ -648,7 +648,15 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
     Also the natural home for the account self-service milestone 2 left out — changing the
     account email, exporting the account's data, deleting the account. Two parts are
     load-bearing rather than cosmetic, so respect them earlier even though the milestone is late:
-    - **Time zone decides what "today" means.** The stats views total a *local* day while the
+    - ~~**Time zone decides what "today" means.**~~ ✅ **Built early, as this entry asked** —
+      [16-time-zone.md](docs/decisions/16-time-zone.md). The claim held: `ZoneFor` stopped returning
+      UTC and the log range, the stats views and the goal progress all followed, with no other call
+      site touched. The zone lives on the account, never travels with a request, and the phone's own
+      zone is *offered* on the profile rather than used. **The trap `DayBoundary` flagged was real:**
+      the alpine runtime image ships no tz database, so every named zone threw — on the deployed
+      server only. It now installs `tzdata`; `InvariantGlobalization` was a red herring and stays on.
+      The rest of this milestone is untouched. Original wording:
+      **Time zone decides what "today" means.** The stats views total a *local* day while the
       server stores UTC. Until a per-user zone exists, keep the day boundary in exactly one
       helper (defaulting to UTC or a single configured server zone) so making it per-user later
       is one change rather than a rewrite of every aggregate. The phone knows its own zone,

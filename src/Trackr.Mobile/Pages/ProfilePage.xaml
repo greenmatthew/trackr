@@ -107,8 +107,11 @@
                     <Label Text="Your days are measured in" Style="{StaticResource FieldLabel}" />
                     <Label Text="{Binding TimeZoneDescription}" Style="{StaticResource Body}" />
 
+                    <!-- No apostrophe in the format string: a single-quoted XAML attribute cuts
+                         the value there even when it is escaped, which showed up on the device as
+                         a button reading "Use this phone". -->
                     <Button
-                        Text="{Binding DeviceTimeZoneId, StringFormat='Use this phone&apos;s zone ({0})'}"
+                        Text="{Binding DeviceTimeZoneId, StringFormat='Use this phone: {0}'}"
                         AutomationId="UseDeviceTimeZone"
                         IsVisible="{Binding CanUseDeviceTimeZone}"
                         Command="{Binding UseDeviceTimeZoneCommand}" />
