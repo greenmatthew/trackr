@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="Trackr.Mobile.Pages.BodyMetricsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
+    x:DataType="vm:BodyMetricsViewModel"
+    Title="Body measurements">
+
+    <!-- Optional, all of it. These exist so a calorie target can be suggested instead of invented
+         (CLAUDE.md section 9.13), and section 9.12 is explicit that a hand-typed target must work
+         regardless - so an empty screen here is a complete one.
+
+         Height and weight are typed in whatever the profile chose and converted before they are
+         sent. The server is only ever told centimetres and kilograms. -->
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+
+            <Label
+                Text="Only used to estimate what a day costs you. Leave anything blank and nothing is stored."
+                Style="{StaticResource Caption}" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+
+            <Label
+                Text="{Binding Problem}"
+                Style="{StaticResource ErrorText}"
+                IsVisible="{Binding Problem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="Sex" Style="{StaticResource FieldLabel}" />
+                <Picker
+                    ItemsSource="{Binding SexNames}"
+                    SelectedIndex="{Binding SelectedSex}"
+                    AutomationId="BodySex" />
+                <!-- Named for what it is: the coefficient the equation has two of, and "prefer not
+                     to say" costs an estimate rather than the account. -->
+                <Label
+                    Text="Every published estimate has one constant for each. Leaving it unsaid simply means no estimate."
+                    Style="{StaticResource Caption}" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="4">
+
+                <Label Text="Date of birth" Style="{StaticResource FieldLabel}" />
+
+                <!-- A switch beside the picker, because a date picker always has a value and
+                     "today" is not an answer anybody meant to give. -->
+                <HorizontalStackLayout Spacing="8">
+                    <Switch IsToggled="{Binding HasBirthDate}" AutomationId="HasBirthDate" />
+                    <DatePicker
+                        Date="{Binding BirthDate}"
+                        IsEnabled="{Binding HasBirthDate}"
+                        AutomationId="BirthDate"
+                        VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsMetric}">
+                <Label Text="Height (cm)" Style="{StaticResource FieldLabel}" />
+                <Entry
+                    Text="{Binding HeightCmText}"
+                    Keyboard="Numeric"
+                    AutomationId="HeightCm" />
+            </VerticalStackLayout>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding IsImperial}">
+
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="Height (ft)" Style="{StaticResource FieldLabel}" />
+                    <Entry
+                        Text="{Binding HeightFeetText}"
+                        Keyboard="Numeric"
+                        AutomationId="HeightFeet" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="4">
+                    <Label Text="and inches" Style="{StaticResource FieldLabel}" />
+                    <Entry
+                        Text="{Binding HeightInchesText}"
+                        Keyboard="Numeric"
+                        AutomationId="HeightInches" />
+                </VerticalStackLayout>
+
+            </Grid>
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="{Binding WeightLabel}" Style="{StaticResource FieldLabel}" />
+                <Entry
+                    Text="{Binding WeightText}"
+                    Keyboard="Numeric"
+                    AutomationId="Weight" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="4">
+                <Label Text="How active you are" Style="{StaticResource FieldLabel}" />
+                <Picker
+                    ItemsSource="{Binding ActivityNames}"
+                    SelectedIndex="{Binding SelectedActivity}"
+                    AutomationId="ActivityLevel" />
+            </VerticalStackLayout>
+
+            <!-- Only when there is enough to estimate from. A figure built on a height nobody
+                 entered would be an invented number wearing the authority of a calculation. -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding HasEstimate}">
+                <VerticalStackLayout Spacing="6">
+
+                    <Label Text="What this suggests" Style="{StaticResource FieldLabel}" />
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="At rest" />
+                        <Label Grid.Column="1" Text="{Binding BasalDescription}" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="A typical day" />
+                        <Label Grid.Column="1" Text="{Binding MaintenanceDescription}" AutomationId="Maintenance" />
+                    </Grid>
+
+                    <Label
+                        Text="An estimate, and a rough one - two people matching on all of this can differ by a couple of hundred a day. Daily targets can start from it."
+                        Style="{StaticResource Caption}" />
+
+                </VerticalStackLayout>
+            </Border>
+
+            <Button
+                Text="Save"
+                Style="{StaticResource PrimaryAction}"
+                AutomationId="SaveBody"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding CanSave}" />
+
+            <Label
+                Text="Saved"
+                Style="{StaticResource Caption}"
+                HorizontalOptions="Center"
+                IsVisible="{Binding IsSaved}" />
+
+            <!-- Being able to take it back out is not a feature to leave for later: this is the
+                 most personal data the app stores. -->
+            <Button
+                Text="Remove my measurements"
+                Style="{StaticResource LinkAction}"
+                AutomationId="ClearBody"
+                Command="{Binding ClearCommand}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertedBoolConverter}}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

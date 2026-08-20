@@ -29,6 +29,8 @@ public sealed class ShellNavigationService : INavigationService
 
     public Task GoToGoalsAsync() => GoToAsync(Routes.Goals);
 
+    public Task GoToBodyMetricsAsync() => GoToAsync(Routes.BodyMetrics);
+
     private static Task GoToAsync(string route) =>
         // Shell navigation must happen on the UI thread, and commands may complete on a
         // thread-pool thread after an await.

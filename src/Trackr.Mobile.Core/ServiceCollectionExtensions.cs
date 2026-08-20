@@ -31,6 +31,16 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<AuthSession>();
 
+        // The same instance behind the read-only view of it. Anything that only needs to render the
+        // account - its units, its name - takes ICurrentAccount instead of the session that could
+        // sign somebody out.
+        services.AddSingleton<ICurrentAccount>(services => services.GetRequiredService<AuthSession>());
+
+        // Singleton and stateless: it reads the account each time it is asked, so a unit changed on
+        // the profile screen is in force the next time any other screen redraws, with nothing to
+        // invalidate.
+        services.AddSingleton<DisplayUnits>();
+
         // Singleton because two screens draw the same picture and must agree the moment it
         // changes - and because it subscribes to AuthSession.Changed to drop the bytes on
         // sign-out, which only works if there is exactly one of it.
@@ -93,6 +103,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ChatViewModel>();
 
         services.AddTransient<ProfileViewModel>();
+        services.AddTransient<BodyMetricsViewModel>();
         services.AddTransient<AppShellViewModel>();
 
         return services;

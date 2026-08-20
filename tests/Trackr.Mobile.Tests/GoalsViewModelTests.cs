@@ -2,6 +2,7 @@ using NSubstitute;
 using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Nutrition;
 using Trackr.Mobile.Core.ViewModels;
+using Trackr.Shared.Auth;
 using Trackr.Shared.Nutrition;
 using Xunit;
 
@@ -132,7 +133,128 @@ public sealed class GoalsViewModelTests
         Assert.Contains("Could not reach the server", goals.Problem!, StringComparison.Ordinal);
     }
 
-    private static (GoalsViewModel Goals, ITrackrApiClient Api) Build()
+    /// <summary>
+    /// A target is typed in the account's own unit and stored in the API's.
+    /// </summary>
+    /// <remarks>
+    /// The row holds what is on screen; the server is only ever told kilocalories. A target that
+    /// went in as 8 368 kJ and came out as a target of 8 368 kcal would be four times the day it
+    /// was meant to be.
+    /// </remarks>
+    [Fact]
+    public async Task A_target_in_kilojoules_is_saved_as_the_kilocalories_it_means()
+    {
+        var (goals, api) = Build(EnergyUnit.Kilojoules);
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns([new GoalResponse("energy_kcal", 2_000m, GoalKind.AtMost)]);
+
+        api.SaveGoalsAsync(Arg.Any<SaveGoalsRequest>(), Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        await goals.LoadCommand.ExecuteAsync(null);
+
+        Assert.Equal("8368", Assert.Single(goals.Rows).TargetText);
+
+        await goals.SaveCommand.ExecuteAsync(null);
+
+        var request = api.ReceivedCalls()
+            .Select(call => call.GetArguments().FirstOrDefault())
+            .OfType<SaveGoalsRequest>()
+            .Single();
+
+        Assert.Equal(2_000m, Assert.Single(request.Goals).Target);
+    }
+
+    /// <summary>
+    /// The estimate is offered, and filling a field is all it does.
+    /// </summary>
+    /// <remarks>
+    /// CLAUDE.md section 9.12 closes the gap it left open - a target can be suggested rather than
+    /// invented - and is equally clear that a hand-typed one must keep working, so the row this
+    /// produces is an ordinary editable row.
+    /// </remarks>
+    [Fact]
+    public async Task The_body_estimate_fills_the_energy_target_and_leaves_it_editable()
+    {
+        var (goals, api) = Build();
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>()).Returns([]);
+        api.GetProfileAsync(Arg.Any<CancellationToken>()).Returns(WithEstimate(2_100m));
+
+        await goals.LoadCommand.ExecuteAsync(null);
+
+        Assert.True(goals.HasEstimate);
+        Assert.Contains("2100 kcal", goals.EstimateDescription, StringComparison.Ordinal);
+
+        goals.UseEstimateCommand.Execute(null);
+
+        var row = Assert.Single(goals.Rows);
+
+        Assert.Equal("2100", row.TargetText);
+        Assert.True(row.IsCeiling);
+        Assert.True(goals.CanSave);
+    }
+
+    /// <remarks>
+    /// A second tap replaces the figure in the row that is already there rather than adding a
+    /// second energy target, which the server refuses - correctly, since two targets for one
+    /// nutrient is a contradiction.
+    /// </remarks>
+    [Fact]
+    public async Task Using_the_estimate_twice_does_not_produce_two_energy_targets()
+    {
+        var (goals, api) = Build();
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns([new GoalResponse("energy_kcal", 1_800m, GoalKind.AtLeast)]);
+
+        api.GetProfileAsync(Arg.Any<CancellationToken>()).Returns(WithEstimate(2_100m));
+
+        await goals.LoadCommand.ExecuteAsync(null);
+
+        goals.UseEstimateCommand.Execute(null);
+        goals.UseEstimateCommand.Execute(null);
+
+        var row = Assert.Single(goals.Rows);
+
+        Assert.Equal("2100", row.TargetText);
+        Assert.True(row.IsCeiling);
+    }
+
+    /// <remarks>
+    /// Most accounts have no body measurements, and an estimate is a convenience - a profile that
+    /// could not be fetched must not stop somebody typing a number in.
+    /// </remarks>
+    [Fact]
+    public async Task An_account_with_no_measurements_is_simply_offered_nothing()
+    {
+        var (goals, api) = Build();
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>()).Returns([]);
+        api.GetProfileAsync(Arg.Any<CancellationToken>()).Returns((ProfileResponse?)null);
+
+        await goals.LoadCommand.ExecuteAsync(null);
+
+        Assert.False(goals.HasEstimate);
+
+        goals.UseEstimateCommand.Execute(null);
+
+        Assert.Empty(goals.Rows);
+        Assert.Null(goals.Problem);
+    }
+
+    private static ProfileResponse WithEstimate(decimal maintenanceKcal) =>
+        new(
+            null,
+            null,
+            EnergyUnit.Kilocalories,
+            MeasurementSystem.Metric,
+            BodyMetricsResponse.Empty,
+            new EnergyEstimateResponse(maintenanceKcal - 500m, maintenanceKcal));
+
+    private static (GoalsViewModel Goals, ITrackrApiClient Api) Build(
+        EnergyUnit energy = EnergyUnit.Kilocalories)
     {
         var api = Substitute.For<ITrackrApiClient>();
 
@@ -143,6 +265,6 @@ public sealed class GoalsViewModelTests
             new NutrientResponse("sodium", "Sodium", NutrientUnit.Milligram, NutrientGroup.SterolsAndElectrolytes, 90, false)
         ]);
 
-        return (new GoalsViewModel(api, new NutrientCatalogCache(api)), api);
+        return (new GoalsViewModel(api, new NutrientCatalogCache(api), Units.For(energy)), api);
     }
 }

@@ -4,6 +4,7 @@ using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Platform;
 using Trackr.Shared.Auth;
+using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.ViewModels;
 
@@ -28,9 +29,135 @@ public sealed partial class ProfileViewModel(
     IPhotoPicker photoPicker,
     IImageDownsizer downsizer,
     ITrackrApiClient api,
-    IDeviceTimeZone deviceZone) : ObservableObject
+    IDeviceTimeZone deviceZone,
+    INavigationService navigation) : ObservableObject
 {
+    /// <summary>The two energy units, in the order the picker shows them.</summary>
+    private static readonly EnergyUnit[] EnergyUnits = [EnergyUnit.Kilocalories, EnergyUnit.Kilojoules];
+
+    private static readonly MeasurementSystem[] MeasurementSystems =
+        [MeasurementSystem.Metric, MeasurementSystem.Imperial];
+
     public string Email => session.CurrentUser?.Email ?? "not signed in";
+
+    /// <summary>
+    /// What to call the account holder, or blank to go back to the email address.
+    /// </summary>
+    /// <remarks>
+    /// Not a second identifier. The account is still keyed by its email and still logs in with it -
+    /// this is what a greeting and a set of initials read from.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnsavedProfile))]
+    public partial string NameText { get; set; } = string.Empty;
+
+    public IReadOnlyList<string> EnergyUnitNames { get; } = ["Calories (kcal)", "Kilojoules (kJ)"];
+
+    public IReadOnlyList<string> MeasurementSystemNames { get; } =
+        ["Metric (cm, kg)", "Imperial (ft, lb)"];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnsavedProfile))]
+    public partial int SelectedEnergyUnit { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnsavedProfile))]
+    public partial int SelectedMeasurementSystem { get; set; }
+
+    [ObservableProperty]
+    public partial string? ProfileProblem { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsProfileBusy { get; set; }
+
+    /// <summary>
+    /// Whether the form differs from the account as the server last described it.
+    /// </summary>
+    /// <remarks>
+    /// So the save button appears when there is something to save, rather than sitting there
+    /// inviting a request that would change nothing.
+    /// </remarks>
+    public bool HasUnsavedProfile =>
+        !string.Equals(NameText.Trim(), session.CurrentUser?.DisplayName ?? "", StringComparison.Ordinal)
+        || EnergyUnits[Clamp(SelectedEnergyUnit, EnergyUnits.Length)] != (session.CurrentUser?.EnergyUnit ?? EnergyUnit.Kilocalories)
+        || MeasurementSystems[Clamp(SelectedMeasurementSystem, MeasurementSystems.Length)]
+            != (session.CurrentUser?.MeasurementSystem ?? MeasurementSystem.Metric);
+
+    /// <summary>
+    /// Saves the name and the units together, because one route writes all three.
+    /// </summary>
+    /// <remarks>
+    /// The units change how this app draws a number and nothing else. Every total, target and
+    /// snapshot stays in kilocalories on the server - see <see cref="Nutrition.DisplayUnits"/>.
+    /// </remarks>
+    [RelayCommand]
+    private async Task SaveProfileAsync()
+    {
+        ProfileProblem = null;
+        IsProfileBusy = true;
+
+        try
+        {
+            var name = NameText.Trim();
+
+            var saved = await api.SaveProfileAsync(new SaveProfileRequest
+            {
+                DisplayName = string.IsNullOrEmpty(name) ? null : name,
+                EnergyUnit = EnergyUnits[Clamp(SelectedEnergyUnit, EnergyUnits.Length)],
+                MeasurementSystem = MeasurementSystems[Clamp(SelectedMeasurementSystem, MeasurementSystems.Length)]
+            });
+
+            if (saved is null)
+            {
+                // Left showing what was typed, over an account that still says what it said. A
+                // screen that redrew as though it had worked would be claiming a preference the
+                // server does not hold.
+                ProfileProblem = "That could not be saved, so nothing has changed.";
+
+                return;
+            }
+
+            // What came back rather than what was sent, so the screen and the account agree even
+            // if the server trimmed or refused part of it.
+            if (session.CurrentUser is { } current)
+            {
+                await session.NoteAccountChangedAsync(current with
+                {
+                    DisplayName = saved.DisplayName,
+                    EnergyUnit = saved.EnergyUnit,
+                    MeasurementSystem = saved.MeasurementSystem
+                });
+            }
+
+            ReadProfileFromSession();
+        }
+        finally
+        {
+            IsProfileBusy = false;
+        }
+    }
+
+    /// <summary>The measurements behind an energy estimate, on a screen of their own.</summary>
+    /// <remarks>
+    /// A route rather than another card here: this page is already long, and body measurements are
+    /// the most personal thing the app stores.
+    /// </remarks>
+    [RelayCommand]
+    private Task OpenBodyMetricsAsync() => navigation.GoToBodyMetricsAsync();
+
+    private void ReadProfileFromSession()
+    {
+        NameText = session.CurrentUser?.DisplayName ?? string.Empty;
+        SelectedEnergyUnit = Array.IndexOf(EnergyUnits, session.CurrentUser?.EnergyUnit ?? EnergyUnit.Kilocalories);
+        SelectedMeasurementSystem = Array.IndexOf(
+            MeasurementSystems,
+            session.CurrentUser?.MeasurementSystem ?? MeasurementSystem.Metric);
+
+        OnPropertyChanged(nameof(Initials));
+        OnPropertyChanged(nameof(HasUnsavedProfile));
+    }
+
+    private static int Clamp(int index, int length) => Math.Clamp(index, 0, length - 1);
 
     /// <summary>
     /// Which zone this account's days are measured in.
@@ -75,13 +202,21 @@ public sealed partial class ProfileViewModel(
             return;
         }
 
-        session.NoteAccountChanged(updated);
+        await session.NoteAccountChangedAsync(updated);
 
         OnPropertyChanged(nameof(TimeZoneDescription));
         OnPropertyChanged(nameof(CanUseDeviceTimeZone));
     }
 
-    public string Initials => Avatar.InitialsFrom(session.CurrentUser?.Email);
+    /// <summary>
+    /// From the display name where there is one, and the email address otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The point of setting a name: "SW" beats the first letter of an email address on a shared
+    /// server, which is the case a household member's initials are for.
+    /// </remarks>
+    public string Initials =>
+        Avatar.InitialsFrom(session.CurrentUser?.DisplayName ?? session.CurrentUser?.Email);
 
     public string ServerDescription => serverSettings.BaseUrl?.Host ?? "no server configured";
 
@@ -112,6 +247,8 @@ public sealed partial class ProfileViewModel(
     [RelayCommand]
     private async Task LoadAsync()
     {
+        ReadProfileFromSession();
+
         await avatars.EnsureLoadedAsync();
 
         NotifyPictureChanged();

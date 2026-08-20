@@ -65,6 +65,21 @@
 
             <Button Text="Add a target" AutomationId="AddGoal" Command="{Binding AddCommand}" />
 
+            <!-- Offered, never applied. It fills the energy row and leaves it there to be changed,
+                 which is what section 9.12 means by a target being suggested rather than invented -
+                 and it is simply absent for an account with no body measurements. -->
+            <VerticalStackLayout Spacing="4" IsVisible="{Binding HasEstimate}">
+
+                <Label Text="{Binding EstimateDescription}" Style="{StaticResource Caption}" />
+
+                <Button
+                    Text="Start from that"
+                    Style="{StaticResource LinkAction}"
+                    AutomationId="UseEstimate"
+                    Command="{Binding UseEstimateCommand}" />
+
+            </VerticalStackLayout>
+
             <Button
                 Text="Save"
                 AutomationId="SaveGoals"

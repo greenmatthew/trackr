@@ -32,4 +32,7 @@ public interface INavigationService
     /// Opens the daily targets from Home. Pushes, like the profile, so it comes back.
     /// </summary>
     Task GoToGoalsAsync();
+
+    /// <summary>Opens the body measurements from the profile. Pushes, so it comes back.</summary>
+    Task GoToBodyMetricsAsync();
 }

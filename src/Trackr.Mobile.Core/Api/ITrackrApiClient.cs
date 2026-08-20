@@ -120,6 +120,32 @@ public interface ITrackrApiClient
         SaveTimeZoneRequest request,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The account's profile: name, units, body measurements and what they estimate.
+    /// </summary>
+    /// <remarks>
+    /// Null when it could not be asked, which is not the same as an empty profile - the screen must
+    /// say so rather than draw an account with nothing filled in.
+    /// </remarks>
+    Task<ProfileResponse?> GetProfileAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Sets the display name and the units numbers are shown in.</summary>
+    Task<ProfileResponse?> SaveProfileAsync(
+        SaveProfileRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the body measurements, in metric.
+    /// </summary>
+    /// <remarks>
+    /// Always centimetres and kilograms on the wire, whatever the screen showed. Two units for one
+    /// number is how a weight becomes ambiguous, so the conversion happens here on the client and
+    /// the API is only ever told one of them.
+    /// </remarks>
+    Task<ProfileResponse?> SaveBodyMetricsAsync(
+        SaveBodyMetricsRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Each daily target against what has been eaten today.</summary>
     /// <remarks>
     /// Measured by the server, on the account's day. Null when it could not be asked.

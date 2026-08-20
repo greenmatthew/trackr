@@ -396,20 +396,92 @@ public sealed class StatsViewModelTests
         Assert.Equal(1d, Assert.Single(trends.Days).Fraction);
     }
 
-    private static (HomeViewModel Home, ITrackrApiClient Api) BuildHome()
+    /// <summary>
+    /// A day's total and the label under it are drawn in the account's own unit.
+    /// </summary>
+    /// <remarks>
+    /// The server reports kilocalories whatever the account prefers. A screen that converted the
+    /// number and kept a fixed "kcal" label would be contradicting itself in the space of two
+    /// lines, which is why the label is bound too.
+    /// </remarks>
+    [Fact]
+    public async Task Today_is_drawn_in_kilojoules_for_an_account_that_reads_them()
+    {
+        var (home, api) = BuildHome(EnergyUnit.Kilojoules);
+
+        api.GetStatsAsync(null, null, Arg.Any<CancellationToken>())
+            .Returns(Stats(Day(energyKcal: 2_000m)));
+
+        await home.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal("8368", home.EnergyText);
+        Assert.Equal("kJ today", home.EnergyUnitText);
+
+        // Untouched: grams are grams whatever else was chosen.
+        Assert.Equal("70 g", home.FatText);
+    }
+
+    /// <remarks>
+    /// Both halves of "80 of 100" have to be the same unit, or the row is worse than useless.
+    /// </remarks>
+    [Fact]
+    public async Task A_target_row_converts_the_amount_and_the_target_together()
+    {
+        var (home, api) = BuildHome(EnergyUnit.Kilojoules);
+
+        api.GetStatsAsync(null, null, Arg.Any<CancellationToken>()).Returns(Stats(Day()));
+        api.GetGoalProgressAsync(Arg.Any<CancellationToken>()).Returns(
+        [
+            new GoalProgressResponse("energy_kcal", 2_000m, GoalKind.AtMost, 1_000m, 0.5d, true)
+        ]);
+
+        await home.RefreshCommand.ExecuteAsync(null);
+
+        var energy = Assert.Single(home.Goals);
+
+        Assert.Equal("4184 of 8368 kJ", energy.Amount);
+
+        // The bar is a ratio, so it is the same number in either unit.
+        Assert.Equal(0.5d, energy.Fraction);
+    }
+
+    [Fact]
+    public async Task The_trends_headline_and_target_follow_the_same_preference()
+    {
+        var (trends, api) = BuildTrends(EnergyUnit.Kilojoules);
+
+        api.GetRecentStatsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Stats(Day(energyKcal: 2_000m), average: Day(energyKcal: 2_000m)));
+
+        api.GetGoalsAsync(Arg.Any<CancellationToken>())
+            .Returns([new GoalResponse("energy_kcal", 2_500m, GoalKind.AtMost)]);
+
+        await trends.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal("8368 kJ a day", trends.Headline);
+        Assert.Equal("Target: at most 10460 kJ a day", trends.TargetCaption);
+    }
+
+    private static (HomeViewModel Home, ITrackrApiClient Api) BuildHome(
+        EnergyUnit energy = EnergyUnit.Kilocalories)
     {
         var api = WithCatalog();
 
         return (
-            new HomeViewModel(api, new NutrientCatalogCache(api), Substitute.For<INavigationService>()),
+            new HomeViewModel(
+                api,
+                new NutrientCatalogCache(api),
+                Substitute.For<INavigationService>(),
+                Units.For(energy)),
             api);
     }
 
-    private static (TrendsViewModel Trends, ITrackrApiClient Api) BuildTrends()
+    private static (TrendsViewModel Trends, ITrackrApiClient Api) BuildTrends(
+        EnergyUnit energy = EnergyUnit.Kilocalories)
     {
         var api = WithCatalog();
 
-        return (new TrendsViewModel(api, new NutrientCatalogCache(api)), api);
+        return (new TrendsViewModel(api, new NutrientCatalogCache(api), Units.For(energy)), api);
     }
 
     private static ITrackrApiClient WithCatalog()

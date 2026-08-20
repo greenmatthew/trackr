@@ -19,6 +19,7 @@ public partial class AppShell : Shell
         // also the app's only pushed route - see INavigationService.GoToProfileAsync.
         Routing.RegisterRoute(Routes.Profile, typeof(ProfilePage));
         Routing.RegisterRoute(Routes.Goals, typeof(GoalsPage));
+        Routing.RegisterRoute(Routes.BodyMetrics, typeof(BodyMetricsPage));
     }
 
     protected override void OnAppearing()

@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Trackr.Shared.Auth;
+using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.Storage;
 
@@ -33,7 +34,8 @@ public sealed class AccountCache(LocalDatabase database, ILogger<AccountCache> l
         {
             await using var command = connection.CreateCommand();
             command.CommandText =
-                "SELECT user_id, email, two_factor, avatar_marker FROM account WHERE id = 1;";
+                "SELECT user_id, email, two_factor, avatar_marker, time_zone_id, display_name, "
+                + "energy_unit, measurement_system FROM account WHERE id = 1;";
 
             await using var reader = await command.ExecuteReaderAsync(token);
 
@@ -46,7 +48,14 @@ public sealed class AccountCache(LocalDatabase database, ILogger<AccountCache> l
                 Guid.Parse(reader.GetString(0)),
                 reader.GetString(1),
                 reader.GetBoolean(2),
-                reader.IsDBNull(3) ? null : ParseTimestamp(reader.GetString(3)));
+                reader.IsDBNull(3) ? null : ParseTimestamp(reader.GetString(3)),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                // A row written before the account had a preference, or by a version that spelled
+                // one differently, falls back to the API's own units rather than refusing to
+                // produce an account at all. This is a cache: it degrades.
+                ParseOr(reader, 6, EnergyUnit.Kilocalories),
+                ParseOr(reader, 7, MeasurementSystem.Metric));
         }, cancellationToken);
 
     public Task WriteAccountAsync(MeResponse user, CancellationToken cancellationToken = default) =>
@@ -58,14 +67,22 @@ public sealed class AccountCache(LocalDatabase database, ILogger<AccountCache> l
             // keyed on anything else would only invite two.
             command.CommandText =
                 """
-                INSERT INTO account (id, user_id, email, two_factor, avatar_marker, cached_utc)
-                VALUES (1, @userId, @email, @twoFactor, @avatarMarker, @cachedUtc)
+                INSERT INTO account (
+                    id, user_id, email, two_factor, avatar_marker, cached_utc,
+                    time_zone_id, display_name, energy_unit, measurement_system)
+                VALUES (
+                    1, @userId, @email, @twoFactor, @avatarMarker, @cachedUtc,
+                    @timeZoneId, @displayName, @energyUnit, @measurementSystem)
                 ON CONFLICT (id) DO UPDATE SET
-                    user_id       = excluded.user_id,
-                    email         = excluded.email,
-                    two_factor    = excluded.two_factor,
-                    avatar_marker = excluded.avatar_marker,
-                    cached_utc    = excluded.cached_utc;
+                    user_id            = excluded.user_id,
+                    email              = excluded.email,
+                    two_factor         = excluded.two_factor,
+                    avatar_marker      = excluded.avatar_marker,
+                    cached_utc         = excluded.cached_utc,
+                    time_zone_id       = excluded.time_zone_id,
+                    display_name       = excluded.display_name,
+                    energy_unit        = excluded.energy_unit,
+                    measurement_system = excluded.measurement_system;
                 """;
 
             command.Parameters.AddWithValue("@userId", user.UserId.ToString());
@@ -75,6 +92,13 @@ public sealed class AccountCache(LocalDatabase database, ILogger<AccountCache> l
                 "@avatarMarker",
                 user.AvatarUpdatedUtc is { } marker ? Format(marker) : DBNull.Value);
             command.Parameters.AddWithValue("@cachedUtc", Format(DateTimeOffset.UtcNow));
+            command.Parameters.AddWithValue("@timeZoneId", (object?)user.TimeZoneId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@displayName", (object?)user.DisplayName ?? DBNull.Value);
+
+            // The name rather than the number, so a value read back after the enum grows a member
+            // still means what it meant when it was written.
+            command.Parameters.AddWithValue("@energyUnit", user.EnergyUnit.ToString());
+            command.Parameters.AddWithValue("@measurementSystem", user.MeasurementSystem.ToString());
 
             await command.ExecuteNonQueryAsync(token);
         }, cancellationToken);
@@ -165,6 +189,13 @@ public sealed class AccountCache(LocalDatabase database, ILogger<AccountCache> l
 
     private static DateTimeOffset ParseTimestamp(string value) =>
         DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+    /// <summary>An enum stored by name, or the fallback if the column holds anything else.</summary>
+    private static TEnum ParseOr<TEnum>(SqliteDataReader reader, int ordinal, TEnum fallback)
+        where TEnum : struct, Enum =>
+        !reader.IsDBNull(ordinal) && Enum.TryParse<TEnum>(reader.GetString(ordinal), out var parsed)
+            ? parsed
+            : fallback;
 
     private async Task<T> TryAsync<T>(
         T fallback,

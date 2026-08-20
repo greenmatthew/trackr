@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Nutrition;
+using Trackr.Shared.Auth;
 using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.ViewModels;
@@ -20,8 +21,10 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// (AppShell.xaml) and a target is something set occasionally and then left alone.
 /// </para>
 /// </remarks>
-public sealed partial class GoalsViewModel(ITrackrApiClient api, NutrientCatalogCache nutrients)
-    : ObservableObject
+public sealed partial class GoalsViewModel(
+    ITrackrApiClient api,
+    NutrientCatalogCache nutrients,
+    DisplayUnits units) : ObservableObject
 {
     private IReadOnlyList<NutrientResponse> catalog = [];
 
@@ -38,6 +41,26 @@ public sealed partial class GoalsViewModel(ITrackrApiClient api, NutrientCatalog
 
     [ObservableProperty]
     public partial bool IsSaved { get; set; }
+
+    /// <summary>
+    /// What the account's body measurements suggest a day costs, or null when there is no estimate.
+    /// </summary>
+    /// <remarks>
+    /// CLAUDE.md section 9.12 closes the loop it left open here: a target can be offered rather
+    /// than invented. <strong>Offered, and never applied</strong> - it fills a field the user can
+    /// then change, and section 9.12 is explicit that a hand-typed target must work regardless.
+    /// Most accounts have no measurements, and this is simply absent for them.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasEstimate))]
+    [NotifyPropertyChangedFor(nameof(EstimateDescription))]
+    public partial EnergyEstimateResponse? Estimate { get; set; }
+
+    public bool HasEstimate => Estimate is not null;
+
+    public string EstimateDescription => Estimate is null
+        ? string.Empty
+        : $"Your measurements suggest about {units.FormatEnergy(Estimate.MaintenanceKcal)} a day.";
 
     public bool CanSave => !IsBusy && Rows.All(row => row.IsValid);
 
@@ -64,7 +87,9 @@ public sealed partial class GoalsViewModel(ITrackrApiClient api, NutrientCatalog
 
             foreach (var nutrient in catalog)
             {
-                NutrientNames.Add($"{nutrient.DisplayName} ({NutrientRows.UnitSymbol(nutrient.Unit)})");
+                // The account's own unit, so a target is typed in whatever the rest of the app
+                // draws. Only energy has a choice; grams stay grams.
+                NutrientNames.Add($"{nutrient.DisplayName} ({units.SymbolFor(nutrient.Unit)})");
             }
 
             var goals = await api.GetGoalsAsync();
@@ -90,8 +115,17 @@ public sealed partial class GoalsViewModel(ITrackrApiClient api, NutrientCatalog
                     continue;
                 }
 
-                Rows.Add(new GoalEditRow(this, index, goal.Target, goal.Kind));
+                Rows.Add(new GoalEditRow(
+                    this,
+                    index,
+                    units.FromStored(catalog[index].Unit, goal.Target),
+                    goal.Kind));
             }
+
+            // After the targets, and never allowed to fail the screen: an estimate is a
+            // convenience, and a profile that could not be fetched must not stop somebody typing
+            // a number in.
+            Estimate = (await api.GetProfileAsync())?.Energy;
 
             Recheck();
         }
@@ -118,6 +152,46 @@ public sealed partial class GoalsViewModel(ITrackrApiClient api, NutrientCatalog
         }
 
         Rows.Add(new GoalEditRow(this, free, 0m, GoalKind.AtLeast));
+        Recheck();
+    }
+
+    /// <summary>
+    /// Fills the energy target with the estimate, leaving it there to be changed.
+    /// </summary>
+    /// <remarks>
+    /// A ceiling, because that is what a calorie target almost always is - and it is a starting
+    /// point rather than a verdict: the row is ordinary once filled, and the direction is a switch
+    /// beside it.
+    /// </remarks>
+    [RelayCommand]
+    private void UseEstimate()
+    {
+        if (Estimate is null)
+        {
+            return;
+        }
+
+        var index = IndexOf(CoreNutrients.EnergyKcal);
+
+        if (index < 0)
+        {
+            // A server that does not track energy is not one this button belongs on.
+            return;
+        }
+
+        var shown = units.EnergyFromStored(Estimate.MaintenanceKcal);
+        var row = Rows.FirstOrDefault(existing => existing.NutrientIndex == index);
+
+        if (row is null)
+        {
+            Rows.Add(new GoalEditRow(this, index, shown, GoalKind.AtMost));
+        }
+        else
+        {
+            row.TargetText = shown.ToString("0.####", CultureInfo.CurrentCulture);
+            row.IsCeiling = true;
+        }
+
         Recheck();
     }
 
@@ -150,7 +224,10 @@ public sealed partial class GoalsViewModel(ITrackrApiClient api, NutrientCatalog
                 Goals = [.. Rows.Select(row => new SaveGoalRequest
                 {
                     NutrientKey = catalog[row.NutrientIndex].Key,
-                    Target = row.Target,
+
+                    // Back into the unit the API keeps. A row holds what is on screen; the server
+                    // is only ever told kilocalories.
+                    Target = units.ToStored(catalog[row.NutrientIndex].Unit, row.Target),
                     Kind = row.Kind
                 })]
             };
@@ -227,7 +304,7 @@ public sealed partial class GoalEditRow : ObservableObject
 
     public GoalKind Kind => IsCeiling ? GoalKind.AtMost : GoalKind.AtLeast;
 
-    public decimal Target => TryRead(TargetText, out var value) ? value : 0m;
+    public decimal Target => Numbers.Read(TargetText);
 
     public bool IsValid => Target > 0m;
 
@@ -236,21 +313,4 @@ public sealed partial class GoalEditRow : ObservableObject
     partial void OnNutrientIndexChanged(int value) => owner.Recheck();
 
     partial void OnIsCeilingChanged(bool value) => owner.Recheck();
-
-    private static bool TryRead(string? text, out decimal value)
-    {
-        value = 0m;
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        const NumberStyles Styles = NumberStyles.AllowDecimalPoint | NumberStyles.AllowThousands
-            | NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite;
-
-        return (decimal.TryParse(text, Styles, CultureInfo.CurrentCulture, out value)
-            || decimal.TryParse(text, Styles, CultureInfo.InvariantCulture, out value))
-            && value >= 0m;
-    }
 }

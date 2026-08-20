@@ -57,6 +57,7 @@ public sealed partial class ChatViewModel : ObservableObject
     private readonly AuthSession _session;
 
     private readonly TimeProvider _time;
+    private readonly DisplayUnits _units;
 
     private CancellationTokenSource? inFlight;
 
@@ -77,7 +78,8 @@ public sealed partial class ChatViewModel : ObservableObject
         IImageDownsizer downsizer,
         NutrientCatalogCache nutrients,
         AuthSession session,
-        TimeProvider time)
+        TimeProvider time,
+        DisplayUnits units)
     {
         _api = api;
         _photoPicker = photoPicker;
@@ -85,6 +87,7 @@ public sealed partial class ChatViewModel : ObservableObject
         _nutrients = nutrients;
         _session = session;
         _time = time;
+        _units = units;
 
         // This view model outlives a visit to the tab, so it also outlives an account. A previous
         // user's meals, photographs and half-typed message sitting in memory is exactly the sort of
@@ -204,7 +207,7 @@ public sealed partial class ChatViewModel : ObservableObject
 
             foreach (var item in recent)
             {
-                Recents.Add(new RecentItem(item, now));
+                Recents.Add(new RecentItem(item, now, _units));
             }
 
             if (Recents.Count == 0)
@@ -253,8 +256,9 @@ public sealed partial class ChatViewModel : ObservableObject
         var meal = new SentMeal(null, []);
 
         Messages.Add(new ConfirmationCard(
-            [new ConfirmableItem(recent.Item, catalog)],
-            (card, cancellationToken) => SaveAsync(card, meal, cancellationToken)));
+            [new ConfirmableItem(recent.Item, catalog, _units)],
+            (card, cancellationToken) => SaveAsync(card, meal, cancellationToken),
+            _units));
     }
 
     /// <summary>The `+` button, bottom-left of the text box.</summary>
@@ -486,12 +490,13 @@ public sealed partial class ChatViewModel : ObservableObject
         }
 
         var items = result.Items
-            .Select(item => new ConfirmableItem(item, catalog))
+            .Select(item => new ConfirmableItem(item, catalog, _units))
             .ToList();
 
         Messages.Add(new ConfirmationCard(
             items,
-            (card, cancellationToken) => SaveAsync(card, meal, cancellationToken)));
+            (card, cancellationToken) => SaveAsync(card, meal, cancellationToken),
+            _units));
 
         // Whatever the user does with the card, this attempt is answered. Leaving it retryable
         // would offer a second identical analysis next to a card already waiting on a decision.

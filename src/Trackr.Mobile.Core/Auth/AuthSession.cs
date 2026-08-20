@@ -18,7 +18,7 @@ public sealed class AuthSession(
     ITrackrApiClient api,
     ITokenStore tokenStore,
     IServerSettings serverSettings,
-    AccountCache cache)
+    AccountCache cache) : ICurrentAccount
 {
     /// <summary>The signed-in account, or null. Populated by <see cref="RestoreAsync"/>.</summary>
     public MeResponse? CurrentUser { get; private set; }
@@ -30,6 +30,15 @@ public sealed class AuthSession(
 
     /// <summary>Raised when sign-in state changes, so the shell can swap what it shows.</summary>
     public event Action? Changed;
+
+    /// <summary>
+    /// Raised when the account's own details change while it stays signed in.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="Changed"/>. That one swaps the whole shell, which for a display
+    /// name would throw away the chat transcript along with it.
+    /// </remarks>
+    public event Action? AccountChanged;
 
     /// <summary>
     /// Works out at startup whether there is a usable session, by spending the stored token
@@ -119,6 +128,32 @@ public sealed class AuthSession(
     }
 
     /// <summary>
+    /// Replaces the held account after a settings change, without raising <see cref="Changed"/>.
+    /// </summary>
+    /// <remarks>
+    /// Same reasoning as <see cref="NoteAvatarChanged"/>: sign-in state has not moved, and raising
+    /// <see cref="Changed"/> would swap the shell - and, since milestone 12, empty the chat
+    /// transcript - for a time zone edit. <see cref="AccountChanged"/> is the smaller signal for
+    /// exactly this, and the title bar listens to it so a new display name reaches the initials.
+    /// <para>
+    /// Written through to the cache as well as held, so the next launch renders the units and the
+    /// name the account actually has rather than the ones it had at the last sign-in. Awaited by
+    /// callers, because a settings screen that navigated away mid-write would leave the cache
+    /// describing the previous answer.
+    /// </para>
+    /// </remarks>
+    public async Task NoteAccountChangedAsync(
+        MeResponse account,
+        CancellationToken cancellationToken = default)
+    {
+        CurrentUser = account;
+
+        await cache.WriteAccountAsync(account, cancellationToken);
+
+        AccountChanged?.Invoke();
+    }
+
+    /// <summary>
     /// Records that this device just changed the profile picture, so the avatar marker here
     /// matches what the server would now report.
     /// </summary>
@@ -128,16 +163,6 @@ public sealed class AuthSession(
     /// <see cref="Changed"/>: sign-in state has not changed, and the shell must not be swapped
     /// because someone chose a photograph.
     /// </remarks>
-    /// <summary>
-    /// Replaces the held account after a settings change, without raising <see cref="Changed"/>.
-    /// </summary>
-    /// <remarks>
-    /// Same reasoning as <see cref="NoteAvatarChanged"/>: sign-in state has not moved, and raising
-    /// Changed would swap the shell - and, since milestone 12, empty the chat transcript - for a
-    /// time zone edit.
-    /// </remarks>
-    public void NoteAccountChanged(MeResponse account) => CurrentUser = account;
-
     public void NoteAvatarChanged(DateTimeOffset? updatedUtc)
     {
         if (CurrentUser is { } user)

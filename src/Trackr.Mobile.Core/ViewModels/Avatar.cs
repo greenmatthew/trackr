@@ -11,30 +11,30 @@ namespace Trackr.Mobile.Core.ViewModels;
 public static class Avatar
 {
     /// <summary>
-    /// Derives up to two initials from an email address.
+    /// Derives up to two initials from a display name, or from an email address.
     /// </summary>
     /// <remarks>
-    /// The local part is the only name the app has until milestone 9.13 adds a display name,
-    /// so "ada.lovelace@example.test" gives "AL" and "ada@example.test" gives "A". Separators
-    /// are the ones that actually appear in addresses; a local part that is all digits or all
-    /// punctuation has no useful initials, and a bare circle is better than a misleading
-    /// letter.
+    /// One method for both, because they separate the same way: "Ada Lovelace" and
+    /// "ada.lovelace@example.test" both give "AL", and "ada@example.test" gives "A". Anything after
+    /// an @ is dropped, which costs a display name nothing and is what makes an address readable.
+    /// A value that is all digits or all punctuation has no useful initials, and a bare circle is
+    /// better than a misleading letter.
     /// <para>
     /// First and <i>last</i> segment rather than the first two, so "ada.byron.lovelace" gives
     /// "AL" and not "AB" - a middle name is not what anyone expects to see in a monogram.
     /// </para>
     /// </remarks>
-    public static string InitialsFrom(string? email)
+    public static string InitialsFrom(string? nameOrEmail)
     {
-        if (string.IsNullOrWhiteSpace(email))
+        if (string.IsNullOrWhiteSpace(nameOrEmail))
         {
             return "";
         }
 
-        var localPart = email.Trim().Split('@')[0];
+        var localPart = nameOrEmail.Trim().Split('@')[0];
 
         var letters = localPart
-            .Split(['.', '_', '-', '+'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Split([' ', '.', '_', '-', '+'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(word => word.FirstOrDefault(char.IsLetter))
             .Where(letter => letter != default)
             .ToArray();

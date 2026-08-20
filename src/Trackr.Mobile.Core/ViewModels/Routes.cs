@@ -52,4 +52,14 @@ public static class Routes
     /// shape of the app, and a target is set occasionally and then left alone.
     /// </remarks>
     public const string Goals = "goals";
+
+    /// <summary>
+    /// The body measurements behind an energy estimate, reached from the profile.
+    /// </summary>
+    /// <remarks>
+    /// A screen of its own rather than another card on the profile, which is already long - and
+    /// this is the most personal thing the app stores, so keeping it somewhere deliberate rather
+    /// than in passing is the right shape for it.
+    /// </remarks>
+    public const string BodyMetrics = "body";
 }

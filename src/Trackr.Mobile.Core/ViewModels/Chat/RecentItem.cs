@@ -1,4 +1,4 @@
-using System.Globalization;
+using Trackr.Mobile.Core.Nutrition;
 using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.ViewModels.Chat;
@@ -12,7 +12,7 @@ namespace Trackr.Mobile.Core.ViewModels.Chat;
 /// <c>NutrientRow</c>'s does - a phrase like "2 days ago" is a display decision, and putting it in
 /// the XAML would put it somewhere no test can reach.
 /// </remarks>
-public sealed class RecentItem(RecentItemResponse response, DateTimeOffset now)
+public sealed class RecentItem(RecentItemResponse response, DateTimeOffset now, DisplayUnits units)
 {
     public MealAnalysisItem Item { get; } = response.Item;
 
@@ -23,13 +23,11 @@ public sealed class RecentItem(RecentItemResponse response, DateTimeOffset now)
     public bool HasBrand { get; } = !string.IsNullOrWhiteSpace(response.Item.Brand);
 
     /// <summary>"312 kcal · 2 days ago", or with a count when it has been eaten more than once.</summary>
-    public string Summary { get; } = Describe(response, now);
+    public string Summary { get; } = Describe(response, now, units);
 
-    private static string Describe(RecentItemResponse response, DateTimeOffset now)
+    private static string Describe(RecentItemResponse response, DateTimeOffset now, DisplayUnits units)
     {
-        var energy = string.Create(
-            CultureInfo.InvariantCulture,
-            $"{response.Item.EnergyKcal:0.#} kcal");
+        var energy = units.FormatEnergy(response.Item.EnergyKcal);
 
         var when = Ago(now - response.LastLoggedUtc);
 

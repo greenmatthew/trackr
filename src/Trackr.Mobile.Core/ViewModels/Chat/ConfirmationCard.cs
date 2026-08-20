@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Trackr.Mobile.Core.Nutrition;
 
 namespace Trackr.Mobile.Core.ViewModels.Chat;
 
@@ -33,13 +34,16 @@ public enum ConfirmationState
 public sealed partial class ConfirmationCard : ChatMessage
 {
     private readonly Func<ConfirmationCard, CancellationToken, Task> save;
+    private readonly DisplayUnits units;
 
     public ConfirmationCard(
         IReadOnlyList<ConfirmableItem> items,
-        Func<ConfirmationCard, CancellationToken, Task> save)
+        Func<ConfirmationCard, CancellationToken, Task> save,
+        DisplayUnits units)
     {
         Items = items;
         this.save = save;
+        this.units = units;
 
         // Editing any field can turn the confirm button on or off, and the button is bound to the
         // card rather than to the item. Without this the user fixes a typo and the button stays
@@ -94,7 +98,9 @@ public sealed partial class ConfirmationCard : ChatMessage
                 .Where(item => item.IsValid)
                 .Sum(item => item.Corrected.Quantity * item.Corrected.EnergyKcal);
 
-            return $"{total.ToString("0.####", CultureInfo.CurrentCulture)} kcal";
+            // Corrected is in the unit the API stores, so this converts once for the reader rather
+            // than summing figures that have already been converted item by item.
+            return units.FormatEnergy(total);
         }
     }
 

@@ -25,15 +25,23 @@ public sealed partial class ConfirmableItem : ObservableObject
 {
     private readonly MealAnalysisItem analysed;
 
+    private readonly DisplayUnits units;
+
     public ConfirmableItem(
         MealAnalysisItem analysed,
-        IReadOnlyDictionary<string, NutrientResponse>? nutrientCatalog)
+        IReadOnlyDictionary<string, NutrientResponse>? nutrientCatalog,
+        DisplayUnits units)
     {
         this.analysed = analysed;
+        this.units = units;
 
         Name = analysed.Name;
         QuantityText = Format(analysed.Quantity);
-        EnergyText = Format(analysed.EnergyKcal);
+
+        // Shown in the account's own unit and converted straight back on the way out. Nothing is
+        // rounded on the way through, so a figure nobody edited stores as exactly what the model
+        // reported - see DisplayUnits.
+        EnergyText = Format(units.EnergyFromStored(analysed.EnergyKcal));
         FatText = Format(analysed.FatG);
         CarbohydrateText = Format(analysed.CarbohydrateG);
         ProteinText = Format(analysed.ProteinG);
@@ -170,17 +178,21 @@ public sealed partial class ConfirmableItem : ObservableObject
     /// Negatives are refused throughout.
     /// </remarks>
     public bool IsValid =>
-        TryRead(QuantityText, out var quantity)
+        Numbers.TryRead(QuantityText, out var quantity)
         && quantity > 0
-        && TryRead(EnergyText, out _)
-        && TryRead(FatText, out _)
-        && TryRead(CarbohydrateText, out _)
-        && TryRead(ProteinText, out _);
+        && Numbers.TryRead(EnergyText, out _)
+        && Numbers.TryRead(FatText, out _)
+        && Numbers.TryRead(CarbohydrateText, out _)
+        && Numbers.TryRead(ProteinText, out _);
+
+    /// <summary>The unit the energy field is typed in - "kcal", or "kJ".</summary>
+    public string EnergySymbol => units.EnergySymbol;
 
     /// <summary>"2 x 78 kcal = 156 kcal", or null while the numbers do not read.</summary>
     public string? TotalDescription =>
-        TryRead(QuantityText, out var quantity) && TryRead(EnergyText, out var energy) && quantity > 0
-            ? $"{Format(quantity)} x {Format(energy)} kcal = {Format(quantity * energy)} kcal"
+        Numbers.TryRead(QuantityText, out var quantity) && Numbers.TryRead(EnergyText, out var energy) && quantity > 0
+            ? $"{Format(quantity)} x {Format(energy)} {EnergySymbol} = "
+                + $"{Format(quantity * energy)} {EnergySymbol}"
             : null;
 
     /// <summary>
@@ -193,11 +205,11 @@ public sealed partial class ConfirmableItem : ObservableObject
     /// </remarks>
     public MealAnalysisItem Corrected => analysed with
     {
-        Quantity = Read(QuantityText),
-        EnergyKcal = Read(EnergyText),
-        FatG = Read(FatText),
-        CarbohydrateG = Read(CarbohydrateText),
-        ProteinG = Read(ProteinText)
+        Quantity = Numbers.Read(QuantityText),
+        EnergyKcal = units.EnergyToStored(Numbers.Read(EnergyText)),
+        FatG = Numbers.Read(FatText),
+        CarbohydrateG = Numbers.Read(CarbohydrateText),
+        ProteinG = Numbers.Read(ProteinText)
     };
 
     private static IReadOnlyList<NutrientRow> BuildNutrientRows(
@@ -206,29 +218,4 @@ public sealed partial class ConfirmableItem : ObservableObject
         NutrientRows.Build(amounts, catalog);
 
     private static string Format(decimal value) => NutrientRows.Format(value);
-
-    private static decimal Read(string? text) => TryRead(text, out var value) ? value : 0m;
-
-    private static bool TryRead(string? text, out decimal value)
-    {
-        value = 0m;
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        var styles = NumberStyles.AllowDecimalPoint | NumberStyles.AllowThousands | NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite;
-
-        if (!decimal.TryParse(text, styles, CultureInfo.CurrentCulture, out value)
-            && !decimal.TryParse(text, styles, CultureInfo.InvariantCulture, out value))
-        {
-            return false;
-        }
-
-        // No leading sign is allowed above, so this catches nothing a keyboard can produce - it is
-        // here for a value arriving from anywhere else, since a negative gram would pass every other
-        // check and then be summed into a day's total.
-        return value >= 0m;
-    }
 }

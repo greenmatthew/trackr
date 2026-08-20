@@ -38,7 +38,10 @@
                     Style="{StaticResource PageTitle}"
                     HorizontalOptions="Center" />
 
-                <Label Text="kcal today" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                <!-- Bound rather than written in: the account chooses whether energy reads as
+                     kilocalories or kilojoules, and a fixed label would contradict the number
+                     above it. -->
+                <Label Text="{Binding EnergyUnitText}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
 
             </VerticalStackLayout>
 

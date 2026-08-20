@@ -15,8 +15,10 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// trends, not analytics. What matters is that they exist and are honest about the days nobody
 /// logged.
 /// </remarks>
-public sealed partial class TrendsViewModel(ITrackrApiClient api, NutrientCatalogCache nutrients)
-    : ObservableObject
+public sealed partial class TrendsViewModel(
+    ITrackrApiClient api,
+    NutrientCatalogCache nutrients,
+    DisplayUnits units) : ObservableObject
 {
     /// <summary>The two ranges offered, in days back from today inclusive.</summary>
     private static readonly (string Label, int Days)[] Ranges =
@@ -64,8 +66,8 @@ public sealed partial class TrendsViewModel(ITrackrApiClient api, NutrientCatalo
     public string TargetCaption => EnergyTarget is null
         ? string.Empty
         : EnergyTarget.Kind is GoalKind.AtMost
-            ? $"Target: at most {NutrientRows.Format(EnergyTarget.Target)} kcal a day"
-            : $"Target: at least {NutrientRows.Format(EnergyTarget.Target)} kcal a day";
+            ? $"Target: at most {units.FormatEnergy(EnergyTarget.Target)} a day"
+            : $"Target: at least {units.FormatEnergy(EnergyTarget.Target)} a day";
 
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
@@ -77,7 +79,7 @@ public sealed partial class TrendsViewModel(ITrackrApiClient api, NutrientCatalo
 
     public string Headline => Stats is null
         ? string.Empty
-        : $"{NutrientRows.Format(Stats.AveragePerLoggedDay.EnergyKcal)} kcal a day";
+        : $"{units.FormatEnergy(Stats.AveragePerLoggedDay.EnergyKcal)} a day";
 
     /// <summary>
     /// Says what the average is an average <em>of</em>, which is the whole honesty of the number.

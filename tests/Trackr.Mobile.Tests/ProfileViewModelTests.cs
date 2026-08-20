@@ -4,6 +4,7 @@ using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Platform;
 using Trackr.Mobile.Core.ViewModels;
 using Trackr.Shared.Auth;
+using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Tests;
 
@@ -163,6 +164,92 @@ public sealed class ProfileViewModelTests
         Assert.Equal("O", viewModel.Initials);
     }
 
+    /// <summary>
+    /// The name and the units are one save, because one route writes all three.
+    /// </summary>
+    /// <remarks>
+    /// The account is updated from what came back rather than from what was sent, so a name the
+    /// server trimmed shows as the name the server actually holds.
+    /// </remarks>
+    [Fact]
+    public async Task A_name_and_a_unit_choice_are_saved_together()
+    {
+        var (profile, api, session) = BuildWithZone("America/Chicago");
+
+        await session.RestoreAsync();
+
+        api.SaveProfileAsync(Arg.Any<SaveProfileRequest>(), Arg.Any<CancellationToken>())
+            .Returns(call => Profile(
+                ((SaveProfileRequest)call[0]).DisplayName?.Trim(),
+                ((SaveProfileRequest)call[0]).EnergyUnit,
+                ((SaveProfileRequest)call[0]).MeasurementSystem));
+
+        profile.NameText = "  Sam  ";
+        profile.SelectedEnergyUnit = 1;
+        profile.SelectedMeasurementSystem = 1;
+
+        await profile.SaveProfileCommand.ExecuteAsync(null);
+
+        var request = api.ReceivedCalls()
+            .Select(call => call.GetArguments().FirstOrDefault())
+            .OfType<SaveProfileRequest>()
+            .Single();
+
+        Assert.Equal("Sam", request.DisplayName);
+        Assert.Equal(EnergyUnit.Kilojoules, request.EnergyUnit);
+        Assert.Equal(MeasurementSystem.Imperial, request.MeasurementSystem);
+
+        Assert.Equal("Sam", session.CurrentUser!.DisplayName);
+        Assert.Equal(EnergyUnit.Kilojoules, session.CurrentUser.EnergyUnit);
+        Assert.Null(profile.ProfileProblem);
+    }
+
+    /// <remarks>
+    /// The same rule the time zone follows: a screen that redrew as though it had worked would be
+    /// claiming a preference the server does not hold.
+    /// </remarks>
+    [Fact]
+    public async Task A_profile_that_could_not_be_saved_leaves_the_account_alone()
+    {
+        var (profile, api, session) = BuildWithZone("America/Chicago");
+
+        await session.RestoreAsync();
+
+        api.SaveProfileAsync(Arg.Any<SaveProfileRequest>(), Arg.Any<CancellationToken>())
+            .Returns((ProfileResponse?)null);
+
+        profile.NameText = "Sam";
+
+        await profile.SaveProfileCommand.ExecuteAsync(null);
+
+        Assert.Null(session.CurrentUser!.DisplayName);
+        Assert.Contains("could not be saved", profile.ProfileProblem!, StringComparison.Ordinal);
+    }
+
+    /// <remarks>
+    /// The point of having a name on a server a household shares: "SW" beats the first letter of
+    /// an email address.
+    /// </remarks>
+    [Fact]
+    public async Task The_initials_come_from_the_name_once_there_is_one()
+    {
+        var (profile, _, session) = BuildWithZone("America/Chicago");
+
+        await session.RestoreAsync();
+
+        Assert.Equal("O", profile.Initials);
+
+        await session.NoteAccountChangedAsync(session.CurrentUser! with { DisplayName = "Sam Wilson" });
+
+        Assert.Equal("SW", profile.Initials);
+    }
+
+    private static ProfileResponse Profile(
+        string? name,
+        EnergyUnit energy,
+        MeasurementSystem measurements) =>
+        new(name, null, energy, measurements, BodyMetricsResponse.Empty, null);
+
     private static IDeviceTimeZone DeviceZone(string? id)
     {
         var zone = Substitute.For<IDeviceTimeZone>();
@@ -198,7 +285,8 @@ public sealed class ProfileViewModelTests
             Substitute.For<IPhotoPicker>(),
             Substitute.For<IImageDownsizer>(),
             api,
-            DeviceZone(deviceZoneId));
+            DeviceZone(deviceZoneId),
+            Substitute.For<INavigationService>());
 
         return (profile, api, session);
     }
@@ -282,7 +370,14 @@ public sealed class ProfileViewModelTests
 
         return (
             new ProfileViewModel(
-                session, serverSettings, avatars, picker, downsizer, api, DeviceZone(null)),
+                session,
+                serverSettings,
+                avatars,
+                picker,
+                downsizer,
+                api,
+                DeviceZone(null),
+                Substitute.For<INavigationService>()),
             api,
             picker,
             downsizer);

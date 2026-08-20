@@ -98,6 +98,63 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- A name and the units numbers are drawn in, saved together because one route
+                 writes all three. The units change how this app draws a figure and nothing else:
+                 the server stores and reports kilocalories whatever is chosen here. -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Your name" Style="{StaticResource FieldLabel}" />
+                        <Entry
+                            Text="{Binding NameText}"
+                            Placeholder="Leave blank to use your email address"
+                            AutomationId="DisplayName" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Show energy as" Style="{StaticResource FieldLabel}" />
+                        <Picker
+                            ItemsSource="{Binding EnergyUnitNames}"
+                            SelectedIndex="{Binding SelectedEnergyUnit}"
+                            AutomationId="EnergyUnit" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Height and weight in" Style="{StaticResource FieldLabel}" />
+                        <Picker
+                            ItemsSource="{Binding MeasurementSystemNames}"
+                            SelectedIndex="{Binding SelectedMeasurementSystem}"
+                            AutomationId="MeasurementSystem" />
+                        <!-- Deliberately not nutrition: labels are metric the world over, so
+                             ounces of protein would be a number on no package. -->
+                        <Label
+                            Text="Food is always shown in the units on its label."
+                            Style="{StaticResource Caption}" />
+                    </VerticalStackLayout>
+
+                    <Button
+                        Text="Save"
+                        AutomationId="SaveProfile"
+                        Command="{Binding SaveProfileCommand}"
+                        IsVisible="{Binding HasUnsavedProfile}"
+                        IsEnabled="{Binding IsProfileBusy, Converter={StaticResource InvertedBoolConverter}}" />
+
+                    <Label
+                        Text="{Binding ProfileProblem}"
+                        Style="{StaticResource ErrorText}"
+                        IsVisible="{Binding ProfileProblem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- On a screen of its own: this page is already long, and body measurements are the
+                 most personal thing the app stores. -->
+            <Button
+                Text="Body measurements"
+                AutomationId="OpenBodyMetrics"
+                Command="{Binding OpenBodyMetricsCommand}" />
+
             <!-- The zone belongs to the account, not to the phone. The server totals a day and
                  every client has to agree with it, so this offers the phone's zone as an answer
                  rather than using it. Section 9.13. -->

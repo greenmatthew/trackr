@@ -165,7 +165,9 @@
                     </VerticalStackLayout>
 
                     <VerticalStackLayout Grid.Column="1">
-                        <Label Text="kcal per serving" Style="{StaticResource FieldLabel}" />
+                        <Label
+                            Text="{Binding EnergySymbol, StringFormat='{0} per serving'}"
+                            Style="{StaticResource FieldLabel}" />
                         <Entry Text="{Binding EnergyText}" Keyboard="Numeric" />
                     </VerticalStackLayout>
 

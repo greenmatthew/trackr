@@ -25,7 +25,8 @@ namespace Trackr.Mobile.Core.ViewModels;
 public sealed partial class HomeViewModel(
     ITrackrApiClient api,
     NutrientCatalogCache nutrients,
-    INavigationService navigation) : ObservableObject
+    INavigationService navigation,
+    DisplayUnits units) : ObservableObject
 {
     /// <summary>
     /// The day being totalled, as the server understands it.
@@ -72,7 +73,17 @@ public sealed partial class HomeViewModel(
 
     public bool HasAnything => Totals?.HasAnything is true;
 
-    public string EnergyText => Format(Totals?.EnergyKcal ?? 0m);
+    /// <summary>
+    /// The day's energy, in the unit the account reads in.
+    /// </summary>
+    /// <remarks>
+    /// The server reports kilocalories whatever this says; the conversion is on the way to the
+    /// screen and nowhere else - see <see cref="DisplayUnits"/>.
+    /// </remarks>
+    public string EnergyText => units.FormatEnergyAmount(Totals?.EnergyKcal ?? 0m);
+
+    /// <summary>"kcal today", or "kJ today". Bound rather than written into the page.</summary>
+    public string EnergyUnitText => $"{units.EnergySymbol} today";
 
     public string FatText => $"{Format(Totals?.FatG ?? 0m)} g";
 
@@ -121,7 +132,7 @@ public sealed partial class HomeViewModel(
 
             foreach (var goal in goals ?? [])
             {
-                Goals.Add(new GoalRow(goal, catalog));
+                Goals.Add(new GoalRow(goal, catalog, units));
             }
 
             OnPropertyChanged(nameof(HasGoals));
@@ -136,6 +147,7 @@ public sealed partial class HomeViewModel(
     {
         OnPropertyChanged(nameof(Today));
         OnPropertyChanged(nameof(EnergyText));
+        OnPropertyChanged(nameof(EnergyUnitText));
         OnPropertyChanged(nameof(FatText));
         OnPropertyChanged(nameof(CarbohydrateText));
         OnPropertyChanged(nameof(ProteinText));

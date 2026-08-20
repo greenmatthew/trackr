@@ -12,18 +12,32 @@ namespace Trackr.Mobile.Core.ViewModels;
 /// </remarks>
 public sealed class GoalRow
 {
-    public GoalRow(GoalProgressResponse progress, IReadOnlyDictionary<string, NutrientResponse>? catalog)
+    public GoalRow(
+        GoalProgressResponse progress,
+        IReadOnlyDictionary<string, NutrientResponse>? catalog,
+        DisplayUnits units)
     {
         var nutrient = catalog?.GetValueOrDefault(progress.NutrientKey);
-        var unit = nutrient is null ? string.Empty : NutrientRows.UnitSymbol(nutrient.Unit);
+        var unit = nutrient is null ? string.Empty : units.SymbolFor(nutrient.Unit);
 
         // The key is a poor label but a better one than a blank row, and the catalog is only
         // missing when the server could not be asked for it.
         DisplayName = nutrient?.DisplayName ?? progress.NutrientKey;
 
+        // Both figures converted, or neither: an amount of one unit against a target of another is
+        // the worst possible version of this row. Only energy converts at all, and the fraction the
+        // bar uses is a ratio, so it is the same number in either unit.
+        var consumed = nutrient is null
+            ? progress.Consumed
+            : units.FromStored(nutrient.Unit, progress.Consumed);
+
+        var target = nutrient is null
+            ? progress.Target
+            : units.FromStored(nutrient.Unit, progress.Target);
+
         Amount = string.IsNullOrEmpty(unit)
-            ? $"{NutrientRows.Format(progress.Consumed)} of {NutrientRows.Format(progress.Target)}"
-            : $"{NutrientRows.Format(progress.Consumed)} of {NutrientRows.Format(progress.Target)} {unit}";
+            ? $"{NutrientRows.Format(consumed)} of {NutrientRows.Format(target)}"
+            : $"{NutrientRows.Format(consumed)} of {NutrientRows.Format(target)} {unit}";
 
         IsMet = progress.IsMet;
         IsCeiling = progress.Kind is GoalKind.AtMost;

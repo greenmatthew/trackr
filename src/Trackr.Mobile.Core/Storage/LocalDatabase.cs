@@ -57,6 +57,19 @@ public sealed class LocalDatabase(ILocalStorePath storePath, ILogger<LocalDataba
             marker       TEXT    NOT NULL
         );
         """,
+
+        // 2: the profile milestone 13 added to the account - including the time zone, which
+        // version 1 did not keep, so an offline profile screen reported UTC for an account that
+        // had chosen otherwise. Nullable and appended rather
+        // than a rewritten table, so a device that already holds an account keeps it - the cache
+        // exists to render before the network answers, and dropping it would cost exactly that on
+        // the one launch after an update.
+        """
+        ALTER TABLE account ADD COLUMN time_zone_id       TEXT NULL;
+        ALTER TABLE account ADD COLUMN display_name       TEXT NULL;
+        ALTER TABLE account ADD COLUMN energy_unit        TEXT NULL;
+        ALTER TABLE account ADD COLUMN measurement_system TEXT NULL;
+        """,
     ];
 
     private readonly SemaphoreSlim _gate = new(1, 1);

@@ -452,6 +452,54 @@ public sealed class TrackrApiClient(
         }
     }
 
+    public Task<ProfileResponse?> GetProfileAsync(CancellationToken cancellationToken = default) =>
+        ReadAsync<ProfileResponse>("api/account/profile", "Profile", cancellationToken);
+
+    public Task<ProfileResponse?> SaveProfileAsync(
+        SaveProfileRequest request,
+        CancellationToken cancellationToken = default) =>
+        PutProfileAsync("api/account/profile", request, "profile", cancellationToken);
+
+    public Task<ProfileResponse?> SaveBodyMetricsAsync(
+        SaveBodyMetricsRequest request,
+        CancellationToken cancellationToken = default) =>
+        PutProfileAsync("api/account/body", request, "body measurements", cancellationToken);
+
+    /// <remarks>
+    /// Null on any failure, so a caller cannot mistake "not saved" for "saved" - both profile
+    /// writes answer with the whole profile, so the screen redraws from what the server actually
+    /// holds rather than from what it just sent.
+    /// </remarks>
+    private async Task<ProfileResponse?> PutProfileAsync<TRequest>(
+        string path,
+        TRequest request,
+        string what,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.PutAsJsonAsync(Endpoint(path), request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "Saving the {What} answered with {StatusCode}",
+                    what,
+                    (int)response.StatusCode);
+
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<ProfileResponse>(cancellationToken);
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Saving the {What} failed", what);
+
+            return null;
+        }
+    }
+
     public Task<IReadOnlyList<GoalProgressResponse>?> GetGoalProgressAsync(
         CancellationToken cancellationToken = default) =>
         ReadAsync<IReadOnlyList<GoalProgressResponse>>("api/goals/progress", "Goal progress", cancellationToken);

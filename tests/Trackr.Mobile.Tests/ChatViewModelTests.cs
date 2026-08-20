@@ -581,7 +581,8 @@ public sealed class ChatViewModelTests
     {
         var item = new ConfirmableItem(
             Analysed() with { Allergens = ["en:milk", "en:tree-nuts"] },
-            nutrientCatalog: null);
+            nutrientCatalog: null,
+            Units.Metric);
 
         Assert.True(item.HasAllergens);
         Assert.Equal("Contains milk, tree nuts", item.AllergenSummary);
@@ -594,7 +595,7 @@ public sealed class ChatViewModelTests
     [Fact]
     public void An_item_with_no_declared_allergens_says_nothing_at_all()
     {
-        var item = new ConfirmableItem(Analysed(), nutrientCatalog: null);
+        var item = new ConfirmableItem(Analysed(), nutrientCatalog: null, Units.Metric);
 
         Assert.False(item.HasAllergens);
         Assert.Null(item.AllergenSummary);
@@ -612,7 +613,7 @@ public sealed class ChatViewModelTests
     [InlineData(AnalyzedItemSource.Model, "estimated")]
     public void Every_source_says_where_its_numbers_came_from(AnalyzedItemSource source, string expected)
     {
-        var item = new ConfirmableItem(Analysed() with { Source = source }, nutrientCatalog: null);
+        var item = new ConfirmableItem(Analysed() with { Source = source }, nutrientCatalog: null, Units.Metric);
 
         Assert.Equal(expected, item.SourceDescription);
     }
@@ -794,7 +795,7 @@ public sealed class ChatViewModelTests
 
         return (
             new ChatViewModel(
-                api, picker, downsizer, new NutrientCatalogCache(api), session, Clock),
+                api, picker, downsizer, new NutrientCatalogCache(api), session, Clock, Units.Metric),
             api,
             picker,
             downsizer,
