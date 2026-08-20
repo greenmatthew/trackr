@@ -32,7 +32,16 @@ public class Invite
     /// <summary>Free text so the issuer remembers who an invite was for.</summary>
     public string? Note { get; set; }
 
-    public Guid CreatedByUserId { get; set; }
+    /// <summary>
+    /// Who minted it, or null once that account has been deleted.
+    /// </summary>
+    /// <remarks>
+    /// Nullable so that an account can be deleted without taking the record of who invited whom
+    /// with it. The row survives saying the invite was created by an account that no longer
+    /// exists, which is exactly what happened - see <c>DELETE /api/account</c>, which also revokes
+    /// any of these still waiting to be used, since a live credential must not outlive its issuer.
+    /// </remarks>
+    public Guid? CreatedByUserId { get; set; }
     public TrackrUser? CreatedBy { get; set; }
     public DateTimeOffset CreatedUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresUtc { get; set; }

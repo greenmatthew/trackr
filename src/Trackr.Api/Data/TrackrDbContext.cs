@@ -116,17 +116,22 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
             invite.HasIndex(i => i.TokenHash).IsUnique();
 
             // Two foreign keys to the same principal table, so both relationships must
-            // be configured explicitly. Restrict rather than cascade: deleting an
-            // account must not silently erase the record of who invited whom.
+            // be configured explicitly. SetNull rather than cascade: deleting an account
+            // must not silently erase the record of who invited whom, and the row is still
+            // worth having with the person replaced by nothing - which is what happened.
+            //
+            // Restrict was the original choice and it made an account undeletable the moment
+            // it minted an invite, which would have made section 9.13's delete a button that
+            // fails for exactly the households the invite system exists for.
             invite.HasOne(i => i.CreatedBy)
                 .WithMany()
                 .HasForeignKey(i => i.CreatedByUserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.SetNull);
 
             invite.HasOne(i => i.RedeemedBy)
                 .WithMany()
                 .HasForeignKey(i => i.RedeemedByUserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         ConfigureNutrition(builder);

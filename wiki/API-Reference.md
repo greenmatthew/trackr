@@ -10,6 +10,14 @@ Two authentication schemes reach these endpoints: the website sends an HttpOnly 
 
 ## Account
 
+### `DELETE /api/account`
+
+Delete the account and everything in it. Not undoable.
+
+**Request body:** `application/json` → [`DeleteAccountRequest`](#deleteaccountrequest)
+
+**Responses:** `200`
+
 ### `GET /api/account/2fa`
 
 Whether 2FA is on, and how many recovery codes remain.
@@ -67,6 +75,28 @@ Remove the profile picture, falling back to initials.
 Replace the body measurements. Sending nulls is how they are cleared.
 
 **Request body:** `application/json` → [`SaveBodyMetricsRequest`](#savebodymetricsrequest)
+
+**Responses:** `200`
+
+### `POST /api/account/email`
+
+Ask for the address to change. Sends a link; nothing moves until it is followed.
+
+**Request body:** `application/json` → [`ChangeEmailRequest`](#changeemailrequest)
+
+**Responses:** `200`
+
+### `POST /api/account/email/confirm`
+
+Follow the link, which is what actually changes the address.
+
+**Request body:** `application/json` → [`ConfirmEmailChangeRequest`](#confirmemailchangerequest)
+
+**Responses:** `200`
+
+### `GET /api/account/export`
+
+Everything this account holds, as a JSON download.
 
 **Responses:** `200`
 
@@ -473,6 +503,13 @@ No properties.
 
 No properties.
 
+### `ChangeEmailRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `password` | string | yes |
+| `newEmail` | string | yes |
+
 ### `ChangePasswordRequest`
 
 | Property | Type | Required |
@@ -480,12 +517,26 @@ No properties.
 | `currentPassword` | string | yes |
 | `newPassword` | string | yes |
 
+### `ConfirmEmailChangeRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `newEmail` | string | yes |
+| `code` | string | yes |
+
 ### `CreateInviteRequest`
 
 | Property | Type | Required |
 | --- | --- | --- |
 | `note` | string, nullable | no |
 | `expiresInHours` | integer or string (int32) | no |
+
+### `DeleteAccountRequest`
+
+| Property | Type | Required |
+| --- | --- | --- |
+| `password` | string | yes |
+| `confirmation` | string | yes |
 
 ### `DisableTwoFactorRequest`
 

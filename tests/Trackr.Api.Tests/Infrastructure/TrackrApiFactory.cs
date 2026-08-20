@@ -92,6 +92,28 @@ public sealed class TrackrApiFactory(string connectionString, IDictionary<string
         return Totp.Generate(key);
     }
 
+    /// <summary>
+    /// The code the change-email link would carry, produced the same way the endpoint does.
+    /// </summary>
+    /// <remarks>
+    /// Stands in for reading the link out of the log, which is what the default email provider
+    /// does with it. The token is bound to the <em>new</em> address as well as to the account,
+    /// which is what a test asserting the wrong address gets to prove.
+    /// </remarks>
+    public async Task<string> GenerateEmailChangeCodeAsync(string currentEmail, string newEmail)
+    {
+        using var scope = Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<TrackrUser>>();
+
+        var user = await users.FindByEmailAsync(currentEmail)
+            ?? throw new InvalidOperationException($"No user with email {currentEmail}.");
+
+        var token = await users.GenerateChangeEmailTokenAsync(user, newEmail);
+
+        return Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(
+            System.Text.Encoding.UTF8.GetBytes(token));
+    }
+
     /// <summary>Reads a password reset token directly, standing in for the emailed link.</summary>
     public async Task<string> GeneratePasswordResetCodeAsync(string email)
     {

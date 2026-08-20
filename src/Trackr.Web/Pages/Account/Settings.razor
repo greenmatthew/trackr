@@ -1,7 +1,9 @@
 @page "/settings"
 
 @* Protected by the blanket [Authorize] in _Imports.razor - no attribute needed here.
-   A thin host for the three sections; each owns its own state and calls. *@
+   A thin host for the sections; each owns its own state and calls. The account self-service
+   milestone 2 left out - the address, the export, the delete - lives here rather than in the app,
+   because CLAUDE.md section 10 keeps account and server management on the web. *@
 
 <PageTitle>Settings — Trackr</PageTitle>
 
@@ -10,5 +12,7 @@
 
     <TwoFactorSection />
     <ChangePasswordSection />
+    <ChangeEmailSection />
     <InvitesSection />
+    <YourDataSection />
 </main>

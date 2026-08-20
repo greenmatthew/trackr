@@ -1,0 +1,96 @@
+@page "/change-email"
+@inject AuthClient Auth
+
+@* The second half of an email change: the link from the message sent to the new address.
+
+   Deliberately NOT [AllowAnonymous]. Holding the link proves the address can be read; being
+   signed in proves whose account it is. With the default email provider the link comes out of a
+   log file, and possession of it alone must not be able to move somebody else's account - the
+   same reasoning that stops a password reset handing over a session. *@
+
+<PageTitle>Confirm your new address — Trackr</PageTitle>
+
+<main class="auth-card">
+    <h1>Confirm your new address</h1>
+
+    @if (_done)
+    {
+        <div class="notice notice--good" role="status">
+            <p>Your account now uses @_request.NewEmail. Sign in with it from now on.</p>
+        </div>
+        <p class="auth-card__aside"><a href="settings">Back to settings</a></p>
+    }
+    else if (string.IsNullOrWhiteSpace(Code))
+    {
+        <div class="notice notice--bad" role="alert">
+            <p>This page needs the link from the message sent to your new address.</p>
+        </div>
+        <p class="auth-card__aside"><a href="settings">Back to settings</a></p>
+    }
+    else
+    {
+        @if (_problem is not null)
+        {
+            <div class="notice notice--bad" role="alert">
+                @foreach (var message in _problem)
+                {
+                    <p>@message</p>
+                }
+            </div>
+        }
+
+        <p>Changing this account's address to <strong>@_request.NewEmail</strong>.</p>
+
+        <button type="button" disabled="@_busy" @onclick="ConfirmAsync">
+            @(_busy ? "Confirming…" : "Confirm the change")
+        </button>
+    }
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? Email { get; set; }
+
+    [SupplyParameterFromQuery(Name = "code")]
+    private string? Code { get; set; }
+
+    private readonly ConfirmEmailChangeRequest _request = new();
+    private IReadOnlyList<string>? _problem;
+    private bool _done;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        _request.NewEmail = Email ?? "";
+        _request.Code = Code ?? "";
+    }
+
+    /// <remarks>
+    /// A button rather than confirming on load. Following a link should not be enough to change an
+    /// account by itself - a mail client that fetches links in the background would otherwise do
+    /// it for you.
+    /// </remarks>
+    private async Task ConfirmAsync()
+    {
+        _busy = true;
+        _problem = null;
+
+        try
+        {
+            var result = await Auth.ConfirmEmailChangeAsync(_request);
+
+            if (result.Succeeded)
+            {
+                _done = true;
+            }
+            else
+            {
+                _problem = result.Problem!.AllMessages.ToArray();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

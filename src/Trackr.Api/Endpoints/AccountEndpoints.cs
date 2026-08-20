@@ -1,6 +1,11 @@
 using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Trackr.Api.Data;
 using Trackr.Api.Identity;
@@ -35,6 +40,16 @@ public static class AccountEndpoints
     /// <summary>Long enough for a name, short enough not to be a paragraph in a greeting.</summary>
     private const int MaxDisplayNameLength = 60;
 
+    /// <summary>
+    /// Indented, unlike every other response here, because a person may well open this one.
+    /// </summary>
+    /// <remarks>
+    /// Web defaults so the property names match the rest of the API, which is what makes the
+    /// document readable next to <c>wiki/API-Reference.md</c>.
+    /// </remarks>
+    private static readonly JsonSerializerOptions ExportJson =
+        new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/account/profile", GetProfileAsync)
@@ -52,6 +67,25 @@ public static class AccountEndpoints
         app.MapPut("/api/account/timezone", SaveTimeZoneAsync)
             .WithName("SaveTimeZone")
             .WithSummary("Choose which zone this account's days are measured in.");
+
+        app.MapPost("/api/account/email", RequestEmailChangeAsync)
+            .RequireRateLimiting(RateLimitPolicies.Sensitive)
+            .WithName("RequestEmailChange")
+            .WithSummary("Ask for the address to change. Sends a link; nothing moves until it is followed.");
+
+        app.MapPost("/api/account/email/confirm", ConfirmEmailChangeAsync)
+            .RequireRateLimiting(RateLimitPolicies.Sensitive)
+            .WithName("ConfirmEmailChange")
+            .WithSummary("Follow the link, which is what actually changes the address.");
+
+        app.MapGet("/api/account/export", ExportAsync)
+            .WithName("ExportAccount")
+            .WithSummary("Everything this account holds, as a JSON download.");
+
+        app.MapDelete("/api/account", DeleteAccountAsync)
+            .RequireRateLimiting(RateLimitPolicies.Sensitive)
+            .WithName("DeleteAccount")
+            .WithSummary("Delete the account and everything in it. Not undoable.");
 
         app.MapPost("/api/account/password", ChangePasswordAsync)
             .RequireRateLimiting(RateLimitPolicies.Sensitive)
@@ -317,6 +351,266 @@ public static class AccountEndpoints
                 ["timeZoneId"] = [.. result.Errors.Select(error => error.Description)]
             });
     }
+
+    /// <summary>
+    /// Starts an email change by sending a link to the <em>new</em> address.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Nothing changes here.</strong> The email address is the login and the only way back
+    /// in through a password reset, so applying a typo immediately would lock somebody out of
+    /// their own server with no route back. Proving the new address works is the whole point, and
+    /// it is the same shape as the password-reset flow this borrows from - including the default
+    /// provider, which writes the link to the backend log.
+    /// <para>
+    /// The password is re-checked because a session left open on a shared laptop should not be
+    /// enough to move an account somewhere else, which is the same reason turning 2FA off asks.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> RequestEmailChangeAsync(
+        ChangeEmailRequest request,
+        HttpContext httpContext,
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        IEmailSender<TrackrUser> emailSender,
+        IOptions<EmailOptions> emailOptions)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (!await userManager.CheckPasswordAsync(user, request.Password))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["password"] = ["That password is not right."]
+            });
+        }
+
+        var newEmail = request.NewEmail.Trim();
+
+        if (string.Equals(newEmail, user.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["newEmail"] = ["That is already this account's address."]
+            });
+        }
+
+        // Told plainly rather than hidden behind a generic 202. Unlike the forgot-password flow,
+        // the caller here is already signed in and can see the invite list, so refusing to say
+        // "that address is taken" would hide nothing and would instead send them a link that
+        // cannot work.
+        if (await userManager.FindByEmailAsync(newEmail) is not null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["newEmail"] = ["Another account on this server already uses that address."]
+            });
+        }
+
+        var token = await userManager.GenerateChangeEmailTokenAsync(user, newEmail);
+
+        // The raw token contains characters that do not survive a query string.
+        var code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+
+        var baseUrl = !string.IsNullOrWhiteSpace(emailOptions.Value.PublicBaseUrl)
+            ? emailOptions.Value.PublicBaseUrl.TrimEnd('/')
+            : $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+
+        var link = $"{baseUrl}/change-email?email={Uri.EscapeDataString(newEmail)}&code={code}";
+
+        // To the new address, never the old one: the point is to prove that somebody can read mail
+        // there before the account depends on it.
+        await emailSender.SendConfirmationLinkAsync(user, newEmail, link);
+
+        return Results.Accepted();
+    }
+
+    /// <summary>
+    /// Applies the change, once the link proves the new address was reachable.
+    /// </summary>
+    /// <remarks>
+    /// Signed in as well as holding the token, deliberately. With the default provider the link
+    /// came out of a log file, and possession of it alone should not be able to move somebody
+    /// else's account - the same reasoning that stops a password reset signing the caller in.
+    /// <para>
+    /// The user name moves with the address, because this application logs in by email and Identity
+    /// keeps the two as separate columns. Changing one without the other leaves an account that
+    /// reports the new address and only accepts the old one at the login screen.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> ConfirmEmailChangeAsync(
+        ConfirmEmailChangeRequest request,
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        SignInManager<TrackrUser> signInManager)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        string token;
+
+        try
+        {
+            token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Code));
+        }
+        catch (FormatException)
+        {
+            // A mangled link, e.g. one wrapped across two lines by a mail client.
+            return InvalidEmailToken();
+        }
+
+        var newEmail = request.NewEmail.Trim();
+
+        var result = await userManager.ChangeEmailAsync(user, newEmail, token);
+        if (!result.Succeeded)
+        {
+            return InvalidEmailToken();
+        }
+
+        var renamed = await userManager.SetUserNameAsync(user, newEmail);
+        if (!renamed.Succeeded)
+        {
+            return renamed.ToValidationProblem();
+        }
+
+        // Both writes rolled the security stamp. Without this the caller is signed out moments
+        // after successfully changing their address.
+        await signInManager.RefreshSignInAsync(user);
+
+        return Results.Ok(user.ToMeResponse());
+    }
+
+    /// <summary>
+    /// Everything this account holds, as a JSON file.
+    /// </summary>
+    /// <remarks>
+    /// A download rather than a rendered page: the point is to have the data somewhere Trackr is
+    /// not. <see cref="AccountExport"/> documents what is in it and what deliberately is not.
+    /// </remarks>
+    private static async Task<IResult> ExportAsync(
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        TrackrDbContext db,
+        DayBoundary boundary,
+        TimeProvider time,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var export = await AccountExport.ForAsync(user, db, time.GetUtcNow(), cancellationToken);
+
+        // Named for the account's own day, since that is the day the totals inside it are grouped
+        // by - a file stamped with a date the data does not use would be its own small confusion.
+        var fileName = $"trackr-export-{boundary.TodayFor(user):yyyy-MM-dd}.json";
+
+        return Results.File(
+            JsonSerializer.SerializeToUtf8Bytes(export, ExportJson),
+            "application/json",
+            fileName);
+    }
+
+    /// <summary>
+    /// Deletes the account and everything belonging to it.
+    /// </summary>
+    /// <remarks>
+    /// The cascades in <see cref="TrackrDbContext"/> do most of it: the avatar, the goals, the log
+    /// and its snapshots, the meal photographs, and the catalog items this account owns all go with
+    /// the row. <strong>Global catalog items do not</strong> - they belong to the server and other
+    /// people's recipes are made of them, which is the same rule the export follows.
+    /// <para>
+    /// Invites are the one thing handled by hand. Their foreign keys null rather than cascade, so
+    /// the record of who invited whom survives the person - but an invite this account minted and
+    /// nobody redeemed is a live credential, and one of those must not outlive its issuer. Those
+    /// are revoked first.
+    /// </para>
+    /// <para>
+    /// Nothing here refuses to delete the last account on the server. It reopens registration, the
+    /// way an empty database does, and the alternative is telling somebody they may not leave their
+    /// own machine.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> DeleteAccountAsync(
+        // Explicit, because minimal APIs will not infer a body on DELETE - the verb usually
+        // carries everything it needs in the route. This one needs credentials, and asking for
+        // them in a query string would put a password in every access log between here and the
+        // browser.
+        [FromBody] DeleteAccountRequest request,
+        ClaimsPrincipal principal,
+        UserManager<TrackrUser> userManager,
+        SignInManager<TrackrUser> signInManager,
+        TrackrDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (!await userManager.CheckPasswordAsync(user, request.Password))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["password"] = ["That password is not right."]
+            });
+        }
+
+        // Typed by hand, so this cannot be reached by a stray tap on a button.
+        if (!string.Equals(
+                request.Confirmation.Trim(),
+                DeleteAccountRequest.RequiredConfirmation,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["confirmation"] =
+                    [$"Type {DeleteAccountRequest.RequiredConfirmation} to confirm."]
+            });
+        }
+
+        var now = Timestamps.UtcNow();
+
+        var outstanding = await db.Invites
+            .Where(invite => invite.CreatedByUserId == user.Id
+                && invite.RedeemedUtc == null
+                && invite.RevokedUtc == null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var invite in outstanding)
+        {
+            invite.RevokedUtc = now;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        var result = await userManager.DeleteAsync(user);
+        if (!result.Succeeded)
+        {
+            return result.ToValidationProblem();
+        }
+
+        // The session belongs to an account that no longer exists. Ending it here means the client
+        // is not left holding a cookie whose every request now 401s for a reason it cannot see.
+        await signInManager.SignOutAsync();
+
+        return Results.NoContent();
+    }
+
+    private static IResult InvalidEmailToken() =>
+        Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["code"] = ["That link is not valid or has expired. Ask for a new one."]
+        });
 
     private static async Task<IResult> ChangePasswordAsync(
         ChangePasswordRequest request,

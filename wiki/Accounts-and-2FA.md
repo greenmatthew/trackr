@@ -31,8 +31,9 @@ sign-in screen, tap *No account yet? Create one*, then paste either the invite c
 **whole invite link**; the app picks the code out of a link so nobody has to select it by hand
 on a phone keyboard.
 
-Registration and the profile picture are the *only* account tasks the app handles. Changing a
-password, enrolling in 2FA, and minting invites all stay on the website.
+Registration, the profile picture and your own preferences are what the app handles. Changing a
+password, changing your email address, enrolling in 2FA, minting invites, exporting your data and
+deleting your account all stay on the website.
 
 ## Your profile picture
 
@@ -50,6 +51,89 @@ prompt asking for your whole photo library, and it never has it.
 If the app reports that your account was created but signing in afterwards failed, the account
 really does exist and the invite really has been spent. **Sign in with it — do not register
 again**, which would consume a second invite and then fail on a duplicate email.
+
+## Your name, your units and your time zone
+
+Set from the phone, on the same screen as the picture.
+
+- **Your name** is what greetings and the initials in the avatar circle use. It is not a second
+  login — the account is still keyed by its email address.
+- **Show energy as** switches every calorie figure in the app between kilocalories and kilojoules.
+  Nothing on the server changes: totals, targets and the snapshot stored with each logged meal
+  stay in kilocalories, and only the display converts. So switching back and forth costs nothing
+  and moves no stored number.
+- **Height and weight in** chooses metric or imperial for the body measurements below. It
+  deliberately does **not** apply to food: nutrition labels are metric everywhere, so grams stay
+  grams.
+- **Your days are measured in** is the time zone every total is grouped by. The phone offers its
+  own zone as an answer rather than using it, because the server is what adds up a day and every
+  device has to agree with it.
+
+## Body measurements
+
+Optional, all of it, on **Profile → Body measurements**. Sex, date of birth, height, weight and
+how active you are, kept for exactly one purpose: estimating what a day costs you, so a calorie
+target can be suggested instead of invented.
+
+Leaving anything blank stores nothing, and *Remove my measurements* takes back whatever is there.
+An estimate only appears once sex, date of birth, height and weight are all present — a figure
+built on measurements nobody entered would be a guess wearing the authority of a calculation.
+
+The estimate is Mifflin-St Jeor, the equation clinical guidance uses when a metabolic cart is not
+available, times an activity multiplier. It is rough: two people matching on every field can
+differ by a couple of hundred kilocalories a day. On **Daily targets**, *Start from that* fills
+the energy target with it and leaves it there to be changed — a hand-typed target always works,
+with or without any of this.
+
+## Changing your email address
+
+**Settings → Email address**, on the website. Your address is also your login, so this happens in
+two steps:
+
+1. Enter the new address and your current password. A confirmation link is sent **to the new
+   address**.
+2. Follow it while signed in and confirm. Only then does the address change.
+
+Nothing moves until step 2, which is the point — a typo would otherwise lock you out of your own
+server, because the address you can no longer read is where a password reset would be sent. Being
+signed in is required as well as holding the link, for the same reason a reset link does not sign
+you in: by default that link is in a log file.
+
+With the default email provider it is found the same way a reset link is:
+
+```bash
+docker compose logs backend | grep -A3 "was not sent"
+```
+
+## Exporting your data
+
+**Settings → Your data → Download my data** gives you a JSON file holding everything the account
+has: the profile, the targets, every logged meal with its full nutrient snapshot, and the catalog
+items only you can see.
+
+Meal photographs are **listed rather than embedded**, each with a link. A few hundred photos as
+base64 text would produce a file nothing can open, and each is already downloadable on its own.
+Fetch them before deleting the account if you want to keep them.
+
+## Deleting your account
+
+**Settings → Your data → Delete this account**. It asks for your password and for the word
+`DELETE` typed by hand, and it cannot be undone.
+
+What goes: the account, its log and every nutrient snapshot in it, its targets, its profile
+picture, its meal photographs, and the catalog items only that account could see.
+
+What stays:
+
+- **Items shared with the household.** They belong to the server, and other people's recipes are
+  made of them.
+- **The record of who invited whom.** Invites survive, saying they were created by an account that
+  no longer exists. Any invite that account minted and nobody has used yet is revoked on the way
+  out, so a live invitation never outlives its issuer.
+
+Deleting the last account on a server leaves an empty database, which means registration reopens
+and the next person to visit `/register` claims it. That is the same state a fresh deployment is
+in.
 
 ## Two-factor authentication
 

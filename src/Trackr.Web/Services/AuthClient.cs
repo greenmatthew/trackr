@@ -98,6 +98,59 @@ public sealed class AuthClient(HttpClient http, CookieAuthenticationStateProvide
         return await ApiResponse.ReadAsync<object>(response);
     }
 
+    /// <summary>
+    /// Asks for the address to change. Nothing moves until the emailed link is followed.
+    /// </summary>
+    /// <remarks>
+    /// Two steps because the address is the login and the only route back in through a password
+    /// reset - see the API's own note on <c>ChangeEmailRequest</c>.
+    /// </remarks>
+    public async Task<ApiResult<object>> RequestEmailChangeAsync(ChangeEmailRequest request)
+    {
+        using var response = await http.PostAsJsonAsync("api/account/email", request);
+        return await ApiResponse.ReadAsync<object>(response);
+    }
+
+    public async Task<ApiResult<MeResponse>> ConfirmEmailChangeAsync(ConfirmEmailChangeRequest request)
+    {
+        using var response = await http.PostAsJsonAsync("api/account/email/confirm", request);
+        var result = await ApiResponse.ReadAsync<MeResponse>(response);
+
+        if (result.Succeeded)
+        {
+            // The address on screen came from the auth state, and it has just moved.
+            stateProvider.Invalidate();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Deletes the account and everything in it.
+    /// </summary>
+    /// <remarks>
+    /// A DELETE with a body, which needs the long-hand request: the credentials must not travel in
+    /// a query string, where every access log between here and the server would keep them.
+    /// </remarks>
+    public async Task<ApiResult<object>> DeleteAccountAsync(DeleteAccountRequest request)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Delete, "api/account")
+        {
+            Content = JsonContent.Create(request)
+        };
+
+        using var response = await http.SendAsync(message);
+        var result = await ApiResponse.ReadAsync<object>(response);
+
+        if (result.Succeeded)
+        {
+            // The server ended the session; the browser needs to stop believing in it too.
+            stateProvider.Invalidate();
+        }
+
+        return result;
+    }
+
     public async Task<ApiResult<TwoFactorStatusResponse>> GetTwoFactorStatusAsync()
     {
         using var response = await http.GetAsync("api/account/2fa");

@@ -1,0 +1,83 @@
+@inject AuthClient Auth
+
+@* Two steps, and the reason is worth having on screen: the address is the login and the only
+   route back in through a password reset, so applying a typo would lock somebody out of their
+   own server with no way back. *@
+
+<section class="settings-section">
+    <h2>Email address</h2>
+
+    @if (_sent)
+    {
+        <div class="notice notice--good" role="status">
+            <p>
+                A link has been sent to @_sentTo. Your address changes when you follow it,
+                and not before — so nothing has changed yet.
+            </p>
+        </div>
+    }
+
+    @if (_problem is not null)
+    {
+        <div class="notice notice--bad" role="alert">
+            @foreach (var message in _problem)
+            {
+                <p>@message</p>
+            }
+        </div>
+    }
+
+    <EditForm Model="_request" OnValidSubmit="SubmitAsync" FormName="change-email">
+        <DataAnnotationsValidator />
+
+        <label for="newEmail">New email address</label>
+        <InputText id="newEmail" @bind-Value="_request.NewEmail" type="email" autocomplete="email" />
+        <ValidationMessage For="() => _request.NewEmail" />
+
+        <label for="emailPassword">Current password</label>
+        <InputText id="emailPassword" @bind-Value="_request.Password" type="password"
+                   autocomplete="current-password" />
+        <ValidationMessage For="() => _request.Password" />
+        <p class="field-hint">Asked for because changing this moves where a password reset goes.</p>
+
+        <button type="submit" disabled="@_busy">@(_busy ? "Sending…" : "Send confirmation link")</button>
+    </EditForm>
+</section>
+
+@code {
+    private readonly ChangeEmailRequest _request = new();
+    private IReadOnlyList<string>? _problem;
+    private string? _sentTo;
+    private bool _sent;
+    private bool _busy;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _problem = null;
+        _sent = false;
+
+        try
+        {
+            var result = await Auth.RequestEmailChangeAsync(_request);
+
+            if (result.Succeeded)
+            {
+                _sentTo = _request.NewEmail;
+                _sent = true;
+
+                // The password is cleared and the address is not: if the link never arrives, the
+                // next attempt should not start by retyping an address that was already right.
+                _request.Password = "";
+            }
+            else
+            {
+                _problem = result.Problem!.AllMessages.ToArray();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
