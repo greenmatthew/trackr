@@ -56,6 +56,8 @@ public sealed partial class ChatViewModel : ObservableObject
 
     private readonly AuthSession _session;
 
+    private readonly TimeProvider _time;
+
     private CancellationTokenSource? inFlight;
 
     /// <summary>
@@ -74,13 +76,15 @@ public sealed partial class ChatViewModel : ObservableObject
         IPhotoPicker photoPicker,
         IImageDownsizer downsizer,
         NutrientCatalogCache nutrients,
-        AuthSession session)
+        AuthSession session,
+        TimeProvider time)
     {
         _api = api;
         _photoPicker = photoPicker;
         _downsizer = downsizer;
         _nutrients = nutrients;
         _session = session;
+        _time = time;
 
         // This view model outlives a visit to the tab, so it also outlives an account. A previous
         // user's meals, photographs and half-typed message sitting in memory is exactly the sort of
@@ -147,6 +151,111 @@ public sealed partial class ChatViewModel : ObservableObject
     /// </remarks>
     [ObservableProperty]
     public partial bool IsAttachMenuOpen { get; set; }
+
+    /// <summary>
+    /// Foods this account confirmed before, offered so the same meal need not be analysed twice.
+    /// </summary>
+    /// <remarks>
+    /// Read from the log rather than from the catalog: what people eat again is mostly home
+    /// cooking, which never carries a barcode and so never becomes a catalog item.
+    /// </remarks>
+    public ObservableCollection<RecentItem> Recents { get; } = [];
+
+    [ObservableProperty]
+    public partial bool IsRecentsOpen { get; set; }
+
+    /// <summary>
+    /// Why the list is empty, when it is empty for a reason worth saying.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Error"/> because it belongs beside the list rather than above the
+    /// composer, and separate from an empty list because "the server could not be reached" and "you
+    /// have not logged anything yet" must never look the same.
+    /// </remarks>
+    [ObservableProperty]
+    public partial string? RecentsProblem { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsLoadingRecents { get; set; }
+
+    /// <summary>Opens the list and fetches it.</summary>
+    [RelayCommand]
+    private async Task ShowRecentsAsync()
+    {
+        IsAttachMenuOpen = false;
+        IsRecentsOpen = true;
+        IsLoadingRecents = true;
+        RecentsProblem = null;
+
+        try
+        {
+            var recent = await _api.GetRecentItemsAsync();
+
+            Recents.Clear();
+
+            if (recent is null)
+            {
+                RecentsProblem = "Could not reach the server, so there is nothing to offer yet.";
+
+                return;
+            }
+
+            var now = _time.GetUtcNow();
+
+            foreach (var item in recent)
+            {
+                Recents.Add(new RecentItem(item, now));
+            }
+
+            if (Recents.Count == 0)
+            {
+                RecentsProblem = "Nothing logged yet. Once you have, it will show up here.";
+            }
+        }
+        finally
+        {
+            IsLoadingRecents = false;
+        }
+    }
+
+    [RelayCommand]
+    private void HideRecents() => IsRecentsOpen = false;
+
+    /// <summary>
+    /// Puts a card for something eaten before into the chat. Saves nothing on its own.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the same card, through the same save path, as an analysis produces. Nothing is
+    /// written until the user confirms - confirm-before-save holds here because this reuses the code
+    /// path that enforces it rather than because it re-implements it.
+    /// <para>
+    /// A user message goes in first so the transcript still reads as a conversation rather than as
+    /// a card that appeared from nowhere.
+    /// </para>
+    /// </remarks>
+    [RelayCommand]
+    private async Task LogAgainAsync(RecentItem? recent)
+    {
+        if (recent is null)
+        {
+            return;
+        }
+
+        IsRecentsOpen = false;
+        Error = null;
+
+        var catalog = await _nutrients.EnsureLoadedAsync();
+
+        Messages.Add(new UserMessage($"{recent.Name} again", []));
+
+        // No text and no photos: nothing here needs analysing, and the note on the entry would
+        // otherwise claim the user typed something they did not.
+        var meal = new SentMeal(null, []);
+
+        Messages.Add(new ConfirmationCard(
+            [new ConfirmableItem(recent.Item, catalog)],
+            (card, cancellationToken) => SaveAsync(card, meal, cancellationToken)));
+    }
 
     /// <summary>The `+` button, bottom-left of the text box.</summary>
     [RelayCommand]
@@ -440,6 +549,10 @@ public sealed partial class ChatViewModel : ObservableObject
         Messages.Clear();
         Attachments.Clear();
         AttachmentsChanged();
+
+        Recents.Clear();
+        IsRecentsOpen = false;
+        RecentsProblem = null;
 
         Draft = string.Empty;
         Error = null;

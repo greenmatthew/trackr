@@ -25,6 +25,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LocalDatabase>();
         services.AddSingleton<AccountCache>();
 
+        // The system clock, injected rather than read statically so a view model that says "2 days
+        // ago" can be tested without waiting two days.
+        services.AddSingleton(TimeProvider.System);
+
         services.AddSingleton<AuthSession>();
 
         // Singleton because two screens draw the same picture and must agree the moment it

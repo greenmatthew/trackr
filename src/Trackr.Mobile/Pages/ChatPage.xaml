@@ -358,10 +358,81 @@
 
             </CollectionView>
 
+            <!-- Things eaten before, offered rather than analysed again. The list is above the
+                 composer rather than on a screen of its own, because re-logging is part of the
+                 conversation - AppShell.xaml says why it is not a tab. -->
+            <Border
+                IsVisible="{Binding IsRecentsOpen}"
+                Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                StrokeThickness="1"
+                Padding="0"
+                Margin="0,0,0,8">
+
+                <Grid RowDefinitions="Auto,Auto,*">
+
+                    <Grid ColumnDefinitions="*,Auto" Padding="12,8">
+
+                        <Label
+                            Text="Had it again"
+                            FontAttributes="Bold"
+                            VerticalOptions="Center" />
+
+                        <Button
+                            Grid.Column="1"
+                            Text="Close"
+                            AutomationId="HideRecents"
+                            Command="{Binding HideRecentsCommand}" />
+
+                    </Grid>
+
+                    <!-- Never an empty list where a failure happened: "you have never logged
+                         anything" and "the server did not answer" must not look the same. -->
+                    <Label
+                        Grid.Row="1"
+                        Padding="12,0,12,12"
+                        Text="{Binding RecentsProblem}"
+                        IsVisible="{Binding RecentsProblem, Converter={StaticResource IsStringNotNullOrEmptyConverter}}" />
+
+                    <CollectionView
+                        Grid.Row="2"
+                        ItemsSource="{Binding Recents}"
+                        HeightRequest="240">
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="chat:RecentItem">
+
+                                <!-- The whole row taps, rather than a button inside it. Milestone 9
+                                     learned this from the attachment remove badge: Material gives a
+                                     Button a minimum touch size that swallows what it sits on. -->
+                                <Grid Padding="12,10" RowDefinitions="Auto,Auto">
+
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ChatViewModel}}, Path=LogAgainCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Grid.GestureRecognizers>
+
+                                    <Label Text="{Binding Name}" FontAttributes="Bold" />
+
+                                    <Label
+                                        Grid.Row="1"
+                                        Text="{Binding Summary}"
+                                        FontSize="12"
+                                        TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}" />
+
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+
+                </Grid>
+            </Border>
+
             <!-- Camera first: photographing the meal in front of you is what the phone is for.
-                 Two plain buttons rather than a platform action sheet, so the choice stays a pair
-                 of commands the view model exposes and a test can drive. -->
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" IsVisible="{Binding IsAttachMenuOpen}">
+                 Plain buttons rather than a platform action sheet, so each choice stays a command
+                 the view model exposes and a test can drive. -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8" IsVisible="{Binding IsAttachMenuOpen}">
 
                 <Button
                     Text="Take a photo"
@@ -373,6 +444,12 @@
                     Text="Choose a photo"
                     AutomationId="ChoosePhoto"
                     Command="{Binding AttachPhotoCommand}" />
+
+                <Button
+                    Grid.Column="2"
+                    Text="Had it again"
+                    AutomationId="ShowRecents"
+                    Command="{Binding ShowRecentsCommand}" />
 
             </Grid>
 

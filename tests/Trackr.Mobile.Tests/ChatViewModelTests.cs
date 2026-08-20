@@ -463,6 +463,116 @@ public sealed class ChatViewModelTests
         Assert.Contains("not allowed", chat.Error);
     }
 
+    [Fact]
+    public async Task Recent_items_are_offered_from_the_attach_menu()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.GetRecentItemsAsync(Arg.Any<CancellationToken>()).Returns([Recent(), Recent("Toast")]);
+
+        chat.ToggleAttachMenuCommand.Execute(null);
+
+        await chat.ShowRecentsCommand.ExecuteAsync(null);
+
+        Assert.True(chat.IsRecentsOpen);
+        Assert.False(chat.IsAttachMenuOpen);
+        Assert.Equal(2, chat.Recents.Count);
+        Assert.Equal("312 kcal \u00b7 2 days ago", chat.Recents[0].Summary);
+        Assert.Null(chat.RecentsProblem);
+    }
+
+    /// <remarks>
+    /// The distinction the whole feature turns on: an unreachable server must never be drawn as an
+    /// account that has never logged anything.
+    /// </remarks>
+    [Fact]
+    public async Task A_failed_recents_fetch_says_so_rather_than_showing_an_empty_history()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.GetRecentItemsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<RecentItemResponse>?)null);
+
+        await chat.ShowRecentsCommand.ExecuteAsync(null);
+
+        Assert.Empty(chat.Recents);
+        Assert.Contains("Could not reach the server", chat.RecentsProblem!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_account_that_has_logged_nothing_is_told_so_plainly()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.GetRecentItemsAsync(Arg.Any<CancellationToken>()).Returns([]);
+
+        await chat.ShowRecentsCommand.ExecuteAsync(null);
+
+        Assert.Contains("Nothing logged yet", chat.RecentsProblem!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Re-logging goes through the same card and the same save path an analysis produces.
+    /// </summary>
+    [Fact]
+    public async Task Logging_something_again_puts_a_card_in_the_chat_and_saves_nothing()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.GetRecentItemsAsync(Arg.Any<CancellationToken>()).Returns([Recent()]);
+
+        await chat.ShowRecentsCommand.ExecuteAsync(null);
+        await chat.LogAgainCommand.ExecuteAsync(chat.Recents[0]);
+
+        Assert.False(chat.IsRecentsOpen);
+        Assert.Single(chat.Messages.OfType<UserMessage>());
+
+        var card = Assert.Single(chat.Messages.OfType<ConfirmationCard>());
+
+        Assert.Equal("logged before", Assert.Single(card.Items).SourceDescription);
+
+        await api.DidNotReceive().SaveLogEntryAsync(
+            Arg.Any<SaveLogEntryRequest>(),
+            Arg.Any<CancellationToken>());
+
+        // And it was never analysed - that is the whole saving.
+        await api.DidNotReceive().AnalyzeMealAsync(
+            Arg.Any<AnalyzeMealRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <remarks>
+    /// The barcode has to survive the round trip, or a re-logged packaged product stops filing
+    /// itself in the catalog the second time.
+    /// </remarks>
+    [Fact]
+    public async Task Confirming_a_re_logged_item_saves_what_the_card_holds()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.GetRecentItemsAsync(Arg.Any<CancellationToken>())
+            .Returns([Recent(energyKcal: 312m, barcode: "0076840100446")]);
+        api.SaveLogEntryAsync(Arg.Any<SaveLogEntryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(SaveLogResult.Ok(Saved()));
+
+        await chat.ShowRecentsCommand.ExecuteAsync(null);
+        await chat.LogAgainCommand.ExecuteAsync(chat.Recents[0]);
+
+        var card = Assert.Single(chat.Messages.OfType<ConfirmationCard>());
+
+        card.Items[0].QuantityText = "2";
+
+        await card.ConfirmCommand.ExecuteAsync(null);
+
+        await api.Received(1).SaveLogEntryAsync(
+            Arg.Is<SaveLogEntryRequest>(request =>
+                request.Items[0].Quantity == 2m
+                && request.Items[0].EnergyKcal == 312m
+                && request.Items[0].Barcode == "0076840100446"
+                && request.Note == null
+                && request.ImageIds.Count == 0),
+            Arg.Any<CancellationToken>());
+    }
+
     /// <remarks>
     /// SourceDescription ends in a catch-all arm reading "estimated", so a new source silently
     /// becomes an estimate rather than failing to compile. This is the test that notices.
@@ -566,6 +676,24 @@ public sealed class ChatViewModelTests
         Assert.Empty(chat.Messages);
     }
 
+    /// <summary>A fixed clock, so "2 days ago" is a thing a test can assert.</summary>
+    private static readonly FixedClock Clock = new(new DateTimeOffset(2026, 8, 19, 12, 0, 0, TimeSpan.Zero));
+
+    private static RecentItemResponse Recent(
+        string name = "Porridge",
+        int timesLogged = 1,
+        int daysAgo = 2,
+        decimal energyKcal = 312m,
+        string? barcode = null) =>
+        new(
+            Clock.GetUtcNow().AddDays(-daysAgo),
+            timesLogged,
+            Analysed(energyKcal: energyKcal, barcode: barcode) with
+            {
+                Name = name,
+                Source = AnalyzedItemSource.PreviouslyLogged
+            });
+
     private static MealAnalysisItem Analysed(
         decimal quantity = 1m,
         decimal energyKcal = 78m,
@@ -637,7 +765,8 @@ public sealed class ChatViewModelTests
             api, Substitute.For<ITokenStore>(), settings, LocalStore.InMemory());
 
         return (
-            new ChatViewModel(api, picker, downsizer, new NutrientCatalogCache(api), session),
+            new ChatViewModel(
+                api, picker, downsizer, new NutrientCatalogCache(api), session, Clock),
             api,
             picker,
             downsizer,
