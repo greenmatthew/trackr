@@ -148,8 +148,11 @@ public static class LogEndpoints
         UserManager<TrackrUser> userManager,
         TrackrDbContext db,
         NutrientCatalog catalog,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
+        var logger = loggerFactory.CreateLogger(typeof(LogEndpoints));
+
         var user = await userManager.GetUserAsync(principal);
         if (user is null)
         {
@@ -166,6 +169,12 @@ public static class LogEndpoints
 
         var now = Timestamps.UtcNow();
 
+        // Milestone 10: a scanned product becomes a catalog row here, because confirming is the only
+        // moment the server knows both what the product is and that a person believes the numbers.
+        // Swallowed on failure on purpose - the meal is what was approved, and losing it to a
+        // convenience that did not work would be the wrong trade. See CatalogUpsert.
+        var filed = await FileInCatalogAsync(db, user.Id, request, now, logger, cancellationToken);
+
         var entry = new LogEntry
         {
             UserId = user.Id,
@@ -177,7 +186,7 @@ public static class LogEndpoints
 
         foreach (var item in request.Items)
         {
-            entry.Items.Add(Snapshot(item, now));
+            entry.Items.Add(Snapshot(item, now, filed));
         }
 
         db.LogEntries.Add(entry);
@@ -290,13 +299,21 @@ public static class LogEndpoints
     }
 
     /// <summary>Freezes one request item into a row, multiplying the quantity in.</summary>
-    private static LogItem Snapshot(SaveLogItemRequest request, DateTimeOffset now)
+    /// <param name="filed">
+    /// What the barcodes in this request resolved to in the catalog, so an item the client could not
+    /// name an id for still records where it came from. A id the client did supply wins - it may be
+    /// a catalog item picked deliberately, which is a stronger statement than a barcode match.
+    /// </param>
+    private static LogItem Snapshot(
+        SaveLogItemRequest request,
+        DateTimeOffset now,
+        IReadOnlyDictionary<string, Guid>? filed = null)
     {
         var quantity = StoredPrecision.Measure(request.Quantity);
 
         var item = new LogItem
         {
-            FoodItemId = request.FoodItemId,
+            FoodItemId = request.FoodItemId ?? FiledId(request, filed),
             Name = request.Name.Trim(),
             Brand = string.IsNullOrWhiteSpace(request.Brand) ? null : request.Brand.Trim(),
             Quantity = quantity,
@@ -320,6 +337,53 @@ public static class LogEndpoints
         }
 
         return item;
+    }
+
+    private static Guid? FiledId(SaveLogItemRequest request, IReadOnlyDictionary<string, Guid>? filed) =>
+        filed is not null
+        && !string.IsNullOrWhiteSpace(request.Barcode)
+        && filed.TryGetValue(request.Barcode.Trim(), out var id)
+            ? id
+            : null;
+
+    /// <summary>
+    /// Files this meal's scanned products away, and never lets that stop the meal being saved.
+    /// </summary>
+    /// <remarks>
+    /// The catch is the point. Everything downstream of it treats a missing catalog row as normal -
+    /// an item with no barcode has none either - so the worst a failure here can do is cost the log
+    /// row its back-link, which is provenance rather than data.
+    /// </remarks>
+    private static async Task<IReadOnlyDictionary<string, Guid>> FileInCatalogAsync(
+        TrackrDbContext db,
+        Guid userId,
+        SaveLogEntryRequest request,
+        DateTimeOffset now,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await CatalogUpsert.FileAsync(db, userId, request, now, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                exception,
+                "Could not file a confirmed meal's products in the catalog. The meal is unaffected.");
+
+            // Load-bearing rather than tidiness. A catalog row added but not saved is still tracked,
+            // and the entry's own SaveChanges would try to insert it again - turning a swallowed
+            // failure into a lost meal, which is the one outcome this catch exists to prevent.
+            foreach (var entry in db.ChangeTracker.Entries<FoodItem>()
+                .Where(entry => entry.State is EntityState.Added)
+                .ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            return new Dictionary<string, Guid>(StringComparer.Ordinal);
+        }
     }
 
     /// <summary>Claims the caller's unattached photos for this entry.</summary>
