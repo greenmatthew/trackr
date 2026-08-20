@@ -128,7 +128,11 @@ internal static class NutritionValidation
     /// so anything else here means a caller is putting something in the field that is not a
     /// barcode - and that field is a uniqueness key for the whole household's catalog.
     /// </remarks>
-    public static string? NormaliseBarcode(string? barcode, ValidationErrors errors)
+    /// <param name="field">
+    /// Which field to report a bad barcode against. Defaults to the catalog's, because a log entry
+    /// carries several items and has to say which one.
+    /// </param>
+    public static string? NormaliseBarcode(string? barcode, ValidationErrors errors, string field = "barcode")
     {
         if (string.IsNullOrWhiteSpace(barcode))
         {
@@ -139,7 +143,7 @@ internal static class NutritionValidation
 
         if (!trimmed.All(char.IsAsciiDigit))
         {
-            errors.Add("barcode", "A barcode is digits only.");
+            errors.Add(field, "A barcode is digits only.");
             return null;
         }
 

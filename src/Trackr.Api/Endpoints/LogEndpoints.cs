@@ -398,6 +398,8 @@ public static class LogEndpoints
                 errors.Add($"{field}.servingSize", "A serving has to be bigger than nothing.");
             }
 
+            NutritionValidation.NormaliseBarcode(item.Barcode, errors, $"{field}.barcode");
+
             NutritionValidation.ValidateCoreNutrients(
                 item.EnergyKcal,
                 item.FatG,

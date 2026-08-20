@@ -62,6 +62,22 @@ public sealed class SaveLogItemRequest
     [StringLength(120)]
     public string? Brand { get; set; }
 
+    /// <summary>
+    /// The barcode this item was identified by, if it was.
+    /// </summary>
+    /// <remarks>
+    /// Not stored on the log item and never shown - CLAUDE.md section 1 keeps barcodes invisible.
+    /// It is here because it is the key the catalog is keyed by, and confirming a meal is the moment
+    /// milestone 10 files a scanned product away for next time. Only stage one of the cascade can
+    /// produce one, so its presence is also what tells the server this item came off a label rather
+    /// than out of the model.
+    /// <para>
+    /// Digits only. An item without one is logged exactly as before and files nothing.
+    /// </para>
+    /// </remarks>
+    [StringLength(32)]
+    public string? Barcode { get; set; }
+
     /// <summary>How many servings. Must be greater than zero; 2.5 is fine.</summary>
     public decimal Quantity { get; set; } = 1m;
 

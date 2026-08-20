@@ -463,6 +463,33 @@ public sealed class ChatViewModelTests
         Assert.Contains("not allowed", chat.Error);
     }
 
+    /// <remarks>
+    /// The barcode is never drawn - section 1 keeps it invisible - but it has to survive the trip
+    /// from the analysis to the save, because it is the key the server files the item away under.
+    /// </remarks>
+    [Fact]
+    public async Task A_confirmed_item_carries_the_barcode_it_was_identified_by()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.AnalyzeMealAsync(Arg.Any<AnalyzeMealRequest>(), Arg.Any<CancellationToken>())
+            .Returns(MealAnalysisResult.Analyzed([Analysed(barcode: "0076840100446")]));
+        api.SaveLogEntryAsync(Arg.Any<SaveLogEntryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(SaveLogResult.Ok(Saved()));
+
+        chat.Draft = "ice cream";
+
+        await chat.SendCommand.ExecuteAsync(null);
+
+        var card = chat.Messages.OfType<ConfirmationCard>().Single();
+
+        await card.ConfirmCommand.ExecuteAsync(null);
+
+        await api.Received(1).SaveLogEntryAsync(
+            Arg.Is<SaveLogEntryRequest>(request => request.Items[0].Barcode == "0076840100446"),
+            Arg.Any<CancellationToken>());
+    }
+
     /// <summary>
     /// The view model is a singleton so the transcript survives a tab switch, and that is exactly
     /// why it must not survive an account.
@@ -527,11 +554,12 @@ public sealed class ChatViewModelTests
         decimal quantity = 1m,
         decimal energyKcal = 78m,
         AnalysisConfidence confidence = AnalysisConfidence.Normal,
-        IReadOnlyList<string>? warnings = null) =>
+        IReadOnlyList<string>? warnings = null,
+        string? barcode = null) =>
         new(
             Name: "Egg",
             Brand: null,
-            Barcode: null,
+            Barcode: barcode,
             MealImageId: null,
             Source: AnalyzedItemSource.Model,
             Confidence: confidence,

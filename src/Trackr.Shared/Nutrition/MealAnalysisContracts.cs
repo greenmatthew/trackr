@@ -160,7 +160,8 @@ public static class MealAnalysisItemExtensions
     /// belong upstream of this, on the <see cref="MealAnalysisItem"/> the card is holding.
     /// <para>
     /// <see cref="SaveLogItemRequest.FoodItemId"/> stays null: the cascade does not read the catalog,
-    /// so there is no id to carry. Milestone 10 fills it in by upserting an item at this moment.
+    /// so there is no id to carry. The <see cref="MealAnalysisItem.Barcode"/> copied across is what
+    /// lets the server fill it in, by filing the item away as it saves the meal.
     /// </para>
     /// </remarks>
     public static SaveLogItemRequest ToSaveLogItemRequest(this MealAnalysisItem item) =>
@@ -168,6 +169,7 @@ public static class MealAnalysisItemExtensions
         {
             Name = item.Name,
             Brand = item.Brand,
+            Barcode = item.Barcode,
             Quantity = item.Quantity,
             ServingSize = item.ServingSize,
             ServingUnit = item.ServingUnit,

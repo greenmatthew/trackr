@@ -501,6 +501,7 @@ No properties.
 | `foodItemId` | string (uuid), nullable | no |
 | `name` | string | yes |
 | `brand` | string, nullable | no |
+| `barcode` | string, nullable | no |
 | `quantity` | number or string (double) | no |
 | `servingSize` | number or string (double), nullable | no |
 | `servingUnit` | string, nullable | no |

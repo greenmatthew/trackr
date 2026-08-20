@@ -43,6 +43,27 @@ public sealed class LogTests(PostgresFixture postgres) : AuthTestBase(postgres)
         Assert.Equal(120m, item.Nutrients["sodium"]);
     }
 
+    /// <remarks>
+    /// The StringLength attributes on SaveLogItemRequest are documentation - nothing in Program.cs
+    /// calls AddValidation - so an unchecked barcode would reach a varchar(32) column as a 500 on a
+    /// card the user had already approved.
+    /// </remarks>
+    [Fact]
+    public async Task A_barcode_on_a_log_item_has_to_be_digits()
+    {
+        using var client = await RegisterOwnerAsync();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/log",
+            Payloads.AdHocLog(barcode: "not-a-barcode"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("items[0].barcode", problem, StringComparison.Ordinal);
+    }
+
     /// <summary>The test that would have caught a cascade on the food-item foreign key.</summary>
     [Fact]
     public async Task Deleting_a_catalog_item_leaves_the_log_intact()

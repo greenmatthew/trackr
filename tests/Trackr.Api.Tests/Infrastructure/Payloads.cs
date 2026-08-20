@@ -69,6 +69,46 @@ internal static class Payloads
     /// <remarks>
     /// Nutrient values are per serving, as the API expects; the server multiplies them in.
     /// </remarks>
+    /// <summary>
+    /// A log entry with nothing in the catalog behind it - what a confirmed analysis produces.
+    /// </summary>
+    /// <remarks>
+    /// The barcode is the interesting parameter: it is what milestone 10 keys the catalog on, and
+    /// leaving it null is how a test says "the model guessed this one".
+    /// </remarks>
+    public static SaveLogEntryRequest AdHocLog(
+        string name = "Chocolate Therapy",
+        string? brand = "Ben & Jerry's",
+        string? barcode = null,
+        decimal quantity = 1m,
+        decimal energyKcal = 330m,
+        decimal fatG = 18m,
+        decimal carbohydrateG = 36m,
+        decimal proteinG = 6m,
+        decimal? servingSize = 100m,
+        string? servingUnit = "g",
+        Dictionary<string, decimal>? nutrients = null) =>
+        new()
+        {
+            Items =
+            [
+                new SaveLogItemRequest
+                {
+                    Name = name,
+                    Brand = brand,
+                    Barcode = barcode,
+                    Quantity = quantity,
+                    ServingSize = servingSize,
+                    ServingUnit = servingUnit,
+                    EnergyKcal = energyKcal,
+                    FatG = fatG,
+                    CarbohydrateG = carbohydrateG,
+                    ProteinG = proteinG,
+                    Nutrients = nutrients ?? new Dictionary<string, decimal>(StringComparer.Ordinal)
+                }
+            ]
+        };
+
     public static SaveLogEntryRequest LogOf(
         FoodItemResponse food,
         decimal quantity = 1m,
