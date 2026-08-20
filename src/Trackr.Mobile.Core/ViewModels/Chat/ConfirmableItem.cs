@@ -77,6 +77,50 @@ public sealed partial class ConfirmableItem : ObservableObject
         _ => "estimated"
     };
 
+    /// <summary>
+    /// The allergens the source declared, in words: "Contains milk, gluten".
+    /// </summary>
+    /// <remarks>
+    /// Drawn above the ingredient list rather than inside it, because "does this contain nuts" is a
+    /// question with consequences and reading a paragraph of small print to answer it is not good
+    /// enough. Empty means the source said nothing - never "contains no allergens" - so nothing is
+    /// shown rather than a reassuring blank.
+    /// </remarks>
+    public string? AllergenSummary => Summarise(analysed.Allergens);
+
+    public bool HasAllergens => AllergenSummary is not null;
+
+    /// <summary>What the product is made of, as the source reported it.</summary>
+    public string? IngredientsText => analysed.IngredientsText;
+
+    public bool HasIngredients => !string.IsNullOrWhiteSpace(analysed.IngredientsText);
+
+    /// <summary>
+    /// Turns Open Food Facts tags into something readable: <c>en:milk</c> becomes "milk".
+    /// </summary>
+    /// <remarks>
+    /// The prefix is a language marker on a taxonomy identifier and means nothing to a person. A
+    /// tag in some other language is shown as it is rather than hidden, because an allergen warning
+    /// somebody cannot read still tells them there is one.
+    /// </remarks>
+    private static string? Summarise(IReadOnlyList<string>? allergens)
+    {
+        if (allergens is null || allergens.Count == 0)
+        {
+            return null;
+        }
+
+        var names = allergens
+            .Select(tag => tag.Contains(':', StringComparison.Ordinal)
+                ? tag[(tag.IndexOf(':', StringComparison.Ordinal) + 1)..]
+                : tag)
+            .Select(tag => tag.Replace('-', ' '))
+            .Where(tag => tag.Length > 0)
+            .ToList();
+
+        return names.Count == 0 ? null : $"Contains {string.Join(", ", names)}";
+    }
+
     /// <summary>What happened to this item specifically. Shown without a tap when there is any.</summary>
     public IReadOnlyList<string> Warnings => analysed.Warnings;
 

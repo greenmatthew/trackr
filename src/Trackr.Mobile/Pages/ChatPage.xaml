@@ -107,6 +107,21 @@
 
                 <Label Text="{Binding SourceDescription}" Style="{StaticResource FieldLabel}" />
 
+                <!-- Above the ingredient list, not inside it. "Does this contain nuts" is a
+                     question with consequences, and answering it by reading a paragraph of small
+                     print is not good enough. Nothing is drawn when the source said nothing,
+                     because an empty list never means "contains no allergens". -->
+                <Label
+                    Text="{Binding AllergenSummary}"
+                    IsVisible="{Binding HasAllergens}"
+                    FontAttributes="Bold" />
+
+                <Label
+                    Text="{Binding IngredientsText}"
+                    IsVisible="{Binding HasIngredients}"
+                    FontSize="12"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}" />
+
                 <!-- Milestone 8's validator is the main thing standing between a small model and a
                      wrong number in the database. Its verdict has to look different from a normal
                      item rather than read as a footnote, or the whole check is decoration. -->

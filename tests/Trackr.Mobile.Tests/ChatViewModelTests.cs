@@ -574,6 +574,34 @@ public sealed class ChatViewModelTests
     }
 
     /// <remarks>
+    /// The prefix is a language marker on a taxonomy identifier and means nothing to a person.
+    /// </remarks>
+    [Fact]
+    public void Allergens_are_shown_as_words_rather_than_as_tags()
+    {
+        var item = new ConfirmableItem(
+            Analysed() with { Allergens = ["en:milk", "en:tree-nuts"] },
+            nutrientCatalog: null);
+
+        Assert.True(item.HasAllergens);
+        Assert.Equal("Contains milk, tree nuts", item.AllergenSummary);
+    }
+
+    /// <remarks>
+    /// An empty list means the source said nothing, never "contains no allergens", so a reassuring
+    /// blank is the one thing that must not be drawn.
+    /// </remarks>
+    [Fact]
+    public void An_item_with_no_declared_allergens_says_nothing_at_all()
+    {
+        var item = new ConfirmableItem(Analysed(), nutrientCatalog: null);
+
+        Assert.False(item.HasAllergens);
+        Assert.Null(item.AllergenSummary);
+        Assert.False(item.HasIngredients);
+    }
+
+    /// <remarks>
     /// SourceDescription ends in a catch-all arm reading "estimated", so a new source silently
     /// becomes an estimate rather than failing to compile. This is the test that notices.
     /// </remarks>
