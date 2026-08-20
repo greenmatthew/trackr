@@ -426,6 +426,37 @@ public sealed class TrackrApiClient(
         }
     }
 
+    /// <remarks>
+    /// On the ordinary client rather than the analysis one: this is a small read of rows the server
+    /// already has, not a request that starts a vision model.
+    /// </remarks>
+    public async Task<IReadOnlyList<RecentItemResponse>?> GetRecentItemsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var response = await http.GetAsync(Endpoint("api/log/recent"), cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "Recent items answered with {StatusCode}",
+                    (int)response.StatusCode);
+
+                return null;
+            }
+
+            return await response.Content
+                .ReadFromJsonAsync<IReadOnlyList<RecentItemResponse>>(cancellationToken);
+        }
+        catch (Exception ex) when (IsTransportFailure(ex))
+        {
+            logger.LogWarning(ex, "Recent items fetch failed");
+
+            return null;
+        }
+    }
+
     public async Task<IReadOnlyList<NutrientResponse>?> GetNutrientsAsync(
         CancellationToken cancellationToken = default)
     {

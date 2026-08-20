@@ -80,6 +80,17 @@ public interface ITrackrApiClient
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Foods this account has logged before, most recently eaten first.
+    /// </summary>
+    /// <remarks>
+    /// Null when it could not be asked, following the nutrient catalog: an empty list means "you
+    /// have never logged anything", which is a different and much more discouraging thing to say
+    /// to somebody whose server is simply unreachable.
+    /// </remarks>
+    Task<IReadOnlyList<RecentItemResponse>?> GetRecentItemsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stores a meal photo and returns its id, for the analysis and the log entry to refer to.
     /// </summary>
     /// <remarks>

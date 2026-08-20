@@ -225,6 +225,27 @@ public sealed class TrackrApiClientTests
         Assert.True((await client.CheckServerAsync(Server)).IsReachable);
     }
 
+    /// <remarks>
+    /// Null rather than an empty list, following the nutrient catalog. Telling somebody they have
+    /// never logged anything, when the truth is that the server could not be reached, is the kind
+    /// of wrong answer that looks like data loss.
+    /// </remarks>
+    [Fact]
+    public async Task An_unreachable_server_has_no_opinion_about_what_was_logged_before()
+    {
+        var client = ClientThatThrows(new HttpRequestException("no route to host"));
+
+        Assert.Null(await client.GetRecentItemsAsync());
+    }
+
+    [Fact]
+    public async Task A_server_error_is_not_an_empty_history_either()
+    {
+        var client = ClientThatResponds(HttpStatusCode.InternalServerError);
+
+        Assert.Null(await client.GetRecentItemsAsync());
+    }
+
     private static TrackrApiClient ClientThatThrows(Exception exception) =>
         Build(new StubHandler(_ => throw exception));
 
