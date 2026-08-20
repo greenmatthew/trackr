@@ -436,87 +436,20 @@ public sealed class MealAnalysisReaderTests
     /// ice cream, for a 43 230 kcal meal that nothing flagged. Every check in force at the time
     /// passed, and correctly - the serving is believable, the macros reconcile to the calorie, the
     /// count is under the thousand-serving ceiling. Only the product was absurd.
-    /// </remarks>
-    [Fact]
-    public void A_quantity_that_is_really_a_gram_weight_is_flagged()
-    {
-        var reading = Read(Reply(
-            """{"productRef":"none","name":"Chocolate Therapy","quantity":131,"energyKcal":330,"fatG":18,"carbohydrateG":36,"proteinG":6,"servingSize":131,"servingUnit":"g"}"""));
-
-        var item = Assert.Single(reading.Items);
-
-        Assert.Equal(AnalysisConfidence.Low, item.Confidence);
-        Assert.Equal(131m, item.Quantity);
-        Assert.Equal(330m, item.EnergyKcal);
-        Assert.Contains(item.Warnings, warning => warning.Contains("43230 kcal", StringComparison.Ordinal));
-    }
-
     /// <remarks>
     /// The half the energy ceiling cannot see. A hundred servings of lettuce is a trivial number of
     /// kilocalories and thirteen kilograms of lettuce, so weighing the portion catches the misread
     /// that counting its calories misses.
-    /// </remarks>
-    [Fact]
-    public void A_portion_weighing_more_than_anyone_could_eat_is_flagged()
-    {
-        var reading = Read(Reply(
-            """{"productRef":"none","name":"Lettuce","quantity":131,"energyKcal":15,"fatG":0,"carbohydrateG":3,"proteinG":1,"servingSize":100,"servingUnit":"g"}"""));
-
-        var item = Assert.Single(reading.Items);
-
-        Assert.Equal(AnalysisConfidence.Low, item.Confidence);
-        Assert.Contains(item.Warnings, warning => warning.Contains("13.1 kg", StringComparison.Ordinal));
-    }
-
     /// <remarks>
     /// The ceiling is on a misread, not on a big appetite, so a portion somebody could plausibly
     /// have eaten has to pass. A check that fires on those is one people learn to ignore.
-    /// </remarks>
-    [Fact]
-    public void A_large_but_believable_portion_is_not_flagged()
-    {
-        var reading = Read(Reply(
-            """{"productRef":"none","name":"Flapjack","quantity":10,"energyKcal":800,"fatG":40,"carbohydrateG":80,"proteinG":30}"""));
-
-        var item = Assert.Single(reading.Items);
-
-        Assert.Equal(AnalysisConfidence.Normal, item.Confidence);
-        Assert.Empty(item.Warnings);
-    }
-
     /// <remarks>
     /// No line here is absurd on its own - each is under the per-item ceiling and each reconciles -
     /// but nobody ate them all in one sitting. Every item is flagged, because the sum is what is
     /// wrong and the reader cannot tell which line spoiled it.
-    /// </remarks>
-    [Fact]
-    public void A_meal_that_adds_up_to_a_week_of_food_is_flagged()
-    {
-        var oil = """{"productRef":"none","name":"Oil","quantity":1,"energyKcal":4500,"fatG":500,"carbohydrateG":0,"proteinG":0}""";
-
-        var reading = Read(Reply(oil, oil, oil, oil, oil));
-
-        Assert.Equal(5, reading.Items.Count);
-        Assert.All(reading.Items, item => Assert.Equal(AnalysisConfidence.Low, item.Confidence));
-        Assert.All(
-            reading.Items,
-            item => Assert.Contains(
-                item.Warnings,
-                warning => warning.Contains("week of food", StringComparison.Ordinal)));
-    }
-
     /// <remarks>
     /// An ordinary meal of several courses must not trip the meal ceiling, or the flag stops
     /// meaning anything.
-    /// </remarks>
-    [Fact]
-    public void An_ordinary_several_course_meal_is_not_flagged()
-    {
-        var reading = Read(Reply(Toast, Toast, Toast));
-
-        Assert.All(reading.Items, item => Assert.Equal(AnalysisConfidence.Normal, item.Confidence));
-    }
-
     private ModelReading Read(string content, string? doneReason = "stop") =>
         MealAnalysisReader.Read(content, doneReason, _catalog, Products);
 

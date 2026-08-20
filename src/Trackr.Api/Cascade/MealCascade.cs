@@ -151,7 +151,10 @@ public sealed class MealCascade(
         return items.Count == 0
             ? MealAnalysisResult.Failed(
                 "Nothing could be read from what you sent.", reading.Note, Distinct(warnings))
-            : MealAnalysisResult.Analyzed(items, reading.Note, Distinct(warnings));
+            // Checked here rather than in the reader, because on a full match the quantity is the
+            // only thing the model contributed and FromProduct has just dropped its warnings. See
+            // PortionCheck.
+            : MealAnalysisResult.Analyzed(PortionCheck.Apply(items), reading.Note, Distinct(warnings));
     }
 
     /// <summary>
@@ -186,7 +189,7 @@ public sealed class MealCascade(
                 + "from the photo. The amount is assumed to be one serving.");
 
         return MealAnalysisResult.Analyzed(
-            [.. matched.Select(product => FromProduct(product, item: null))],
+            PortionCheck.Apply([.. matched.Select(product => FromProduct(product, item: null))]),
             reading.Note,
             Distinct(warnings));
     }

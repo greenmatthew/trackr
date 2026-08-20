@@ -221,6 +221,38 @@ public sealed class MealAnalysisTests(PostgresFixture postgres) : AuthTestBase(p
     }
 
     /// <summary>
+    /// The one complaint about a matched product that must survive: the quantity is the only
+    /// number the model still contributes.
+    /// </summary>
+    /// <remarks>
+    /// Found on the emulator, and it is the other side of the test below. Dropping the reader's
+    /// warnings is right for every figure the database replaced - and wrong for the count, which it
+    /// did not. The reply that produced this had a defensible 330 kcal serving from Open Food Facts
+    /// and a quantity of 131, the serving's gram weight echoed back as a count, and the card offered
+    /// 43 230 kcal with nothing marked wrong. Checking the assembled item rather than the model's is
+    /// what closes it - see PortionCheck.
+    /// </remarks>
+    [Fact]
+    public async Task A_matched_product_still_reports_a_quantity_nobody_could_have_eaten()
+    {
+        using var client = await SignedInClientAsync(
+            StubLookup.Matched(), StubAnalyzer.Reading(productRef: "p1", quantity: 131m));
+
+        var id = await UploadAsync(client, RenderBarcode(Barcode));
+
+        var response = await client.PostAsJsonAsync(
+            "/api/analyze", new AnalyzeMealRequest { ImageIds = [id] });
+
+        var analysis = await response.Content.ReadFromJsonAsync<MealAnalysisResult>();
+
+        var item = Assert.Single(analysis!.Items);
+
+        Assert.Equal(AnalyzedItemSource.Database, item.Source);
+        Assert.Equal(AnalysisConfidence.Low, item.Confidence);
+        Assert.Contains(item.Warnings, warning => warning.Contains("70609 kcal", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// A complaint about numbers that were then thrown away must not survive them.
     /// </summary>
     /// <remarks>
@@ -356,13 +388,14 @@ public sealed class MealAnalysisTests(PostgresFixture postgres) : AuthTestBase(p
         public static StubAnalyzer Reading(
             string? productRef = null,
             decimal energyKcal = 80m,
-            string? warning = null) =>
+            string? warning = null,
+            decimal quantity = 1m) =>
             new(ModelReading.Read([
                 new ModelItem(
                     ProductReference: productRef,
                     Name: "Toast",
                     Brand: null,
-                    Quantity: 1m,
+                    Quantity: quantity,
                     ServingSize: null,
                     ServingUnit: null,
                     EnergyKcal: energyKcal,
