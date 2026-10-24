@@ -260,7 +260,7 @@ public sealed class RegisterViewModelTests
 
         // A real AuthSession, matching LoginViewModelTests: persisting the token on success is
         // part of the behaviour under test, and a substitute would stub exactly that out.
-        var session = new AuthSession(api, tokenStore, settings, LocalStore.InMemory());
+        var session = new AuthSession(api, tokenStore, settings, LocalStore.InMemory(), LocalStore.Recents());
 
         return (new RegisterViewModel(api, session, navigation), api, tokenStore, navigation);
     }

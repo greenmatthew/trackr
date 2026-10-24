@@ -3,8 +3,11 @@ using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Nutrition;
 using Trackr.Mobile.Core.Platform;
+using Trackr.Mobile.Core.Storage;
+using Trackr.Mobile.Core.Sync;
 using Trackr.Mobile.Core.ViewModels;
 using Trackr.Mobile.Core.ViewModels.Chat;
+using Trackr.Shared.Auth;
 using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Tests;
@@ -267,16 +270,23 @@ public sealed class ChatViewModelTests
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>A failed save leaves the card usable rather than losing the corrections.</summary>
+    /// <summary>
+    /// A save the server <em>refused</em> leaves the card usable rather than losing the corrections.
+    /// </summary>
+    /// <remarks>
+    /// Only a refusal behaves this way. A save that never reached the server is queued instead -
+    /// see <see cref="A_save_that_could_not_be_sent_is_queued_rather_than_lost"/> - because
+    /// retrying that one unchanged will eventually work, while retrying this one will not.
+    /// </remarks>
     [Fact]
-    public async Task A_save_that_failed_says_so_and_stays_confirmable()
+    public async Task A_save_the_server_refused_says_so_and_stays_confirmable()
     {
         var (chat, api, _, _) = Build();
 
         api.AnalyzeMealAsync(Arg.Any<AnalyzeMealRequest>(), Arg.Any<CancellationToken>())
             .Returns(MealAnalysisResult.Analyzed([Analysed()]));
         api.SaveLogEntryAsync(Arg.Any<SaveLogEntryRequest>(), Arg.Any<CancellationToken>())
-            .Returns(SaveLogResult.Failed("Could not reach the server. Nothing was saved."));
+            .Returns(SaveLogResult.Rejected("That photo belongs to another entry."));
 
         chat.Draft = "an egg";
 
@@ -287,8 +297,74 @@ public sealed class ChatViewModelTests
         await card.ConfirmCommand.ExecuteAsync(null);
 
         Assert.Equal(ConfirmationState.Pending, card.State);
-        Assert.Contains("Nothing was saved", card.Problem);
+        Assert.Contains("another entry", card.Problem);
         Assert.True(card.CanConfirm);
+    }
+
+    /// <summary>
+    /// Milestone 14: an approved meal the server never received is kept, not lost.
+    /// </summary>
+    /// <remarks>
+    /// And it is not called saved. The numbers are settled, but today's total will not include them
+    /// until the queue empties, and a card claiming "saved to your log" would be the app telling a
+    /// small lie about a server it could not reach.
+    /// </remarks>
+    [Fact]
+    public async Task A_save_that_could_not_be_sent_is_queued_rather_than_lost()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.AnalyzeMealAsync(Arg.Any<AnalyzeMealRequest>(), Arg.Any<CancellationToken>())
+            .Returns(MealAnalysisResult.Analyzed([Analysed()]));
+        api.SaveLogEntryAsync(Arg.Any<SaveLogEntryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(SaveLogResult.Deferred("Could not reach the server. Nothing was saved yet."));
+
+        chat.Draft = "an egg";
+
+        await chat.SendCommand.ExecuteAsync(null);
+
+        var card = chat.Messages.OfType<ConfirmationCard>().Single();
+
+        await card.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.Equal(ConfirmationState.Queued, card.State);
+        Assert.Null(card.Problem);
+        Assert.Contains("waiting to send", card.StateDescription);
+
+        // And the user is told, in the transcript, rather than being left to infer it from a label.
+        Assert.Contains(
+            chat.Messages.OfType<WarningMessage>(),
+            warning => warning.Text.Contains("sent when the server can be reached"));
+    }
+
+    /// <summary>
+    /// The stamp that makes a queued meal keep the time it was eaten.
+    /// </summary>
+    /// <remarks>
+    /// Sent on every save rather than only on a queued one, so a meal's time never depends on how
+    /// long it waited. An instant, never a date: which local day it falls in stays the server's
+    /// decision, as milestone 11 and milestone 12 both insisted.
+    /// </remarks>
+    [Fact]
+    public async Task Confirming_stamps_the_moment_it_was_approved_and_an_id_to_repeat_it_by()
+    {
+        var (chat, api, _, _) = Build();
+
+        api.AnalyzeMealAsync(Arg.Any<AnalyzeMealRequest>(), Arg.Any<CancellationToken>())
+            .Returns(MealAnalysisResult.Analyzed([Analysed()]));
+        api.SaveLogEntryAsync(Arg.Any<SaveLogEntryRequest>(), Arg.Any<CancellationToken>())
+            .Returns(SaveLogResult.Ok(Saved()));
+
+        chat.Draft = "an egg";
+
+        await chat.SendCommand.ExecuteAsync(null);
+
+        await chat.Messages.OfType<ConfirmationCard>().Single().ConfirmCommand.ExecuteAsync(null);
+
+        await api.Received(1).SaveLogEntryAsync(
+            Arg.Is<SaveLogEntryRequest>(request =>
+                request.LoggedUtc == Clock.GetUtcNow() && request.ClientRequestId != null),
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -706,6 +782,73 @@ public sealed class ChatViewModelTests
     }
 
     /// <summary>A fixed clock, so "2 days ago" is a thing a test can assert.</summary>
+    /// <summary>
+    /// Milestone 14: with no server there is no cascade, so the only thing that can be logged is
+    /// something logged before - and that list has to be on the phone for it to be offered.
+    /// </summary>
+    [Fact]
+    public async Task The_list_of_foods_eaten_before_is_kept_for_when_the_server_cannot_be_reached()
+    {
+        var recents = LocalStore.Recents();
+
+        var (online, api, _, _, session) = BuildWithSession(recents: recents);
+
+        api.GetMeAsync(Arg.Any<CancellationToken>()).Returns(MeResult.Ok(Account()));
+        await session.RestoreAsync();
+
+        api.GetRecentItemsAsync(Arg.Any<CancellationToken>())
+            .Returns([new RecentItemResponse(Clock.GetUtcNow(), 3, Analysed())]);
+
+        await online.ShowRecentsCommand.ExecuteAsync(null);
+
+        Assert.Single(online.Recents);
+
+        // A second phone-worth of state, with a server that has since become unreachable.
+        var (offline, offlineApi, _, _, offlineSession) = BuildWithSession(recents: recents);
+
+        offlineApi.GetMeAsync(Arg.Any<CancellationToken>()).Returns(MeResult.Ok(Account()));
+        await offlineSession.RestoreAsync();
+
+        offlineApi.GetRecentItemsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<RecentItemResponse>?)null);
+
+        await offline.ShowRecentsCommand.ExecuteAsync(null);
+
+        Assert.Single(offline.Recents);
+
+        // And it says the list is old, rather than passing it off as the server's current answer.
+        Assert.Contains("Offline", offline.RecentsProblem);
+    }
+
+    /// <summary>
+    /// An unreachable server and an empty history must not look the same, offline or on.
+    /// </summary>
+    [Fact]
+    public async Task With_no_list_stored_the_chat_says_that_rather_than_showing_an_empty_one()
+    {
+        var (chat, api, _, _, session) = BuildWithSession();
+
+        api.GetMeAsync(Arg.Any<CancellationToken>()).Returns(MeResult.Ok(Account()));
+        await session.RestoreAsync();
+
+        api.GetRecentItemsAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<RecentItemResponse>?)null);
+
+        await chat.ShowRecentsCommand.ExecuteAsync(null);
+
+        Assert.Empty(chat.Recents);
+        Assert.Contains("nothing has been saved on this phone", chat.RecentsProblem);
+    }
+
+    private static MeResponse Account() =>
+        new(
+            Queues.UserId,
+            "owner@example.test",
+            TwoFactorEnabled: false,
+            AvatarUpdatedUtc: null,
+            TimeZoneId: null,
+            DisplayName: null,
+            EnergyUnit: EnergyUnit.Kilocalories,
+            MeasurementSystem: MeasurementSystem.Metric);
+
     private static readonly FixedClock Clock = new(new DateTimeOffset(2026, 8, 19, 12, 0, 0, TimeSpan.Zero));
 
     private static RecentItemResponse Recent(
@@ -773,7 +916,7 @@ public sealed class ChatViewModelTests
     /// would stub out exactly that.
     /// </remarks>
     private static (ChatViewModel Chat, ITrackrApiClient Api, IPhotoPicker Picker, IImageDownsizer Downsizer, AuthSession Session)
-        BuildWithSession(bool withNutrientCatalog = true)
+        BuildWithSession(bool withNutrientCatalog = true, RecentItemsCache? recents = null)
     {
         var api = Substitute.For<ITrackrApiClient>();
         var picker = Substitute.For<IPhotoPicker>();
@@ -790,12 +933,24 @@ public sealed class ChatViewModelTests
         var settings = Substitute.For<IServerSettings>();
         settings.BaseUrl.Returns(new Uri("https://trackr.example.test/"));
 
+        // A token already stored, so a test that wants a signed-in session only has to answer /me.
+        var tokenStore = Substitute.For<ITokenStore>();
+        tokenStore.ReadAsync().Returns(new StoredTokens("access", "refresh", DateTimeOffset.MaxValue));
+
         var session = new AuthSession(
-            api, Substitute.For<ITokenStore>(), settings, LocalStore.InMemory());
+            api, tokenStore, settings, LocalStore.InMemory(), LocalStore.Recents());
 
         return (
             new ChatViewModel(
-                api, picker, downsizer, new NutrientCatalogCache(api), session, Clock, Units.Metric),
+                api,
+                picker,
+                downsizer,
+                new NutrientCatalogCache(api),
+                session,
+                Clock,
+                Units.Metric,
+                Queues.Sync(api, time: Clock),
+                recents ?? LocalStore.Recents()),
             api,
             picker,
             downsizer,

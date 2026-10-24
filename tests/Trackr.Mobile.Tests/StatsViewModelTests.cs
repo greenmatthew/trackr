@@ -472,7 +472,8 @@ public sealed class StatsViewModelTests
                 api,
                 new NutrientCatalogCache(api),
                 Substitute.For<INavigationService>(),
-                Units.For(energy)),
+                Units.For(energy),
+                Queues.Sync(api)),
             api);
     }
 

@@ -14,9 +14,11 @@ namespace Trackr.Mobile.Core.Nutrition;
 /// name, or in grams when it is micrograms.
 /// <para>
 /// Cached because the answer changes about once a year and the card is drawn on every meal.
-/// In memory rather than in the phone's SQLite database, deliberately: the offline log queue is the
-/// thing that will need to survive a restart, and until it exists a table here would be schema to
-/// maintain for a request that costs one round trip on the first meal of a session.
+/// In memory rather than in the phone's SQLite database, deliberately: what has to survive a
+/// restart is a meal the server has not taken (<c>Storage/LogOutbox</c>), and a table here would be
+/// schema to maintain for a request that costs one round trip on the first meal of a session. The
+/// consequence is worth stating: with no network and a cold process, a card shows its calories and
+/// macros and leaves the micronutrient rows out, which is the degradation this class is built for.
 /// </para>
 /// </remarks>
 public sealed class NutrientCatalogCache(ITrackrApiClient api)

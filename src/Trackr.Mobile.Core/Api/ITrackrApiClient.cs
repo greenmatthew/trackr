@@ -224,16 +224,49 @@ public sealed record MealImageUploadResult(
     public static MealImageUploadResult Failed(string problem) => new(false, Problem: problem);
 }
 
+/// <summary>
+/// What a save attempt came to.
+/// </summary>
+/// <remarks>
+/// Three outcomes rather than two, and the third is what makes the offline queue possible: a
+/// request that never reached the server can be sent again unchanged, while one the server read
+/// and refused will be refused again for as long as it is retried. Collapsing them into a single
+/// "failed" either loses meals or loops forever. It is the same distinction
+/// <see cref="MeStatus"/> already draws for the session.
+/// </remarks>
+public enum SaveLogStatus
+{
+    /// <summary>The server has the meal.</summary>
+    Saved,
+
+    /// <summary>The server answered and refused. Retrying this request changes nothing.</summary>
+    Rejected,
+
+    /// <summary>
+    /// No verdict: offline, timed out, or the server is unwell or does not currently accept this
+    /// session. The meal is unsaved and the same request may work later.
+    /// </summary>
+    Deferred,
+}
+
 /// <summary>Outcome of writing a log entry.</summary>
 /// <param name="Entry">What was stored, set only on success.</param>
 public sealed record SaveLogResult(
-    bool Succeeded,
+    SaveLogStatus Status,
     LogEntryResponse? Entry = null,
     string? Problem = null)
 {
-    public static SaveLogResult Ok(LogEntryResponse entry) => new(true, entry);
+    public bool Succeeded => Status is SaveLogStatus.Saved;
 
-    public static SaveLogResult Failed(string problem) => new(false, Problem: problem);
+    public static SaveLogResult Ok(LogEntryResponse entry) => new(SaveLogStatus.Saved, entry);
+
+    /// <summary>The server read it and said no. Nothing will send it again on its own.</summary>
+    public static SaveLogResult Rejected(string problem) =>
+        new(SaveLogStatus.Rejected, Problem: problem);
+
+    /// <summary>Not sent, and worth sending again.</summary>
+    public static SaveLogResult Deferred(string problem) =>
+        new(SaveLogStatus.Deferred, Problem: problem);
 }
 
 /// <summary>Outcome of probing a candidate server address.</summary>

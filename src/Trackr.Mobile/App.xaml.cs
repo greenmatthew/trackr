@@ -1,4 +1,5 @@
 using Trackr.Mobile.Core.Auth;
+using Trackr.Mobile.Core.Sync;
 using Trackr.Mobile.Pages;
 
 namespace Trackr.Mobile;
@@ -39,6 +40,12 @@ public partial class App : Application
         // server setup. Showing a neutral screen briefly is better than showing a wrong one.
         _window = new Window(new LoadingPage());
 
+        // Coming back to the app is the most likely moment for a queued meal to become sendable:
+        // the phone has usually moved, or has been put down somewhere with wifi, since it was last
+        // looked at. OutboxSync also listens to connectivity itself, which covers the app being
+        // open when the signal returns; this covers the far commoner case of it not being.
+        _window.Resumed += (_, _) => FlushQueue();
+
         _ = ResolveStartingShellAsync();
 
         return _window;
@@ -60,6 +67,16 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Empties the offline queue, without holding up whatever prompted it.
+    /// </summary>
+    /// <remarks>
+    /// Nothing awaits this and nothing shows a spinner for it: a delivery the user did not ask for
+    /// should not be able to make the app feel slow. Home reads the queue every time it appears -
+    /// and flushes it again itself - so what this changes is on screen the next time anybody looks.
+    /// </remarks>
+    private void FlushQueue() => _ = _services.GetRequiredService<OutboxSync>().FlushAsync();
+
     private void SyncShell() =>
         // Changed is raised from whichever thread finished the await that preceded it, and
         // Window.Page must be set on the UI thread.
@@ -76,6 +93,11 @@ public partial class App : Application
                 {
                     _window.Page = _services.GetRequiredService<AppShell>();
                 }
+
+                // Signing back in is the other moment a stuck queue can move: rows survive a
+                // sign-out precisely so a meal is not lost by one, and a session that ended while
+                // they waited is the reason several of them may have stalled.
+                FlushQueue();
             }
             else if (_window.Page is not AuthShell)
             {

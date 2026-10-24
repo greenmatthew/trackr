@@ -18,6 +18,16 @@ public enum ConfirmationState
     /// <summary>Written to the log. The card stays in the transcript, read-only.</summary>
     Saved,
 
+    /// <summary>
+    /// Approved and stored on the phone, waiting for a server that could not be reached.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="Saved"/>. The numbers are settled and nothing more will be
+    /// asked of the user, but today's total does not include this yet and saying "saved to your
+    /// log" would be a claim about the server that is not true - see milestone 14's queue.
+    /// </remarks>
+    Queued,
+
     /// <summary>Thrown away by the user. Also nothing written.</summary>
     Discarded
 }
@@ -80,6 +90,7 @@ public sealed partial class ConfirmationCard : ChatMessage
     public string? StateDescription => State switch
     {
         ConfirmationState.Saved => "Saved to your log",
+        ConfirmationState.Queued => "Saved on this phone - waiting to send",
         ConfirmationState.Discarded => "Discarded - nothing was saved",
         _ => null
     };

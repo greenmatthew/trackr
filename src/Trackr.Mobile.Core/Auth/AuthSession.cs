@@ -18,7 +18,8 @@ public sealed class AuthSession(
     ITrackrApiClient api,
     ITokenStore tokenStore,
     IServerSettings serverSettings,
-    AccountCache cache) : ICurrentAccount
+    AccountCache cache,
+    RecentItemsCache recents) : ICurrentAccount
 {
     /// <summary>The signed-in account, or null. Populated by <see cref="RestoreAsync"/>.</summary>
     public MeResponse? CurrentUser { get; private set; }
@@ -183,6 +184,18 @@ public sealed class AuthSession(
         // to sign in on this device the previous one's email and photograph, and would break
         // the invariant RestoreAsync leans on.
         await cache.ClearAsync();
+
+        // The offline list of what this account has eaten goes too, for the same reason and with
+        // no loss: it is a copy of something the server will hand back on the next sign-in.
+        //
+        // The offline queue deliberately does NOT. Those rows are meals somebody confirmed and the
+        // server has never seen, so dropping them here would make signing out a way to lose food
+        // that was logged. They are tagged with the account that queued them, are never read back
+        // for another, and go out on the next sign-in - see OutboxSync.
+        if (CurrentUser is { } user)
+        {
+            await recents.ClearAsync(user.UserId);
+        }
 
         CurrentUser = null;
         Changed?.Invoke();

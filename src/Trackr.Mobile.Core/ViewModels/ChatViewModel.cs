@@ -5,6 +5,8 @@ using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Nutrition;
 using Trackr.Mobile.Core.Platform;
+using Trackr.Mobile.Core.Storage;
+using Trackr.Mobile.Core.Sync;
 using Trackr.Mobile.Core.ViewModels.Chat;
 using Trackr.Shared.Nutrition;
 
@@ -59,6 +61,10 @@ public sealed partial class ChatViewModel : ObservableObject
     private readonly TimeProvider _time;
     private readonly DisplayUnits _units;
 
+    private readonly OutboxSync _outbox;
+
+    private readonly RecentItemsCache _recentsCache;
+
     private CancellationTokenSource? inFlight;
 
     /// <summary>
@@ -79,7 +85,9 @@ public sealed partial class ChatViewModel : ObservableObject
         NutrientCatalogCache nutrients,
         AuthSession session,
         TimeProvider time,
-        DisplayUnits units)
+        DisplayUnits units,
+        OutboxSync outbox,
+        RecentItemsCache recentsCache)
     {
         _api = api;
         _photoPicker = photoPicker;
@@ -88,6 +96,8 @@ public sealed partial class ChatViewModel : ObservableObject
         _session = session;
         _time = time;
         _units = units;
+        _outbox = outbox;
+        _recentsCache = recentsCache;
 
         // This view model outlives a visit to the tab, so it also outlives an account. A previous
         // user's meals, photographs and half-typed message sitting in memory is exactly the sort of
@@ -181,7 +191,20 @@ public sealed partial class ChatViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsLoadingRecents { get; set; }
 
-    /// <summary>Opens the list and fetches it.</summary>
+    /// <summary>
+    /// Opens the list and fetches it, falling back to the copy on the phone.
+    /// </summary>
+    /// <remarks>
+    /// The offline half of milestone 14, and the reason the queue is worth having at all. Analysing
+    /// a meal needs the server - the cascade lives there and stays there (CLAUDE.md section 10) - so
+    /// with no network this list is the <em>only</em> way to log anything. Something eaten before
+    /// needs no model: the numbers were confirmed once already, and re-logging is a card built from
+    /// them.
+    /// <para>
+    /// The stale list says it is stale. Showing yesterday's answer as though the server had just
+    /// given it would be the quiet kind of wrong this app keeps refusing to be.
+    /// </para>
+    /// </remarks>
     [RelayCommand]
     private async Task ShowRecentsAsync()
     {
@@ -192,18 +215,18 @@ public sealed partial class ChatViewModel : ObservableObject
 
         try
         {
+            var user = _session.CurrentUser;
             var recent = await _api.GetRecentItemsAsync();
+            var now = _time.GetUtcNow();
 
             Recents.Clear();
 
             if (recent is null)
             {
-                RecentsProblem = "Could not reach the server, so there is nothing to offer yet.";
+                await ShowCachedRecentsAsync(user?.UserId, now);
 
                 return;
             }
-
-            var now = _time.GetUtcNow();
 
             foreach (var item in recent)
             {
@@ -214,12 +237,52 @@ public sealed partial class ChatViewModel : ObservableObject
             {
                 RecentsProblem = "Nothing logged yet. Once you have, it will show up here.";
             }
+
+            if (user is { } signedIn)
+            {
+                // Written on the way past rather than on a schedule: the list is only ever wanted
+                // here, so the moment it is fetched is the moment worth keeping it.
+                await _recentsCache.WriteAsync(signedIn.UserId, recent, now);
+            }
         }
         finally
         {
             IsLoadingRecents = false;
         }
     }
+
+    private async Task ShowCachedRecentsAsync(Guid? userId, DateTimeOffset now)
+    {
+        var cached = userId is { } id ? await _recentsCache.ReadAsync(id) : null;
+
+        if (cached is null || cached.Items.Count == 0)
+        {
+            RecentsProblem = "Could not reach the server, and nothing has been saved on this phone "
+                + "to offer instead.";
+
+            return;
+        }
+
+        foreach (var item in cached.Items)
+        {
+            Recents.Add(new RecentItem(item, now, _units));
+        }
+
+        RecentsProblem = $"Offline - showing what this phone last saw, {Ago(now - cached.CachedUtc)}. "
+            + "Anything you log now is sent when the server can be reached.";
+    }
+
+    /// <remarks>
+    /// Coarser than <c>RecentItem</c>'s, and about a different thing: this dates the <em>list</em>,
+    /// and the question it answers is only "is this worth trusting".
+    /// </remarks>
+    private static string Ago(TimeSpan elapsed) => elapsed switch
+    {
+        { TotalMinutes: < 90 } => "a moment ago",
+        { TotalHours: < 24 } => $"{(int)elapsed.TotalHours} hours ago",
+        { TotalDays: < 2 } => "yesterday",
+        _ => $"{(int)elapsed.TotalDays} days ago"
+    };
 
     [RelayCommand]
     private void HideRecents() => IsRecentsOpen = false;
@@ -503,6 +566,27 @@ public sealed partial class ChatViewModel : ObservableObject
         LastAttempt = null;
     }
 
+    /// <summary>
+    /// Turns an approved card into a stored meal - on the server, or on the phone until it can be.
+    /// </summary>
+    /// <remarks>
+    /// Two fields are stamped here and nowhere else, and both exist because the save may not happen
+    /// for hours.
+    /// <para>
+    /// <b><c>LoggedUtc</c> is the moment the card was approved</b>, on every save rather than only
+    /// on a queued one. The server would otherwise stamp its own "now" when the queue finally
+    /// reached it, which turns a breakfast confirmed in a tunnel into an evening meal - and, past
+    /// midnight, into one on the wrong day. One rule for both paths, so a meal's time never depends
+    /// on how long it waited. It is an <em>instant</em> and never a date: which local day it falls
+    /// in is still the server's decision, as milestone 11 and milestone 12 both insisted.
+    /// </para>
+    /// <para>
+    /// <b><c>ClientRequestId</c> makes the save repeatable.</b> A queued row is retried with nobody
+    /// watching, and a reply lost on the way back is indistinguishable from a request that never
+    /// arrived; the id is what makes the second attempt find the first one's entry instead of
+    /// writing a second dinner.
+    /// </para>
+    /// </remarks>
     private async Task SaveAsync(
         ConfirmationCard card,
         SentMeal meal,
@@ -510,6 +594,8 @@ public sealed partial class ChatViewModel : ObservableObject
     {
         var request = new SaveLogEntryRequest
         {
+            ClientRequestId = Guid.CreateVersion7(),
+            LoggedUtc = _time.GetUtcNow(),
             Note = meal.Text,
             ImageIds = [.. meal.ImageIds],
 
@@ -518,18 +604,46 @@ public sealed partial class ChatViewModel : ObservableObject
             Items = [.. card.Items.Select(item => item.Corrected.ToSaveLogItemRequest())]
         };
 
-        var result = await _api.SaveLogEntryAsync(request, cancellationToken);
+        var result = await _outbox.SubmitAsync(request, Describe(card), cancellationToken);
 
-        if (!result.Succeeded)
+        switch (result.Outcome)
         {
-            card.Problem = result.Problem;
+            case SubmitOutcome.Saved:
+                card.Problem = null;
+                card.State = ConfirmationState.Saved;
+                card.Detach();
 
-            return;
+                break;
+
+            case SubmitOutcome.Queued:
+                // Settled as far as the user is concerned, and deliberately not called "saved":
+                // today's total will not move until the queue empties, and a card claiming
+                // otherwise would be the app telling a small lie about the server.
+                card.Problem = null;
+                card.State = ConfirmationState.Queued;
+                card.Detach();
+
+                Messages.Add(new WarningMessage(
+                    result.Problem ?? "Saved on this phone. It will be sent when the server can be "
+                    + "reached."));
+
+                break;
+
+            default:
+                // Rejected or unstorable. The card stays pending with its numbers intact, because
+                // the only thing that can fix either is the person looking at it.
+                card.Problem = result.Problem;
+
+                break;
         }
+    }
 
-        card.Problem = null;
-        card.State = ConfirmationState.Saved;
-        card.Detach();
+    /// <summary>What to call a queued meal on the Home banner, where there is no card to look at.</summary>
+    private static string Describe(ConfirmationCard card)
+    {
+        var first = card.Items[0].Corrected.Name;
+
+        return card.Items.Count > 1 ? $"{first} and {card.Items.Count - 1} more" : first;
     }
 
     /// <summary>

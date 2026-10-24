@@ -126,6 +126,6 @@ public sealed class AuthSessionTests
         serverSettings.BaseUrl.Returns(new Uri("https://trackr.example.test/"));
         tokenStore.ReadAsync().Returns(new StoredTokens("access", "refresh", DateTimeOffset.MaxValue));
 
-        return (new AuthSession(api, tokenStore, serverSettings, cache), api, tokenStore, cache);
+        return (new AuthSession(api, tokenStore, serverSettings, cache, LocalStore.Recents()), api, tokenStore, cache);
     }
 }

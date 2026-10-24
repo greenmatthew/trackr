@@ -3,6 +3,7 @@ using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Auth;
 using Trackr.Mobile.Core.Nutrition;
 using Trackr.Mobile.Core.Storage;
+using Trackr.Mobile.Core.Sync;
 using Trackr.Mobile.Core.ViewModels;
 
 namespace Trackr.Mobile.Core;
@@ -25,6 +26,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LocalDatabase>();
         services.AddSingleton<AccountCache>();
 
+        // Not caches, whatever the neighbours suggest: LogOutbox holds meals the server has not
+        // taken yet, and losing one loses food somebody logged. RecentItemsCache is a cache, and is
+        // what makes the queue reachable with no network at all.
+        services.AddSingleton<LogOutbox>();
+        services.AddSingleton<RecentItemsCache>();
+
         // The system clock, injected rather than read statically so a view model that says "2 days
         // ago" can be tested without waiting two days.
         services.AddSingleton(TimeProvider.System);
@@ -45,6 +52,11 @@ public static class ServiceCollectionExtensions
         // changes - and because it subscribes to AuthSession.Changed to drop the bytes on
         // sign-out, which only works if there is exactly one of it.
         services.AddSingleton<AvatarStore>();
+
+        // Singleton, and one of the few things here that does work while no screen is looking: it
+        // subscribes to the platform's connectivity signal for the life of the app, so a queue
+        // empties itself when the network returns rather than when somebody remembers it.
+        services.AddSingleton<OutboxSync>();
 
         services.AddTransient<BearerTokenHandler>();
 
@@ -93,9 +105,9 @@ public static class ServiceCollectionExtensions
 
         // Singleton, unlike the view models above, because the transcript is the screen: a chat that
         // empties itself on the way back from the Home tab reads as a crash rather than a design.
-        // Milestone 14's offline queue is what gives a conversation somewhere to live that a phone
-        // call cannot destroy; until then, surviving a tab switch is most of the value at none of
-        // the cost.
+        // It still lives only as long as the process - milestone 14's queue holds the part that
+        // must not, which is a meal the server has not taken, and holds it in SQLite rather than
+        // in a transcript.
         //
         // What it costs is the obligation AvatarStore already carries: state that outlives a visit
         // also outlives an account, so ChatViewModel takes AuthSession and empties itself on a

@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Trackr.Mobile.Core.Api;
 using Trackr.Mobile.Core.Nutrition;
+using Trackr.Mobile.Core.Storage;
+using Trackr.Mobile.Core.Sync;
 using Trackr.Shared.Nutrition;
 
 namespace Trackr.Mobile.Core.ViewModels;
@@ -26,7 +28,8 @@ public sealed partial class HomeViewModel(
     ITrackrApiClient api,
     NutrientCatalogCache nutrients,
     INavigationService navigation,
-    DisplayUnits units) : ObservableObject
+    DisplayUnits units,
+    OutboxSync outbox) : ObservableObject
 {
     /// <summary>
     /// The day being totalled, as the server understands it.
@@ -47,6 +50,36 @@ public sealed partial class HomeViewModel(
 
     /// <summary>Micronutrients something reported today, in label order.</summary>
     public ObservableCollection<NutrientRow> Nutrients { get; } = [];
+
+    /// <summary>
+    /// Meals confirmed on this phone that the server has not taken yet.
+    /// </summary>
+    /// <remarks>
+    /// Home is where this belongs, because Home is where the number it contradicts is. A total that
+    /// silently omits three queued meals is a wrong number on the screen the whole app is built
+    /// around, and the chat card that queued them is in a transcript that does not survive a
+    /// restart. So the queue is shown next to the total it is missing from.
+    /// </remarks>
+    public ObservableCollection<QueuedMeal> Queued { get; } = [];
+
+    public bool HasQueued => Queued.Count > 0;
+
+    /// <summary>
+    /// What the queue amounts to, in a sentence. Null when there is nothing waiting.
+    /// </summary>
+    /// <remarks>
+    /// Says explicitly that today's total does not include them, because that is the thing a person
+    /// looking at this screen would otherwise get wrong.
+    /// </remarks>
+    public string? QueuedSummary => Queued.Count switch
+    {
+        0 => null,
+        1 => "1 meal is waiting to be sent, and is not in today's total.",
+        var many => $"{many} meals are waiting to be sent, and are not in today's total."
+    };
+
+    /// <summary>Whether anything in the queue has stopped trying by itself.</summary>
+    public bool HasStuck => Queued.Any(meal => meal.Rejected);
 
     /// <summary>
     /// Daily targets against today, drawn above the totals.
@@ -106,6 +139,12 @@ public sealed partial class HomeViewModel(
 
         try
         {
+            // Before the totals rather than after: a queue that empties now is a total that should
+            // already include what it delivered, and asking the other way round shows a stale
+            // number beside a banner that has just gone.
+            await outbox.FlushAsync();
+            await ReadQueueAsync();
+
             var catalog = await nutrients.EnsureLoadedAsync();
             var stats = await api.GetStatsAsync();
             var goals = await api.GetGoalProgressAsync();
@@ -141,6 +180,51 @@ public sealed partial class HomeViewModel(
         {
             IsLoading = false;
         }
+    }
+
+    /// <summary>Sends one stuck meal again, from the banner.</summary>
+    [RelayCommand]
+    private async Task RetryQueuedAsync(QueuedMeal? meal)
+    {
+        if (meal is null)
+        {
+            return;
+        }
+
+        await outbox.RetryAsync(meal.Id);
+        await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Throws one away, from the banner. The only way a confirmed meal is ever lost, and it takes
+    /// a deliberate tap to do it.
+    /// </summary>
+    [RelayCommand]
+    private async Task DiscardQueuedAsync(QueuedMeal? meal)
+    {
+        if (meal is null)
+        {
+            return;
+        }
+
+        await outbox.DiscardAsync(meal.Id);
+        await ReadQueueAsync();
+    }
+
+    private async Task ReadQueueAsync()
+    {
+        var queued = await outbox.ReadAsync();
+
+        Queued.Clear();
+
+        foreach (var meal in queued)
+        {
+            Queued.Add(meal);
+        }
+
+        OnPropertyChanged(nameof(HasQueued));
+        OnPropertyChanged(nameof(QueuedSummary));
+        OnPropertyChanged(nameof(HasStuck));
     }
 
     partial void OnTotalsChanged(DayTotals? value)

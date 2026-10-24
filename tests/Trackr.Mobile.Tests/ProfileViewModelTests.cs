@@ -275,7 +275,7 @@ public sealed class ProfileViewModelTests
             TwoFactorEnabled: false)));
 
         var cache = LocalStore.InMemory();
-        var session = new AuthSession(api, tokenStore, serverSettings, cache);
+        var session = new AuthSession(api, tokenStore, serverSettings, cache, LocalStore.Recents());
         var avatars = new AvatarStore(api, session, cache);
 
         var profile = new ProfileViewModel(
@@ -363,7 +363,7 @@ public sealed class ProfileViewModelTests
 
         var cache = LocalStore.InMemory();
 
-        var session = new AuthSession(api, tokenStore, serverSettings, cache);
+        var session = new AuthSession(api, tokenStore, serverSettings, cache, LocalStore.Recents());
         var avatars = new AvatarStore(api, session, cache);
 
         session.RestoreAsync().GetAwaiter().GetResult();

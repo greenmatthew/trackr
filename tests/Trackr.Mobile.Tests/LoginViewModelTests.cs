@@ -224,7 +224,7 @@ public sealed class LoginViewModelTests
         // AuthSession is a real instance rather than a substitute: the behaviour under test
         // includes it deciding to persist tokens, which is exactly what a substitute would
         // stub out.
-        var session = new AuthSession(api, tokenStore, settings, LocalStore.InMemory());
+        var session = new AuthSession(api, tokenStore, settings, LocalStore.InMemory(), LocalStore.Recents());
 
         return (new LoginViewModel(session, settings, navigation), api, tokenStore, navigation);
     }

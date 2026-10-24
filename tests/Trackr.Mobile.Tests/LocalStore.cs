@@ -20,9 +20,18 @@ namespace Trackr.Mobile.Tests;
 internal static class LocalStore
 {
     public static AccountCache InMemory() =>
-        new(
-            new LocalDatabase(new MemoryStorePath(), NullLogger<LocalDatabase>.Instance),
-            NullLogger<AccountCache>.Instance);
+        new(Database(), NullLogger<AccountCache>.Instance);
+
+    /// <summary>The offline queue, on its own database.</summary>
+    public static LogOutbox Outbox() =>
+        new(Database(), NullLogger<LogOutbox>.Instance);
+
+    /// <summary>The offline list of foods logged before, on its own database.</summary>
+    public static RecentItemsCache Recents() =>
+        new(Database(), NullLogger<RecentItemsCache>.Instance);
+
+    private static LocalDatabase Database() =>
+        new(new MemoryStorePath(), NullLogger<LocalDatabase>.Instance);
 
     private sealed class MemoryStorePath : ILocalStorePath
     {

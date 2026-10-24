@@ -767,17 +767,24 @@ public sealed class TrackrApiClient(
                     .ReadFromJsonAsync<LogEntryResponse>(cancellationToken);
 
                 return entry is null
-                    ? SaveLogResult.Failed("The server returned an empty response.")
+                    ? SaveLogResult.Deferred("The server returned an empty response.")
                     : SaveLogResult.Ok(entry);
             }
 
-            return SaveLogResult.Failed(await ReadProblemAsync(response, cancellationToken));
+            var problem = await ReadProblemAsync(response, cancellationToken);
+
+            // A refusal the server thought about, or one it could not help. The first will be
+            // refused again however many times the offline queue sends it; the second is the queue's
+            // whole reason for existing.
+            return IsWorthSendingAgain(response.StatusCode)
+                ? SaveLogResult.Deferred(problem)
+                : SaveLogResult.Rejected(problem);
         }
         catch (Exception ex) when (IsTransportFailure(ex))
         {
             logger.LogWarning(ex, "Saving the log entry failed");
 
-            return SaveLogResult.Failed("Could not reach the server. Nothing was saved.");
+            return SaveLogResult.Deferred("Could not reach the server. Nothing was saved yet.");
         }
     }
 
@@ -811,6 +818,22 @@ public sealed class TrackrApiClient(
             or TaskCanceledException
             or TimeoutRejectedException
             or BrokenCircuitException;
+
+    /// <summary>
+    /// Whether a status the server did return leaves the same request worth sending later.
+    /// </summary>
+    /// <remarks>
+    /// Everything the server blames itself for, plus the two it blames on timing. A 401 is here
+    /// deliberately: <see cref="BearerTokenHandler"/> has already tried to refresh, so reaching
+    /// this means the session has ended - and the meal should wait for the next sign-in rather
+    /// than be thrown away by it. The 4xx that are left are the ones a retry cannot fix: a number
+    /// the server will not accept, or a photo that belongs to somebody else.
+    /// </remarks>
+    private static bool IsWorthSendingAgain(HttpStatusCode status) =>
+        (int)status >= 500
+        || status is HttpStatusCode.RequestTimeout
+            or HttpStatusCode.TooManyRequests
+            or HttpStatusCode.Unauthorized;
 
     /// <summary>
     /// What to tell the user about a failure from <see cref="IsTransportFailure"/>.

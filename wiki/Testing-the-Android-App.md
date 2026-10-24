@@ -119,6 +119,39 @@ A rejected session is different from an unreachable one and must still sign you 
 no convenient way to force that from the emulator; changing the account's password on the web
 app rolls the security stamp and does it.
 
+### Testing the offline queue
+
+**Stop a container; do not use airplane mode.** The emulator reaches the dev server through
+`10.0.2.2`, which is the host rather than a network, and it stays reachable in airplane mode
+while Android reports no connection at all. Stopping the container is the only way to make the
+server genuinely unreachable from the app:
+
+```bash
+docker stop trackr-dev-frontend-1
+```
+
+Then, in the app: **Chat → `+` → Had it again**. The list is served from the phone, with a
+sentence above it saying so — give it 10–15 seconds, since the HTTP client retries before it
+gives up. Pick something, tap **Save**, and the card should read *Saved on this phone - waiting
+to send* rather than *Saved to your log*. Home then carries a banner naming the meal and saying
+it is not in today's total.
+
+```bash
+adb shell "run-as gg.matthewgreen.trackr sqlite3 files/trackr.db \
+  'SELECT summary, attempts, rejected FROM outbox;'"
+```
+
+Start the container again and return to Home: the banner goes, the total moves, and the stored
+entry carries the time the card was **approved**, not the time it was delivered.
+
+```bash
+docker start trackr-dev-frontend-1
+```
+
+Sending the same meal twice is not a duplicate — the server de-duplicates on the request's
+client id — so a flush interrupted half-way is safe to repeat. `docs/decisions/18-offline.md`
+has the reasoning.
+
 ## 3. A physical phone
 
 Required for camera work, and the only real check of the reverse-proxy path.

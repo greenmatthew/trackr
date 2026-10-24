@@ -318,7 +318,7 @@ public sealed class AvatarStoreTests
         // store keeps the picture beside it.
         var cache = LocalStore.InMemory();
 
-        var session = new AuthSession(api, tokenStore, serverSettings, cache);
+        var session = new AuthSession(api, tokenStore, serverSettings, cache, LocalStore.Recents());
         var store = new AvatarStore(api, session, cache);
 
         // Signs in via the same path the app uses, so CurrentUser is populated the same way.

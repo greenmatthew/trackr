@@ -70,6 +70,41 @@ public sealed class LocalDatabase(ILocalStorePath storePath, ILogger<LocalDataba
         ALTER TABLE account ADD COLUMN energy_unit        TEXT NULL;
         ALTER TABLE account ADD COLUMN measurement_system TEXT NULL;
         """,
+
+        // 3: milestone 14's offline queue, and the list that makes it reachable without a network.
+        //
+        // outbox holds meals the user approved and the server has not taken yet. The whole request
+        // is stored as the JSON that would have been posted, rather than as columns: what gets
+        // sent must be exactly what was confirmed, and a row taken apart into fields is a row that
+        // can be put back together differently. client_request_id is both the primary key here and
+        // the de-duplication key the server indexes, so a retry cannot become a second meal.
+        //
+        // user_id on both tables because a device signs out and back in. Neither is ever read for
+        // another account - a queued meal belongs to whoever approved it, and the list of what
+        // somebody ate is not something to show the next person to hold the phone.
+        """
+        CREATE TABLE outbox (
+            client_request_id TEXT    PRIMARY KEY,
+            user_id           TEXT    NOT NULL,
+            payload           TEXT    NOT NULL,
+            summary           TEXT    NOT NULL,
+            queued_utc        TEXT    NOT NULL,
+            attempts          INTEGER NOT NULL DEFAULT 0,
+            last_attempt_utc  TEXT    NULL,
+            last_error        TEXT    NULL,
+            rejected          INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX ix_outbox_user_queued ON outbox (user_id, queued_utc);
+
+        CREATE TABLE recent_item (
+            user_id    TEXT    NOT NULL,
+            position   INTEGER NOT NULL,
+            payload    TEXT    NOT NULL,
+            cached_utc TEXT    NOT NULL,
+            PRIMARY KEY (user_id, position)
+        );
+        """,
     ];
 
     private readonly SemaphoreSlim _gate = new(1, 1);

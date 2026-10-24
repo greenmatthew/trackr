@@ -49,6 +49,10 @@ public static class MauiProgram
         builder.Services.AddSingleton<IPhotoPicker, MediaPickerPhotoPicker>();
         builder.Services.AddSingleton<IImageDownsizer, GraphicsImageDownsizer>();
 
+        // Singleton because it subscribes to Connectivity for the life of the app: this is what
+        // tells the offline queue that a network came back.
+        builder.Services.AddSingleton<INetworkStatus, ConnectivityNetworkStatus>();
+
         // View models, the API client and its handler pipeline.
         builder.Services.AddTrackrCore();
 

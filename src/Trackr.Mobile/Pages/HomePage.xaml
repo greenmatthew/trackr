@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:nutrition="clr-namespace:Trackr.Mobile.Core.Nutrition;assembly=Trackr.Mobile.Core"
+    xmlns:storage="clr-namespace:Trackr.Mobile.Core.Storage;assembly=Trackr.Mobile.Core"
     xmlns:vm="clr-namespace:Trackr.Mobile.Core.ViewModels;assembly=Trackr.Mobile.Core"
     x:DataType="vm:HomeViewModel">
 
@@ -23,6 +24,67 @@
                 HorizontalOptions="Center" />
 
             <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" />
+
+            <!-- Meals confirmed on this phone that the server has not taken yet. It sits here, above
+                 the total, because the total is the number it contradicts: leaving three queued
+                 meals out of "today so far" without saying so would be exactly the quiet wrong
+                 figure CLAUDE.md section 2 is written against.
+
+                 A row only offers Send again and Discard once it has stopped retrying by itself.
+                 Discarding is the only way a confirmed meal is ever lost, so it takes a deliberate
+                 tap and never happens on the app's own initiative. -->
+            <Border
+                Style="{StaticResource Card}"
+                IsVisible="{Binding HasQueued}"
+                Stroke="{AppThemeBinding Light={StaticResource WarningOnLight}, Dark={StaticResource Warning}}">
+
+                <VerticalStackLayout Spacing="8">
+
+                    <Label
+                        Text="{Binding QueuedSummary}"
+                        AutomationId="QueuedSummary"
+                        TextColor="{AppThemeBinding Light={StaticResource WarningOnLight}, Dark={StaticResource Warning}}" />
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Queued}" Spacing="8">
+
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="storage:QueuedMeal">
+                                <VerticalStackLayout Spacing="2">
+
+                                    <Label Text="{Binding Summary}" Style="{StaticResource Body}" />
+
+                                    <Label
+                                        Text="{Binding LastError}"
+                                        Style="{StaticResource ErrorText}"
+                                        IsVisible="{Binding Rejected}" />
+
+                                    <HorizontalStackLayout Spacing="8" IsVisible="{Binding Rejected}">
+
+                                        <Button
+                                            Text="Send again"
+                                            Style="{StaticResource LinkAction}"
+                                            AutomationId="RetryQueued"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:HomeViewModel}}, Path=RetryQueuedCommand}"
+                                            CommandParameter="{Binding .}" />
+
+                                        <Button
+                                            Text="Discard"
+                                            Style="{StaticResource LinkAction}"
+                                            AutomationId="DiscardQueued"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:HomeViewModel}}, Path=DiscardQueuedCommand}"
+                                            CommandParameter="{Binding .}" />
+
+                                    </HorizontalStackLayout>
+
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+
+            </Border>
 
             <!-- Never drawn as an empty day: "you have eaten nothing" and "the server did not
                  answer" look identical if you let them, and only one is the user's doing. -->
