@@ -18,6 +18,16 @@ public class LogEntry
     public TrackrUser? User { get; set; }
 
     /// <summary>
+    /// The client's own id for the request that created this entry, when it supplied one.
+    /// </summary>
+    /// <remarks>
+    /// Unique per account, which is what makes a retried save find this row instead of writing a
+    /// second one. Null for every entry created before milestone 14 and for any client that does
+    /// not send one - the column is a de-duplication key, not a second identity.
+    /// </remarks>
+    public Guid? ClientRequestId { get; set; }
+
+    /// <summary>
     /// When the food was eaten. This is what the stats views aggregate on.
     /// </summary>
     /// <remarks>

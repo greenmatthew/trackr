@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Trackr.Api.Data;
 using Trackr.Api.Identity;
 using Trackr.Api.Time;
@@ -315,6 +316,20 @@ public static class LogEndpoints
             return Results.Unauthorized();
         }
 
+        // Before validation, not after, and that order is the whole point. A replay carries the
+        // same image ids as the request that succeeded, and those are now attached to the entry it
+        // created - which ValidateAsync rejects, correctly, as photos belonging to another entry.
+        // Checking first means a retry finds its own meal instead of a 400 about it.
+        if (await ReplayOfAsync(db, user.Id, request.ClientRequestId, cancellationToken) is { } already)
+        {
+            logger.LogInformation(
+                "Log entry {EntryId} returned again for client request {ClientRequestId}; nothing was written",
+                already,
+                request.ClientRequestId);
+
+            return Results.Ok(await ReadBackAsync(db, user.Id, already, cancellationToken));
+        }
+
         var errors = new ValidationErrors();
         await ValidateAsync(request, user.Id, entryId: null, db, catalog, errors, cancellationToken);
 
@@ -334,6 +349,7 @@ public static class LogEndpoints
         var entry = new LogEntry
         {
             UserId = user.Id,
+            ClientRequestId = request.ClientRequestId,
             LoggedUtc = Timestamps.ToStorablePrecision(request.LoggedUtc ?? now),
             Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
             CreatedUtc = now,
@@ -348,10 +364,70 @@ public static class LogEndpoints
         db.LogEntries.Add(entry);
 
         await AttachImagesAsync(db, user.Id, entry, request.ImageIds, cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateClientRequest(ex))
+        {
+            // Two flushes of the same queue at once - a resume and a connectivity change land
+            // together often enough. The look-up above found nothing because the other request had
+            // not committed yet; the unique index is what makes that a losing race rather than a
+            // second meal. Answer with the entry the winner wrote.
+            db.ChangeTracker.Clear();
+
+            var winner = await ReplayOfAsync(db, user.Id, request.ClientRequestId, cancellationToken);
+
+            if (winner is null)
+            {
+                throw;
+            }
+
+            logger.LogInformation(
+                "Log entry {EntryId} won the race for client request {ClientRequestId}",
+                winner,
+                request.ClientRequestId);
+
+            return Results.Ok(await ReadBackAsync(db, user.Id, winner.Value, cancellationToken));
+        }
 
         return Results.Created($"/api/log/{entry.Id}", await ReadBackAsync(db, user.Id, entry.Id, cancellationToken));
     }
+
+    /// <summary>The entry this client request already created, if it created one.</summary>
+    private static async Task<Guid?> ReplayOfAsync(
+        TrackrDbContext db,
+        Guid userId,
+        Guid? clientRequestId,
+        CancellationToken cancellationToken)
+    {
+        if (clientRequestId is not { } key)
+        {
+            return null;
+        }
+
+        var match = await db.LogEntries
+            .AsNoTracking()
+            .Where(entry => entry.UserId == userId && entry.ClientRequestId == key)
+            .Select(entry => (Guid?)entry.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return match;
+    }
+
+    /// <summary>
+    /// Whether a failed write was the unique index on the client request id, rather than anything
+    /// else that can go wrong on the way to Postgres.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the constraint name as well as the SQL state, because a bare 23505 could equally
+    /// be a catalog row or a goal, and answering those with somebody's meal would be worse than the
+    /// 500 they deserve.
+    /// </remarks>
+    private static bool IsDuplicateClientRequest(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } inner
+        && inner.ConstraintName is "IX_LogEntries_UserId_ClientRequestId";
 
     /// <remarks>
     /// A replace, like the catalog's PUT: items and their nutrient maps are rewritten wholesale,

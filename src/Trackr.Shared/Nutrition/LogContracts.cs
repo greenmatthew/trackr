@@ -10,6 +10,26 @@ namespace Trackr.Shared.Nutrition;
 public sealed class SaveLogEntryRequest
 {
     /// <summary>
+    /// The client's own id for this save, so sending it twice records one meal.
+    /// </summary>
+    /// <remarks>
+    /// Optional, and only <c>POST /api/log</c> reads it - a replace is already addressed by the
+    /// entry's own id and needs no second key.
+    /// <para>
+    /// It exists for the phone's offline queue (milestone 14). A queued entry is retried without
+    /// anybody watching, and the failure that matters is the one where the write succeeded and the
+    /// reply was lost: the client cannot tell that from a request that never arrived, so an
+    /// unguarded retry logs the meal a second time. With an id, the second request finds the first
+    /// one's entry and returns it - the same body, minus the write.
+    /// </para>
+    /// <para>
+    /// Unique per account, so two accounts choosing the same id is not a collision. Nothing about
+    /// it is secret and it is never shown; it is a de-duplication key, not a name.
+    /// </para>
+    /// </remarks>
+    public Guid? ClientRequestId { get; set; }
+
+    /// <summary>
     /// When the food was eaten. Defaults to now if the client does not say.
     /// </summary>
     /// <remarks>

@@ -313,6 +313,15 @@ public class TrackrDbContext(DbContextOptions<TrackrDbContext> options)
             // One index serves day, week and month alike: Postgres scans a btree backwards, so no
             // descending variant is needed. EF already creates the plain foreign-key indexes.
             entry.HasIndex(e => new { e.UserId, e.LoggedUtc });
+
+            // The phone's offline queue retries a save nobody is watching, so a lost reply must not
+            // become a second meal. Unique rather than merely indexed: the endpoint's look-then-write
+            // is two statements, and two flushes racing would otherwise both find nothing. Filtered,
+            // because null means "this client did not ask for de-duplication" and every entry
+            // written before milestone 14 says exactly that.
+            entry.HasIndex(e => new { e.UserId, e.ClientRequestId })
+                .IsUnique()
+                .HasFilter("\"ClientRequestId\" IS NOT NULL");
         });
 
         builder.Entity<LogItem>(item =>

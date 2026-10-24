@@ -663,6 +663,7 @@ No properties.
 
 | Property | Type | Required |
 | --- | --- | --- |
+| `clientRequestId` | string (uuid), nullable | no |
 | `loggedUtc` | string (date-time), nullable | no |
 | `note` | string, nullable | no |
 | `items` | array of [`SaveLogItemRequest`](#savelogitemrequest) | no |
