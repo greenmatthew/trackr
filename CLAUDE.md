@@ -253,6 +253,27 @@ lives — read the relevant one before changing anything it covers.
   (and the earlier decision that already settled it), why a hit links but never updates, why
   re-logging reads the log instead of the catalog, and why the portion check had to move out of the
   reader and onto the assembled item.
+- [13-ingredients.md](docs/decisions/13-ingredients.md) — ingredients: raw text on the item,
+  allergens and diet flags as Open Food Facts' own tags validated against no vocabulary, why empty
+  never means "contains none", why a recipe unions allergens where it intersects nutrients, and why
+  an over-long list is dropped rather than truncated.
+- [14-stats.md](docs/decisions/14-stats.md) — the stats views: grouping into local days in memory,
+  why a client may not name a day at all, empty days that come back as days, and an average that
+  divides by days logged.
+- [15-goals.md](docs/decisions/15-goals.md) — goals: targets keyed by nutrient, why a target carries
+  a direction and the fraction is uncapped, why a floor not yet reached is a day in progress, and
+  why a nutrient nothing reported counts as nothing eaten.
+- [16-time-zone.md](docs/decisions/16-time-zone.md) — the per-user zone: why it lives on the account
+  rather than travelling with a request, the phone's zone offered but never used, and the alpine
+  image that ships no tz database.
+- [17-profile.md](docs/decisions/17-profile.md) — the profile: units as a display preference that
+  never reaches storage, imperial governing bodies and not food, one read and three writes so that
+  clearing stays expressible, and an estimate declined rather than guessed.
+- [18-offline.md](docs/decisions/18-offline.md) — logging with no connection: why only a *confirmed*
+  meal is queued, the cached re-log list that makes it usable, the client request id that makes an
+  unwatched retry safe, why the client stamps the time it was approved, refused versus undelivered,
+  why discarding is the only way a meal is lost, and why connectivity is a trigger and never a
+  verdict.
 
 ---
 
@@ -688,9 +709,32 @@ Do each milestone as a working, testable slice before moving on. Keep the three 
       **Body metrics feed the goal maths.** Goals can suggest a calorie target from BMR/TDEE
       instead of asking the user to invent a number. Goals must still accept a hand-typed
       target, so this is never a hard dependency.
-14. **Polish** — offline/queued logging when the phone has no connection, edit/delete entries,
-    richer charts, per-nutrient detail views, a weight history to chart, an admin page on the web
-    app. (Exporting an account's data landed in §9.13; an *import* to match it has not.)
+14. **Polish** — a grab-bag with no fixed order. Still open: edit/delete entries, richer charts,
+    per-nutrient detail views, a weight history to chart, an admin page on the web app. (Exporting
+    an account's data landed in §9.13; an *import* to match it has not.)
+    - ~~**Offline / queued logging**~~ ✅ — [18-offline.md](docs/decisions/18-offline.md).
+      **Only a *confirmed* meal is queued**, and that falls out of rules the project already had
+      rather than out of caution: the cascade lives on the server (§10), so with no network there
+      are no numbers to be had, and confirm-before-save (§2) forbids storing numbers nobody has
+      seen. What makes the queue worth having is the other half — **`GET /api/log/recent` is cached
+      on the phone**, so something eaten before can still be logged from a tunnel, and the stale
+      list says in words that it is stale.
+      **A retry is safe because the server de-duplicates it.** `SaveLogEntryRequest` carries a
+      `ClientRequestId` and `POST /api/log` answers a repeat with the original entry and a 200 —
+      because the failure that matters is not the request that never arrived but the one whose
+      *reply* was lost, which from the phone looks identical. The unique index is what makes that
+      true rather than the look-up, which is two statements and can lose a race.
+      **The client stamps `LoggedUtc` on every save**, so a breakfast confirmed in a tunnel is not
+      stored as an evening meal — an instant, never a date, so §9.13's day boundary stays the
+      server's. A refusal and a non-delivery became different answers (`SaveLogStatus`), a rejected
+      row is kept and shown rather than retried or dropped, and **discarding is the only way a
+      confirmed meal is ever lost**. Home carries the banner, because Home holds the total the
+      queue is missing from.
+      **The trap, found by running it:** Android reports *no network* in airplane mode while the
+      emulator's host server is still reachable, so connectivity is a **trigger and never a
+      verdict** — a save is always attempted.
+      **Left open:** no physical-phone run; a background flush does not redraw a Home already on
+      screen; nothing but the save is queued, so a photo taken offline cannot be analysed later.
 
 ---
 
