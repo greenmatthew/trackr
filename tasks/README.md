@@ -47,6 +47,7 @@ verbatim under `## Notes`. `just milestone 13` finds them.
 | M12 | Goals |
 | M13 | User profile: name, units, body metrics, time zone, account self-service |
 | M14 | Polish: everything after, in no fixed order |
+| M15 | Operations: backups, CI, signing and releases, pinned and hardened images, going public |
 
 A new area of work is a new row (`M15`, ...), added in the commit that files its first task.
 Renaming a row means moving its tasks in the same commit.
