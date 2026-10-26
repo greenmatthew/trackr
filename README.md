@@ -10,8 +10,9 @@ Food photos never leave your server: barcodes are decoded locally and images go 
 model running in a container of your own. The only thing that goes out to the internet is a
 barcode number, looked up against [Open Food Facts](https://world.openfoodfacts.org/).
 
-> **Status: early.** Accounts, 2FA and the Android app's sign-in work today. Meal logging does
-> not exist yet — see the build order in [CLAUDE.md](CLAUDE.md).
+> **Status:** meal logging works end to end — the chat, photos, the confirmation card, the day's
+> totals, trends, daily targets and logging with no connection — verified on the emulator, not yet
+> on a physical phone. What is left is on the [task board](tasks/README.md).
 
 ## Layout
 
@@ -26,6 +27,7 @@ docker/                    Compose stacks and .env.example
 just/                      Task-runner recipes
 wiki/                      The project wiki — edited here, published from here
 docs/decisions/            Why each milestone was built the way it was
+tasks/                     The task board: one file per task, the directory is the status
 ```
 
 One repository on purpose: `Trackr.Shared` is a project reference rather than a published

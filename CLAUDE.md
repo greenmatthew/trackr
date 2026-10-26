@@ -13,7 +13,7 @@ Three homes, split by **when something is read** rather than by who reads it.
 | Home | Holds | Read |
 | --- | --- | --- |
 | **`CLAUDE.md`** (this file) | Decisions and constraints. What we are building, what is locked in, what not to do. | Every session, unprompted. |
-| **`docs/`** | Claude-facing working material. `decisions/` holds one record per milestone — the *why* behind past choices. | Before changing anything a record covers. |
+| **`docs/`** | Claude-facing working material. `decisions/` holds the decision records — the *why* behind past choices. | Before changing anything a record covers. |
 | **`wiki/`** | Reference and how-to, for the self-hoster and for Claude alike: installation, configuration, troubleshooting, dev environment, testing. Tracked here, published to the GitHub/Gitea wiki. | On demand, when the question actually arises. |
 
 **The test for this file:** *would Claude make a worse decision without this in context?* If
@@ -206,8 +206,9 @@ Keep the data layer behind EF Core so the concrete provider stays swappable.
 
 ### Decisions made so far
 
-Recorded per milestone in [`docs/decisions/`](docs/decisions/), which is where the *why*
-lives — read the relevant one before changing anything it covers.
+Recorded in [`docs/decisions/`](docs/decisions/), which is where the *why* lives — read the
+relevant one before changing anything it covers. One per milestone through record 18; since the
+task board (§9), one per task that settles something worth recording.
 
 - [01-scaffold.md](docs/decisions/01-scaffold.md) — nginx also proxying `/api/`, plain HTTP
   inside the containers, the two compose files, the `dotnet watch` inner loop.
@@ -419,8 +420,8 @@ have to be undone:
   Facts supplies it for barcode hits and the vision model reads it off the label otherwise.
 - **An ingredient list is only true of a specific product.** It attaches to an item with a brand or
   a barcode; a generic item must not carry one, and a composite derives its own from its components.
-  This is also why it sits awkwardly with the shared catalog's wiki-style edits — §9.10a has the
-  reasoning and the parts worth building.
+  This is also why it sits awkwardly with the shared catalog's wiki-style edits — milestone 10a's
+  entry (task 013) has the reasoning and the parts worth building.
 
 ---
 
@@ -475,266 +476,34 @@ login is ever exposed publicly, revisit this.)*
 
 ---
 
-## 9. Build order (milestones)
+## 9. The task board
 
-Do each milestone as a working, testable slice before moving on. Keep the three cascade stages
-(barcode, OFF, AI) behind interfaces from the start so they stay swappable.
+The work is a board of tasks in [`tasks/`](tasks/README.md): one Markdown file each, and the
+directory is the status — `backlog/`, `in-progress/`, `needs-user/`, `done/`, `rejected/`. Skill
+`task-board` is the workflow; `scripts/board.py` manages it, and `just next`, `just ready` and
+`just waiting` answer the questions people actually ask of it.
 
-1. ~~**Scaffold**~~ ✅ — [01-scaffold.md](docs/decisions/01-scaffold.md)
-2. ~~**Auth**~~ ✅ — [02-auth.md](docs/decisions/02-auth.md)
-3. ~~**Mobile foundation**~~ ✅ — the thin end-to-end slice, deliberately *before* the backend
-   milestones because the Android toolchain and token auth were the two unknowns in the pivot.
-   [03-android-pivot.md](docs/decisions/03-android-pivot.md)
-4. ~~**Documentation migration**~~ ✅ — [05-documentation.md](docs/decisions/05-documentation.md)
-5. ~~**Mobile UX & architecture**~~ ✅ — [06-mobile-ux.md](docs/decisions/06-mobile-ux.md).
-   Scoped as planning; it grew structural code because the questions were facts about a build,
-   not opinions about a design. Two shells swapped on the window, three tabs (Home | Chat |
-   Trends) with the profile behind a title-bar avatar, `Styles.xaml` pruned to a Trackr layer
-   over Material, a server-stored profile picture, and SQLite on the phone.
-   **Two things it pulled forward on purpose:** the avatar needed an EF entity, a migration and
-   endpoints (milestone 6 work) and a profile screen (§9.13). Neither means those milestones
-   partly shipped — the record says what was and was not taken.
-   **The status bar clash it left open is fixed** — before milestone 9, since the chat is the most
-   inset-sensitive screen in the app and building it against a layout about to change would mean
-   building it twice. It needed no slice: the app was already edge-to-edge (Android 15 enforces it
-   at API 35+), and the band was the Shell's `AppBarLayout` painting `colorPrimary` through the
-   status bar inset. An Android resource override fixes it; the amendment on the record has the
-   reasoning and the two things `ConfigChanges.UiMode` made necessary.
-6. ~~**Data layer**~~ ✅ — [07-data-layer.md](docs/decisions/07-data-layer.md). Seven entities,
-   the relational nutrient store seeded with 29 nutrients, and CRUD for catalog, log and meal
-   photos. The acceptance criterion — store and read back a full multi-nutrient item — is
-   `FoodCatalogTests.A_food_item_keeps_every_nutrient_it_was_given`.
-   **API only: it has no UI and is not meant to acquire one** (§10 still forbids a food-logging
-   surface on the web; the chat is milestone 9). Two things it settled beyond the original scope:
-   the **catalog is shared across accounts** (see §7) and meal photos are stored now, because
-   milestone 9 needs somewhere to put them before a confirmation card exists.
-7. ~~**Barcode + Open Food Facts**~~ ✅ — [08-barcode-off.md](docs/decisions/08-barcode-off.md).
-   Server-side decode (ZXing + SkiaSharp), OFF v2 lookup behind `IProductLookup`, and a pure mapper
-   onto the per-serving `FoodItem` shape across all 29 nutrients. All four §5 branches, with failure
-   reasons carried in `ProductLookupResult.Warnings` rather than swallowed. Two read-only routes,
-   `/api/lookup/barcode/{barcode}` and `/api/lookup/image/{id}` — **not** a barcode-entry surface,
-   and they write nothing.
-   **Verified at two tiers** (§11): unit tests plus a live run of the compose stack against the real
-   API, and then against real photographs in `media/examples` — which changed the design. **UPC-E is
-   excluded from the decoder because it manufactured checksum-valid false positives** out of
-   ingredients paragraphs and nutrition tables, and a false positive is the cascade's worst outcome:
-   it is reported as a full match, which is the one branch that never sends the photo to the model.
-   A second decode pass at 2× resolution earned its place on a curved can. 3 of 4 barcodes read, 0
-   invented. **Left open:** ingredients are not requested from OFF yet (milestone 10a), and no lookup
-   caching, deliberately — milestone 10 putting items in the catalog is the real fix.
-   - ~~**7a. Composite / recipe items**~~ ✅ — [09-composites.md](docs/decisions/09-composites.md).
-     A composite is still a `FoodItem`, plus a `FoodItemComponent` join and a `Yield`; nutrition is
-     **materialized on write**, so nothing downstream learns composites exist. Quantities count
-     **servings of the ingredient**, never grams. Two rules the original sketch did not settle and
-     this milestone did: **a global recipe may hold only global ingredients** — which is also what
-     makes the delete cascade safe — and **a nutrient survives into a recipe only if every
-     ingredient reports it**, because summing a missing micronutrient as zero is a confident
-     understatement, and "missing is not zero" has to hold in the arithmetic or it holds nowhere.
-     The cycle check is backed by a **transaction-scoped advisory lock**, without which it is advice
-     rather than a guarantee; the fan-out recompute deliberately **crosses account boundaries**,
-     since a shared ingredient sits in other people's recipes. Deleting an item a recipe uses is
-     refused, never cascaded.
-     **Left open:** nothing writes a recipe yet but a person with an HTTP client — milestone 9 is
-     where saying "I made this from these" becomes possible — and there is no scaling or unit
-     conversion.
-8. ~~**Ollama integration**~~ ✅ — [10-ollama.md](docs/decisions/10-ollama.md). `IMealAnalyzer`
-   behind a typed client, a prompt and JSON schema **generated from `NutrientCatalog`**, the
-   image-vs-structured-data swap in `MealPrompt.PhotosToSend`, and `MealAnalysisReader` — the
-   validator §5 marks REQUIRED, which is where the milestone's weight sits. One read-only route,
-   `POST /api/analyze`, running all three stages; it **writes nothing**, with a test that says so.
-   **Two things it settled beyond the original scope.** The model reports *per serving* plus a
-   quantity and **the server does the multiplication** — a deviation from §5's "the prompt computes
-   serving math", because small models are bad at arithmetic and the result maps 1:1 onto
-   `SaveLogItemRequest`. And **the prompt pins each identified product's serving**, without which
-   merging Open Food Facts' figures with the model's re-creates milestone 7's "each number
-   defensible, total nonsense" failure across a new seam.
-   **Two traps worth knowing before touching any of it:** a JSON-schema keyword Ollama's grammar
-   converter does not support is **skipped in silence**, leaving that part of the reply
-   unconstrained with no runtime symptom — hence
-   `The_schema_uses_no_construct_the_grammar_skips_silently`. And a photograph costs about 7 000
-   tokens, so the context window is set explicitly rather than left to Ollama, which sizes it from
-   *video* memory and gives a CPU-only server far too little.
-   **Left open:** nothing calls the route but an HTTP client, and the mobile client cannot — its
-   30-second timeout and retry pipeline would queue four inference jobs for one meal.
-9. ~~**Chat UI + cascade + confirm**~~ ✅ — [11-chat.md](docs/decisions/11-chat.md). The chat page,
-   the `+` button with camera and gallery, and the in-chat confirmation card that turns an analysis
-   into a `POST /api/log`. The cascade itself was already one server call, so this is MAUI work plus
-   the client fix without which none of it runs: **analysis needs its own named `HttpClient`** —
-   five-minute timeout, no resilience pipeline — because the shared 30-second client with retries
-   queued four inference jobs per meal.
-   **Three things it settled.** Confirming is `items.Select(ToSaveLogItemRequest)` and nothing else,
-   with edits applied upstream as `analysed with { … }`, so no mapping layer sits between the number
-   on screen and the number stored. Editable figures are bound as **text**, parsed here, and an
-   unreadable one blocks the save rather than becoming zero. And a photo is uploaded on send but
-   kept **by id**, so retrying a failed analysis costs no second upload.
-   **The two inherited rules landed where they had to:** a `Confidence: Low` item is drawn
-   differently with its warnings visible without a tap, and the card lists only nutrients the source
-   reported — never a "—" row for one nobody measured.
-   **Left open at the time, and closed since:** the quantity the validator missed and the transcript
-   dying on a tab switch are both fixed — see §9.10 and `12-catalog-growth.md` for the first, which
-   turned out to need fixing twice. No physical-phone run yet.
-10. ~~**Catalog growth**~~ ✅ — [12-catalog-growth.md](docs/decisions/12-catalog-growth.md). Both
-    halves, and both are smaller than the wording above suggests, on purpose.
-    **A barcode is the only key**: an item without one is logged exactly as before and files
-    nothing, because matching a model's read of "chicken breast" on its name is wrong whether it
-    hits (two different foods merged) or misses (a near-duplicate row every meal). **Everything
-    filed is personal** — a global item cannot be deleted, so automatic promotion is the one
-    irreversible thing the catalog does, and §7's no-duplicates rule is honoured instead by a hit
-    on a shared row inserting nothing. **A hit links and writes nothing**: tapping save consents to
-    logging a meal, not to editing the household's catalog.
-    **Re-logging reads the log rather than the catalog** — `GET /api/log/recent`, behind the chat's
-    `+` button. The catalog holds packaged products; what people eat again is mostly home cooking,
-    which never carries a barcode. A pre-model text match was designed and rejected: it would be
-    badged *from Open Food Facts* while skipping the stage that would have caught the error.
-    **Two bugs fixed on the way**, both found by running it rather than by reading it: a barcode
-    was never checked against its `varchar(32)` column, and a quantity nobody could have eaten was
-    still unflagged on a *matched* product, because the reader checks the model's figures and a
-    full match keeps only the model's count. That check now runs on the assembled item.
-    **Left open:** no lookup cache off the new rows (deliberate — it needs a staleness rule first),
-    and `PUT /api/log/{id}` files nothing.
-    - ~~**10a. Ingredients**~~ ✅ (parts 1–2) — [13-ingredients.md](docs/decisions/13-ingredients.md).
-      Raw text on the item; allergens and diet flags as a Postgres `text[]` with GIN indexes, using
-      **Open Food Facts' own tags** rather than a local vocabulary, and validating against no
-      vocabulary at all — theirs grows without asking, and dropping an unknown tag would discard a
-      real allergen warning. **Empty means the source said nothing, never "contains no allergens".**
-      The brand-or-barcode rule is enforced and **a recipe derives its own**: allergens *union*
-      where nutrients intersect, because the safe direction for "how much iron" is to say less and
-      for "does this contain nuts" is to say more. Diet flags are not derived — "vegan" does not
-      union.
-      **The model reads a list off a label only where the database left a gap**, and that scope fell
-      out of milestone 10's rules rather than out of caution: a list is filed onto a catalog row, a
-      row needs a barcode, and a barcode came from Open Food Facts — so the only gap is a *partial*
-      match with no ingredients, whose photo is already being sent. The field is absent from the
-      schema and the prompt otherwise. Bounded at 600 characters for the **output budget**, not the
-      column, and an over-long list is **dropped rather than truncated** — the opposite of every
-      other text field, because a shortened ingredient list reads as a complete one.
-      **Left open:** part 3 remains unbuilt as intended.
-      Lettered rather than renumbered because §9.10 and §9.13 are referenced by name from code
-      comments.
-      **Three parts, in this order, and the value drops off sharply after the second.**
-      1. **Raw ingredient text — cheap, do this first.** Open Food Facts already returns
-         `ingredients_text_en`, so for any barcode hit this is a field to map, not a feature to
-         build. Milestone 7 deliberately does not request it (see the `Fields` constant); adding it
-         is a small change. Where OFF has nothing, the **model reads it off the photo** in the same
-         vision call that reads the nutrition panel — no second pass, no OCR engine, and the image
-         never leaves the server. Store it as text on the item and show it; that alone answers "what
-         is in this?" and carries almost no design risk.
-      2. **Allergens and diet flags — the high-value structured subset.** OFF returns
-         `allergens_tags` (`en:milk`, `en:nuts`, `en:soybeans`) and `ingredients_analysis_tags`
-         (`en:palm-oil`, `en:non-vegan`). A closed, small vocabulary, unlike ingredients in general,
-         so it is queryable without solving the hard problem — and it is the part a household
-         actually needs, because "does this contain nuts" is a question with consequences.
-      3. **Per-ingredient rows and stats — the uncertain one.** *Deliberately last, and it may never
-         be worth building.* Two things make it more tractable than it looks, both worth knowing
-         before writing it off: OFF ships a **canonical ingredient taxonomy** (`en:sugar`), which is
-         the alias problem already solved by somebody else; and OFF's parsed `ingredients` array
-         **already nests sub-ingredients**, which is the "an ingredient made of ingredients" case
-         modelled for us, along with a `percent_estimate` per ingredient. So the aliases, the
-         synonyms and the parenthesised sub-lists are largely not ours to untangle *for packaged
-         products*. What stays genuinely hard is anything the model transcribed rather than OFF
-         supplying, because mapping free text onto that taxonomy is its own problem.
-      - **Ingredients belong to a specific product, and that constrains where they can live.** A
-        list is only true of one brand's formulation, so it attaches to an item carrying a brand or
-        a barcode. A generic item ("chicken breast") must **not** claim one, and a composite (7a)
-        derives its ingredients from its components instead of storing a list of its own. This is
-        the concern that makes ingredients a poor fit for the shared catalog's wiki-style editing —
-        settle it before writing the schema.
-      - Keep it to parts 1 and 2 unless a real question needs part 3. "Which of my regular foods
-        contain palm oil" is answerable from part 2; "how much sunflower lecithin did I eat in
-        March" is what part 3 buys, and is a question nobody has actually asked.
-11. ~~**Stats views**~~ ✅ — [14-stats.md](docs/decisions/14-stats.md). Home is today's totals,
-    Trends is the week and the month with a bar per day. One route, `GET /api/stats`, because the
-    three views differ only in how many days were asked for.
-    **The day boundary belongs to the server, and this milestone had to enforce that twice.**
-    Grouping into local days happens in memory rather than with `date_trunc`, so there is only one
-    answer to "which day is this instant in" — and **a client may not name a day at all**: Trends
-    computed its range from the phone's clock, which put Home on the 19th and the chart on the
-    20th, both faithful to different clocks. `?days=N` removes the phone's clock from the question
-    rather than correcting for it, which matters because a correction would have to be redone when
-    §9.13 lands. Home's heading had the same bug and now comes from the same answer as its numbers.
-    Summed from snapshots and never through `FoodItemId`; empty days come back as days; a nutrient
-    nobody reported stays absent. The average divides by **days logged**, not by the length of the
-    range, and the screen says so. The chart is scaled rectangles rather than a package.
-    **Left open:** the zone is still UTC (§9.13), and nothing compares a number to a target yet.
-12. ~~**Goals**~~ ✅ — [15-goals.md](docs/decisions/15-goals.md). Targets keyed by nutrient, so a
-    target for selenium is a row rather than a migration — the second thing "core four as columns
-    *and* catalog rows" bought. **A target carries a direction**, because "at least 100 g protein"
-    is met by passing it and "at most 2 000 kcal" is broken by the same; the fraction is uncapped on
-    the wire so a client can draw that difference, and **a floor not yet reached is a day in
-    progress rather than a failure**. One target per nutrient (two would be a contradiction);
-    `PUT /api/goals` replaces wholesale. Progress is measured server-side, for milestone 11's
-    reason. A nutrient nothing reported counts as nothing eaten — a target asks what was eaten, and
-    reporting one met on the strength of food nobody described would be the dishonest answer. The
-    editor is a settings form, which §10 permits, on a route off Home rather than a fourth tab.
-    **No targets is a perfectly good state** and draws nothing.
-    **Left open at the time, and two of the three closed since** by §9.13: a target can now be
-    suggested from body measurements (offered, never applied — a hand-typed one always works), and
-    Trends draws the energy target. Targets are still per-day only.
-13. ~~**User profile**~~ ✅ — [17-profile.md](docs/decisions/17-profile.md), and the time-zone
-    half early in [16-time-zone.md](docs/decisions/16-time-zone.md). Display name, unit
-    preferences, body metrics, and the account self-service milestone 2 left out.
-    **Units are a display preference and change nothing the API returns** — every total, target and
-    snapshot stays kilocalories, the client converts on the way to the screen, and nothing rounds on
-    the way out so an untouched figure round-trips exactly. **Imperial governs height and weight
-    only**: nutrition labels are metric everywhere, so ounces of protein would be a number on no
-    package. One read and three writes rather than a patch, because *clearing* a measurement has to
-    stay expressible. The estimate is Mifflin-St Jeor on the server (milestone 11's reason: one
-    answer) and is **declined rather than guessed** whenever an input is missing; `BiologicalSex` is
-    documented as the coefficient the equation has two of. **Changing an address is two steps** —
-    the address is the login and the only route back in through a reset — and confirming needs the
-    session as well as the link. The export describes what is *stored* and **lists photographs
-    rather than embedding them**. Deleting takes the account's own data and leaves the server's;
-    invite foreign keys became `SetNull` so the record of who invited whom survives the person,
-    while an unredeemed invite is revoked on the way out.
-    **Left open:** no physical-phone run, no import to match the export, weight is a value rather
-    than a series (§9.14), and the estimate suggests energy only.
-    Original wording, and the two parts it called load-bearing rather than cosmetic:
-    - ~~**Time zone decides what "today" means.**~~ ✅ **Built early, as this entry asked** —
-      [16-time-zone.md](docs/decisions/16-time-zone.md). The claim held: `ZoneFor` stopped returning
-      UTC and the log range, the stats views and the goal progress all followed, with no other call
-      site touched. The zone lives on the account, never travels with a request, and the phone's own
-      zone is *offered* on the profile rather than used. **The trap `DayBoundary` flagged was real:**
-      the alpine runtime image ships no tz database, so every named zone threw — on the deployed
-      server only. It now installs `tzdata`; `InvariantGlobalization` was a red herring and stays on.
-      The rest of this milestone is untouched. Original wording:
-      **Time zone decides what "today" means.** The stats views total a *local* day while the
-      server stores UTC. Until a per-user zone exists, keep the day boundary in exactly one
-      helper (defaulting to UTC or a single configured server zone) so making it per-user later
-      is one change rather than a rewrite of every aggregate. The phone knows its own zone,
-      which is a tempting shortcut — but the *server* aggregates, so the zone must be stored per
-      user rather than sent per request.
-    - ~~**Body metrics feed the goal maths.**~~ ✅ They do: *Start from that* on the targets
-      screen fills the energy row from the estimate, and a hand-typed target still works with or
-      without any measurements. Original wording:
-      **Body metrics feed the goal maths.** Goals can suggest a calorie target from BMR/TDEE
-      instead of asking the user to invent a number. Goals must still accept a hand-typed
-      target, so this is never a hard dependency.
-14. **Polish** — a grab-bag with no fixed order. Still open: edit/delete entries, richer charts,
-    per-nutrient detail views, a weight history to chart, an admin page on the web app. (Exporting
-    an account's data landed in §9.13; an *import* to match it has not.)
-    - ~~**Offline / queued logging**~~ ✅ — [18-offline.md](docs/decisions/18-offline.md).
-      **Only a *confirmed* meal is queued**, and that falls out of rules the project already had
-      rather than out of caution: the cascade lives on the server (§10), so with no network there
-      are no numbers to be had, and confirm-before-save (§2) forbids storing numbers nobody has
-      seen. What makes the queue worth having is the other half — **`GET /api/log/recent` is cached
-      on the phone**, so something eaten before can still be logged from a tunnel, and the stale
-      list says in words that it is stale.
-      **A retry is safe because the server de-duplicates it.** `SaveLogEntryRequest` carries a
-      `ClientRequestId` and `POST /api/log` answers a repeat with the original entry and a 200 —
-      because the failure that matters is not the request that never arrived but the one whose
-      *reply* was lost, which from the phone looks identical. The unique index is what makes that
-      true rather than the look-up, which is two statements and can lose a race.
-      **The client stamps `LoggedUtc` on every save**, so a breakfast confirmed in a tunnel is not
-      stored as an evening meal — an instant, never a date, so §9.13's day boundary stays the
-      server's. A refusal and a non-delivery became different answers (`SaveLogStatus`), a rejected
-      row is kept and shown rather than retried or dropped, and **discarding is the only way a
-      confirmed meal is ever lost**. Home carries the banner, because Home holds the total the
-      queue is missing from.
-      **The trap, found by running it:** Android reports *no network* in airplane mode while the
-      emulator's host server is still reachable, so connectivity is a **trigger and never a
-      verdict** — a save is always attempted.
-      **Left open:** no physical-phone run; a background flush does not redraw a Home already on
-      screen; nothing but the save is queued, so a photo taken offline cannot be analysed later.
+- **A task is a working, testable slice that fits one session.** If one turns out bigger, finish a
+  coherent slice and file the rest; never widen a task silently, and never delete a done one. At
+  most three in progress.
+- **One commit per task**, subject `[NNN] Title`, with a `Verified:` trailer naming the tier the
+  claim rests on (§11). `just test` is the gate, and it validates the board first.
+- **`needs-user/` is the one lane Claude cannot clear**: a decision only the user can make, a phone
+  only they hold, a deploy only they can run. Every task there carries a `## Waiting on you`
+  section saying exactly what is wanted — never anything the emulator could answer (§11).
+- **A task that settles something worth not re-deciding records it** — a new file in
+  `docs/decisions/`, or an amendment to the one it changes — in the same commit, names it in its
+  `record:` field, and lists it in §4. The task's `## Notes` hold what the work measured and found;
+  the record holds the why.
+- **The "Left open" sections of the records are not the backlog.** They say what a milestone chose
+  not to do, mostly with the reason. One becomes a task when somebody decides to build it.
+- **Milestones are labels, not gates.** A task's `milestone:` groups it with related work, from the
+  table in `tasks/README.md`. M1–M14 keep the numbers of the build order this section held until
+  2026-10-26, so "milestone 9" in a code comment still means M9.
+- **"Section 9.N" or "§9.N" in a code comment or a decision record** means milestone N's entry in
+  that build order. Each entry moved verbatim into the `## Notes` of its done task, and those tasks
+  are numbered after their decision records — milestone 9's record is `11-chat.md`, so its entry is
+  in task 011. `just milestone 9` finds it.
 
 ---
 
@@ -805,7 +574,7 @@ What is a constraint rather than a how-to:
   past a few lines means the logic is in the wrong file**, and a new low-level operation is a
   script subcommand, not a new recipe.
 - **Test by actually running it.** Build the images, bring up the compose stack, hit the
-  endpoints, tear it down — as part of completing each milestone, not as an afterthought.
+  endpoints, tear it down — as part of completing each task, not as an afterthought.
 - **The WSL Docker engine is an empty, disposable sandbox.** The user's real infrastructure
   lives elsewhere, so containers here may be created and destroyed freely. **One precaution:
   it is intentionally logged out of Docker Hub.** Do NOT attempt to `docker login` or
@@ -814,7 +583,8 @@ What is a constraint rather than a how-to:
   config (ports, test DB creds) separate from anything deployment-related, via env files.
 - **Say which testing tier a claim of "it works" rests on.** There are three — view-model tests
   (no device), emulator, and a physical phone — and "the APK builds" and "the app runs" are
-  very different statements. Say which one a claim rests on.
+  very different statements. Say which one a claim rests on — and a task's commit says it in its
+  `Verified:` trailer (skill `task-board`).
   - **The emulator is runnable from Claude Code's own shell on this machine.** It needs the
     invoking user in the `kvm` group and that user is; this file previously implied otherwise.
     So "I could not run it" is not an available excuse for anything short of a physical phone.
@@ -834,7 +604,7 @@ What is a constraint rather than a how-to:
   install on a device. Out of scope; nothing should actively prevent it.
 - Deeper analytics on top of the core stats (long-range trends, nutrient-adequacy views,
   correlations), richer export formats. (Detailed micronutrient tracking and week/month
-  summaries are **core** — see §7 and §9 — not future work.)
+  summaries are **core** — see §1 and §7 — not future work.)
 - Making the website a full second client. Deliberately not the plan (§10), but the API is
   client-agnostic and `Trackr.Shared` is already referenced by both, so nothing blocks it if
   the appetite appears.

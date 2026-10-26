@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Session handoff notes (skill task-board): per machine, rewritten every run, never published.
+.claude/state/

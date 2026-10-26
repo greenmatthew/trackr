@@ -45,6 +45,7 @@ help:
     @echo "    scripts/device.sh     find a device; pair, connect, USB-forward, tunnel a port"
     @echo "    scripts/emulator.sh   start, stop, wipe, create or delete the emulator"
     @echo "    scripts/server.sh     the dev stack, its logs and database, and EF migrations"
+    @echo "    scripts/board.py      the task board: validate, list, ready, next, new, move, show"
 
 # --- everyday workflow ----------------------------------------------------------------------
 # The three recipes below are all most sessions need. Everything else is in the modules.
@@ -75,14 +76,44 @@ stop:
 build:
     dotnet build Trackr.slnx
 
-# Docs first: it is the fastest suite and needs nothing, so a stale wiki page is reported in
-# seconds rather than after Docker has pulled and started Postgres.
+# The board, then docs: they are the fastest checks and need nothing, so a broken task file or a
+# stale wiki page is reported in seconds rather than after Docker has pulled and started Postgres.
 
-# Every test suite. The API tests need Docker; the docs and mobile tests need nothing.
+# The board and every test suite. The API tests need Docker; the rest need nothing.
 test:
+    just board
     just docs::test
     just mobile::test
     just server::test
+
+# --- the task board -------------------------------------------------------------------------
+# The work is tasks/, one file per task, and the directory is its status. The rules are in
+# tasks/README.md and the workflow in skill task-board; these recipes name the questions people
+# actually ask of it.
+
+# `positional-arguments` so a quoted title reaches the script as one argument: without it,
+# `just board new "Two words" ...` would split the title at the space.
+
+# Validate the task board, or run a subcommand: list, new, move, show.
+[positional-arguments]
+board *ARGS="validate":
+    @python3 scripts/board.py "$@"
+
+# The backlog tasks nothing is blocking, lowest id first.
+ready:
+    @python3 scripts/board.py ready
+
+# The one task to pick up now, and what is already in progress.
+next:
+    @python3 scripts/board.py next
+
+# What is waiting on you, with each ask spelled out.
+waiting:
+    @python3 scripts/board.py waiting
+
+# What is done and what is left under one milestone label, e.g. 14 or M7a.
+milestone label:
+    @python3 scripts/board.py milestone {{ label }}
 
 # Two tiers: `clean` for a stale build, `clean-all` to put the machine back the way it was
 # found. The modules have the same pair scoped to themselves - `just server::clean-all` leaves
